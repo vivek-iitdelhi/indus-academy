@@ -1,8 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { company, founder, site } from "@/content/site";
+import { siteGraph } from "@/lib/schema";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,55 +27,42 @@ const instrumentSerif = Instrument_Serif({
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: {
-    default: `${site.name} · ${site.tagline}`,
+    default: `${site.name} | AI Courses, Corporate AI Training & Consulting`,
     template: `%s · ${site.name}`,
   },
   description: site.description,
-  openGraph: {
-    type: "website",
-    siteName: site.name,
-    locale: "en_IN",
+  applicationName: site.name,
+  authors: [{ name: founder.name, url: founder.linkedin }],
+  creator: founder.name,
+  publisher: company.legalName,
+  category: "education",
+  formatDetection: { telephone: false, email: false, address: false },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
   },
+  openGraph: { type: "website", siteName: site.name, locale: "en_IN" },
   twitter: { card: "summary_large_image" },
+  // Optional: the HTML-tag method of Google Search Console verification.
+  ...(process.env.GOOGLE_SITE_VERIFICATION && {
+    verification: { google: process.env.GOOGLE_SITE_VERIFICATION },
+  }),
 };
 
-// Structured data so search engines connect the academy, its issuing company and its founder.
-const organizationJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "EducationalOrganization",
-  name: site.name,
-  url: site.url,
-  description: site.description,
-  email: site.email,
-  parentOrganization: {
-    "@type": "Organization",
-    name: company.legalName,
-    foundingDate: company.founded,
-  },
-  founder: {
-    "@type": "Person",
-    name: founder.name,
-    sameAs: [founder.linkedin],
-    alumniOf: {
-      "@type": "CollegeOrUniversity",
-      name: "Indian Institute of Technology Delhi",
-      url: "https://home.iitd.ac.in/",
-    },
-  },
+export const viewport: Viewport = {
+  themeColor: "#f5f3ec",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="en-IN"
       data-scroll-behavior="smooth"
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} antialiased`}
     >
       <body className="flex min-h-dvh flex-col bg-paper font-sans text-ink">
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd).replace(/</g, "\\u003c") }}
-        />
+        <JsonLd data={siteGraph} />
         <a
           href="#main"
           className="sr-only rounded-full bg-ink px-4 py-2 text-paper focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60]"

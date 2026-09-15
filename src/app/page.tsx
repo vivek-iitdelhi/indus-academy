@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import founderPhoto from "@/assets/vivek-gupta.jpg";
+import { JsonLd } from "@/components/json-ld";
+import { faqSchema } from "@/lib/schema";
+import { pageMetadata } from "@/lib/metadata";
 import { CertificateSection } from "@/components/certificate-section";
 import { CtaBand } from "@/components/cta-band";
 import { Faq } from "@/components/faq";
@@ -21,6 +25,14 @@ import { offerings } from "@/content/consulting";
 import { rolloutSteps, tracks } from "@/content/enterprise";
 import { flagship } from "@/content/programs";
 import { founder, homeFaqs, tools } from "@/content/site";
+
+export const metadata: Metadata = pageMetadata({
+  title: "Indus AI Academy: AI Courses & Corporate AI Training",
+  description:
+    "Live, hands-on AI courses and certification for professionals, corporate AI training for employees, and AI consulting. Founded by an IIT Delhi PhD.",
+  path: "/",
+  absoluteTitle: true,
+});
 
 const pillars = [
   {
@@ -88,14 +100,14 @@ export default function Home() {
 
           <Container className="relative grid gap-16 py-20 sm:py-24 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:py-28">
             <div>
-              <Eyebrow tone="dark">AI Academy · Enterprise Upskilling · Consulting</Eyebrow>
+              <Eyebrow tone="dark">AI Courses · Corporate AI Training · AI Consulting</Eyebrow>
               <h1 className="mt-6 text-5xl font-semibold leading-[1.0] tracking-[-0.04em] text-balance sm:text-6xl lg:text-7xl">
                 Build an <span className="whitespace-nowrap font-serif font-normal italic text-mint">AI-fluent</span>{" "}
                 workforce.
               </h1>
               <p className="mt-7 max-w-xl text-lg leading-relaxed text-paper/70">
-                Hands-on programs for professionals, role-based upskilling for entire organizations, and consulting
-                that turns AI ambition into systems running in production.
+                Live AI courses for professionals, corporate AI training for entire organizations, and AI consulting
+                that turns ambition into systems running in production.
               </p>
               <div className="mt-10 flex flex-wrap gap-3">
                 <ButtonLink href="/enterprise">Upskill my team</ButtonLink>
@@ -248,7 +260,7 @@ export default function Home() {
               ))}
             </dl>
             <div className="mt-8 flex flex-wrap gap-3">
-              <ButtonLink href="/programs#ai-generalist" variant="dark">
+              <ButtonLink href={`/programs/${flagship.slug}`} variant="dark">
                 View full curriculum
               </ButtonLink>
               <ButtonLink href="/contact?interest=programs" variant="outline">
@@ -387,6 +399,7 @@ export default function Home() {
             </div>
           </div>
           <Faq items={homeFaqs} />
+          <JsonLd data={faqSchema(homeFaqs)} />
         </Container>
       </Section>
 

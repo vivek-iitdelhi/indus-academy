@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { Accent, Container, Eyebrow } from "@/components/ui";
 import { enquiryInterests, site } from "@/content/site";
+import { pageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
-  title: "Contact",
+// Canonical stays /contact for every ?interest= variant, so they aren't indexed as duplicates.
+export const metadata: Metadata = pageMetadata({
+  title: "Contact Us",
   description:
-    "Talk to Indus AI Academy about enterprise AI upskilling, individual programs or AI consulting. Tell us your goals and we'll recommend the right next step.",
-};
+    "Talk to Indus AI Academy about corporate AI training, AI courses or AI consulting. Share your goals and we'll recommend the right next step.",
+  path: "/contact",
+});
 
 const nextSteps = [
   "We read every enquiry and reply by email.",

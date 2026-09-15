@@ -2,7 +2,7 @@ export const site = {
   name: "Indus AI Academy",
   tagline: "AI training and consulting",
   description:
-    "Indus AI Academy helps professionals and organizations work with AI: hands-on certification programs, role-based corporate upskilling, and AI consulting that ships real systems.",
+    "Live, hands-on AI courses and certification, corporate AI training for employees, and AI consulting for businesses in India. Founded by an IIT Delhi PhD.",
   // NEXT_PUBLIC_SITE_URL overrides this, e.g. for preview deployments.
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://indusai.academy",
   email: "hello@indusai.academy",
@@ -65,6 +65,14 @@ export const enquiryInterests = [
 export const teamSizes = ["Just me", "2–10", "11–50", "51–200", "201–1,000", "1,000+"];
 
 export const homeFaqs = [
+  {
+    q: "Which AI course is right for working professionals?",
+    a: "Most professionals start with the AI Generalist Certification: 4 weeks and 24 live hours of hands-on prompting, automation, AI agents and app building, with no coding required. Leaders usually choose AI for Leaders, and technical teams the AI Automation & Agents Bootcamp.",
+  },
+  {
+    q: "Do you offer corporate AI training across India?",
+    a: "Yes. Enterprise programs are delivered on site at your offices anywhere in India, live online, or in a hybrid format, with tracks tailored to each department.",
+  },
   {
     q: "Do I need to know how to code?",
     a: "No. Most of our programs are designed for non-technical professionals. Where code helps, we use AI coding tools so you can build without a computer-science background. The Automation & Agents Bootcamp is the only program where basic scripting is useful.",

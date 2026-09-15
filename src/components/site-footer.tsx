@@ -7,7 +7,7 @@ import { Container } from "./ui";
 const columns = [
   {
     title: "Programs",
-    links: programs.map((p) => ({ href: `/programs#${p.slug}`, label: p.name })),
+    links: programs.map((p) => ({ href: `/programs/${p.slug}`, label: p.name })),
   },
   {
     title: "Enterprise",
@@ -37,7 +37,7 @@ export function SiteFooter() {
           <p className="mt-5 leading-relaxed text-paper/60">
             Hands-on AI education and consulting for professionals and the organizations they build.
           </p>
-          <p className="mt-4 text-sm leading-relaxed text-paper/45">
+          <p className="mt-4 text-sm leading-relaxed text-paper/60">
             An initiative of {company.legalName}, {company.location}. {company.credentials.join(" · ")}.
           </p>
           <a
@@ -51,7 +51,7 @@ export function SiteFooter() {
         <div className="grid gap-10 sm:grid-cols-3">
           {columns.map((col) => (
             <div key={col.title}>
-              <h2 className="font-mono text-[0.72rem] uppercase tracking-[0.18em] text-paper/40">{col.title}</h2>
+              <h2 className="font-mono text-[0.72rem] uppercase tracking-[0.18em] text-paper/60">{col.title}</h2>
               <ul className="mt-5 space-y-3">
                 {col.links.map((link) => (
                   <li key={link.href}>
@@ -66,7 +66,7 @@ export function SiteFooter() {
         </div>
       </Container>
 
-      <Container className="flex flex-col gap-3 border-t border-white/10 py-8 text-sm text-paper/45 sm:flex-row sm:justify-between">
+      <Container className="flex flex-col gap-3 border-t border-white/10 py-8 text-sm text-paper/60 sm:flex-row sm:justify-between">
         <p>
           © {new Date().getFullYear()} {company.legalName}. All rights reserved.
         </p>

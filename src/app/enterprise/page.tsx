@@ -2,13 +2,19 @@ import type { Metadata } from "next";
 import { CtaBand } from "@/components/cta-band";
 import { PageHero } from "@/components/page-hero";
 import { Accent, ButtonLink, CheckList, Container, Section, SectionHeading } from "@/components/ui";
+import { JsonLd } from "@/components/json-ld";
 import { formats, measurement, rolloutSteps, tracks } from "@/content/enterprise";
+import { pageMetadata } from "@/lib/metadata";
+import { breadcrumbSchema, serviceSchema } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "Enterprise AI upskilling",
-  description:
-    "Role-based AI upskilling for every function in your organization: executive briefings, cohorts, build sprints and AI champions, measured before and after.",
-};
+const description =
+  "Role-based corporate AI training for every team: executive briefings, cohorts, build sprints and AI champions. On site across India, online or hybrid.";
+
+export const metadata: Metadata = pageMetadata({
+  title: "Corporate AI Training for Employees",
+  description,
+  path: "/enterprise",
+});
 
 const gaps = [
   {
@@ -35,8 +41,22 @@ const governance = [
 export default function EnterprisePage() {
   return (
     <>
+      <JsonLd
+        data={serviceSchema({
+          name: "Corporate AI training and employee upskilling",
+          serviceType: "Corporate AI training",
+          description,
+          path: "/enterprise",
+        })}
+      />
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: "Home", path: "/" },
+          { name: "Corporate AI training", path: "/enterprise" },
+        ])}
+      />
       <PageHero
-        eyebrow="Enterprise upskilling"
+        eyebrow="Corporate AI training"
         title={
           <>
             Make every team <Accent>AI-fluent</Accent>, not just the early adopters.

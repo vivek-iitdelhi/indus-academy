@@ -15,11 +15,36 @@ export type Program = {
   summary: string;
   outcomes: string[];
   modules?: Module[];
+  // Search result title and meta description for the program's own page.
+  seoTitle: string;
+  seoDescription: string;
+  mode: "Online" | "Blended" | "Onsite";
+  workloadHours?: number;
+  faqs: { q: string; a: string }[];
 };
 
 export const programs: Program[] = [
   {
-    slug: "ai-generalist",
+    slug: "ai-generalist-certification",
+    seoTitle: "AI Generalist Certification Course | Indus AI Academy",
+    seoDescription:
+      "4-week live online AI certification for professionals: prompting, automation, AI agents and vibe coding. 24 hands-on hours, no coding needed.",
+    mode: "Online",
+    workloadHours: 24,
+    faqs: [
+      {
+        q: "Who is the AI Generalist Certification for?",
+        a: "Working professionals, managers, founders and career switchers who want practical AI skills they can use at work. No coding background is required.",
+      },
+      {
+        q: "What will I build during the course?",
+        a: "Prompt libraries, no-code automations, an AI agent, a small AI-built web app, and a capstone project that solves a real problem from your own work.",
+      },
+      {
+        q: "How is the certificate awarded?",
+        a: "On completing the program and a capstone project reviewed by faculty. Certificates are issued by INDUS AI Private Limited.",
+      },
+    ],
     name: "AI Generalist Certification",
     tagline: "Become the person on your team who gets things done with AI.",
     audience: "Professionals, managers, founders and career switchers",
@@ -110,6 +135,20 @@ export const programs: Program[] = [
   },
   {
     slug: "ai-for-leaders",
+    seoTitle: "AI for Leaders: Executive AI Program | Indus AI Academy",
+    seoDescription:
+      "Executive AI program for CXOs and business heads: AI strategy, use-case prioritization, ROI, risk and governance. In person, online or in-house.",
+    mode: "Blended",
+    faqs: [
+      {
+        q: "Do leaders need technical knowledge for AI for Leaders?",
+        a: "No. The program focuses on strategy, investment decisions, risk and change management, with hands-on demonstrations rather than code.",
+      },
+      {
+        q: "Can AI for Leaders run privately for our leadership team?",
+        a: "Yes. It can run as a private in-house batch, tailored to your industry, data policies and priorities.",
+      },
+    ],
     name: "AI for Leaders",
     tagline: "Set direction, back the right bets and lead an AI-ready organization.",
     audience: "CXOs, business heads and senior managers",
@@ -126,7 +165,22 @@ export const programs: Program[] = [
     ],
   },
   {
-    slug: "agents-bootcamp",
+    slug: "ai-automation-agents-bootcamp",
+    seoTitle: "AI Agents & Automation Bootcamp | Indus AI Academy",
+    seoDescription:
+      "6-week live bootcamp to design, build and run AI agents and automations in production: RAG, tool use, evaluations, monitoring and cost control.",
+    mode: "Online",
+    workloadHours: 36,
+    faqs: [
+      {
+        q: "What background do I need for the AI Automation & Agents Bootcamp?",
+        a: "Basic comfort with scripting helps. The bootcamp is built for operations, product and technical teams, developers and analysts who will own AI systems.",
+      },
+      {
+        q: "What will I have built by the end of the bootcamp?",
+        a: "Three production-grade agents, built and reviewed, plus reusable patterns for retrieval, evaluation, monitoring, deployment and cost control.",
+      },
+    ],
     name: "AI Automation & Agents Bootcamp",
     tagline: "Design, build and run AI agents and automations in production.",
     audience: "Operations, product and technical teams, developers and analysts",
@@ -143,7 +197,22 @@ export const programs: Program[] = [
     ],
   },
   {
-    slug: "ai-foundations",
+    slug: "ai-foundations-workshop",
+    seoTitle: "AI Foundations Workshop for Teams | Indus AI Academy",
+    seoDescription:
+      "One-day, hands-on AI workshop for employees and first-time AI users: everyday prompting, practical use cases and safe use of company data.",
+    mode: "Blended",
+    workloadHours: 6,
+    faqs: [
+      {
+        q: "Is the AI Foundations Workshop suitable as a company-wide kickoff?",
+        a: "Yes. It is designed to get every employee using AI safely and productively on the same day, and works well before role-based tracks.",
+      },
+      {
+        q: "Can the workshop be delivered at our office?",
+        a: "Yes. It runs in person at your office anywhere in India, or as a live online session.",
+      },
+    ],
     name: "AI Foundations Workshop",
     tagline: "A one-day, hands-on start for anyone new to AI at work.",
     audience: "Every employee, students and first-time AI users",

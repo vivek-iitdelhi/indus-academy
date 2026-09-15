@@ -2,17 +2,32 @@ import type { Metadata } from "next";
 import { CtaBand } from "@/components/cta-band";
 import { PageHero } from "@/components/page-hero";
 import { Accent, ButtonLink, CheckList, Container, Section, SectionHeading } from "@/components/ui";
+import { JsonLd } from "@/components/json-ld";
 import { buildExamples, offerings, phases } from "@/content/consulting";
+import { pageMetadata } from "@/lib/metadata";
+import { breadcrumbSchema, serviceSchema } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "AI consulting",
-  description:
-    "AI strategy, use-case discovery, builds and governance. We design and ship agents, automations and voice AI, and train the teams who run them.",
-};
+const description =
+  "AI consulting for businesses in India: strategy, use-case discovery, AI agents, voice AI and automation builds, plus governance and team enablement.";
+
+export const metadata: Metadata = pageMetadata({
+  title: "AI Consulting Services in India",
+  description,
+  path: "/consulting",
+});
 
 export default function ConsultingPage() {
   return (
     <>
+      <JsonLd
+        data={serviceSchema({ name: "AI consulting", serviceType: "AI consulting", description, path: "/consulting" })}
+      />
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: "Home", path: "/" },
+          { name: "AI consulting", path: "/consulting" },
+        ])}
+      />
       <PageHero
         eyebrow="AI consulting"
         title={

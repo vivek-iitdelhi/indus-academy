@@ -3,7 +3,13 @@ import { company, founder } from "@/content/site";
 import { LogoMark } from "./logo";
 import { Accent, CheckList, Container, Section, SectionHeading } from "./ui";
 
-export function CertificateSection({ className = "" }: { className?: string }) {
+export function CertificateSection({
+  className = "",
+  programName = flagship.name,
+}: {
+  className?: string;
+  programName?: string;
+}) {
   return (
     <Section id="certification" className={className}>
       <Container className="grid gap-16 lg:grid-cols-2 lg:items-center">
@@ -48,7 +54,7 @@ export function CertificateSection({ className = "" }: { className?: string }) {
                 <p className="mt-6 text-sm text-muted">This certifies that</p>
                 <p className="mt-2 font-serif text-4xl italic sm:text-5xl">Your Name</p>
                 <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-muted">
-                  has completed the <span className="font-semibold text-ink">{flagship.name}</span>, including a
+                  has completed the <span className="font-semibold text-ink">{programName}</span>, including a
                   capstone project reviewed by faculty.
                 </p>
                 <div className="mt-10 grid grid-cols-2 gap-6 text-left text-xs">
