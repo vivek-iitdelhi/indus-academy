@@ -19,9 +19,13 @@ Other scripts: `npm run build`, `npm start`, `npm run lint`.
 | Variable               | Purpose                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_SITE_URL` | Production URL, used for metadata, `sitemap.xml` and `robots.txt`.                          |
-| `ENQUIRY_WEBHOOK_URL`  | Contact-form enquiries are POSTed here as JSON (for example an n8n or CRM webhook).         |
+| `RESEND_API_KEY`       | [Resend](https://resend.com) API key used to email contact-form enquiries.                  |
+| `ENQUIRY_TO_EMAIL`     | Inbox (or comma-separated inboxes) that receives enquiries. Defaults to the site email.     |
+| `ENQUIRY_FROM_EMAIL`   | Sender address on a domain verified in Resend. Defaults to `enquiries@indusai.academy`.     |
 
-Without `ENQUIRY_WEBHOOK_URL`, enquiries are logged to the server console in development. In production, the form shows an error that points visitors to the contact email instead of silently dropping them.
+Each enquiry arrives as an email with Reply-To set to the visitor, so you can answer directly. Without `RESEND_API_KEY`, enquiries are logged to the server console in development; in production, the form shows an error that points visitors to the contact email instead of silently dropping them.
+
+Until `indusai.academy` is verified in Resend, set `ENQUIRY_FROM_EMAIL="Indus AI Academy <onboarding@resend.dev>"`. Resend's test sender can only deliver to the email address on your Resend account.
 
 ## Pages
 
@@ -47,7 +51,7 @@ Design tokens (colors, fonts, animations) are in `src/app/globals.css`.
 ## Before launch
 
 - [x] Confirm founder profile, issuing company, credentials and contact email
-- [ ] Set `ENQUIRY_WEBHOOK_URL` in the hosting environment
+- [ ] Verify `indusai.academy` in Resend and set the Resend variables in the hosting environment
 - [ ] Point the indusai.academy domain at the deployment
 - [ ] Review program durations, formats and outcomes, and add pricing if it should be public
 - [ ] Add real testimonials, client logos and faculty profiles once approved for use
