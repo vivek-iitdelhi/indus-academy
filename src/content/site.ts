@@ -5,11 +5,9 @@ export const site = {
     "Indus AI Academy helps professionals and organizations work with AI: hands-on certification programs, role-based corporate upskilling, and AI consulting that ships real systems.",
   // NEXT_PUBLIC_SITE_URL overrides this, e.g. for preview deployments.
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://indusai.academy",
-  // TODO: replace with the real enquiries inbox before launch.
   email: "hello@indusai.academy",
 };
 
-// Sourced from the Indus pitch decks (March 2026). Confirm before launch.
 export const founder = {
   name: "Vivek Gupta",
   role: "Founder",

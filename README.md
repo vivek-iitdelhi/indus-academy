@@ -46,7 +46,8 @@ Design tokens (colors, fonts, animations) are in `src/app/globals.css`.
 
 ## Before launch
 
-- [ ] Replace the placeholder contact email in `src/content/site.ts`
-- [ ] Set `NEXT_PUBLIC_SITE_URL` and `ENQUIRY_WEBHOOK_URL` in the hosting environment
+- [x] Confirm founder profile, issuing company, credentials and contact email
+- [ ] Set `ENQUIRY_WEBHOOK_URL` in the hosting environment
+- [ ] Point the indusai.academy domain at the deployment
 - [ ] Review program durations, formats and outcomes, and add pricing if it should be public
 - [ ] Add real testimonials, client logos and faculty profiles once approved for use
