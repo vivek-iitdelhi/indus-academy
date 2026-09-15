@@ -1,5 +1,6 @@
 import photo from "@/assets/vivek-gupta.jpg";
 import type { Program } from "@/content/programs";
+import type { Post } from "@/lib/blog";
 import { company, founder, site } from "@/content/site";
 
 const absolute = (path = "") => `${site.url}${path}`;
@@ -140,5 +141,28 @@ export function serviceSchema({
     url: absolute(path),
     provider: organizationRef,
     areaServed: { "@type": "Country", name: "India" },
+  };
+}
+
+export function blogPostingSchema(post: Post) {
+  const url = absolute(`/blog/${post.slug}`);
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.description,
+    datePublished: post.date,
+    dateModified: post.updated ?? post.date,
+    inLanguage: "en-IN",
+    keywords: post.tags.join(", "),
+    wordCount: post.wordCount,
+    url,
+    mainEntityOfPage: url,
+    image: `${url}/opengraph-image`,
+    author:
+      post.author === founder.name
+        ? { "@type": "Person", "@id": FOUNDER_ID, name: founder.name, url: founder.linkedin }
+        : { "@type": "Person", name: post.author },
+    publisher: organizationRef,
   };
 }

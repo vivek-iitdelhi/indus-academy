@@ -8,25 +8,21 @@ export function pageMetadata({
   description,
   path,
   absoluteTitle = false,
+  article,
 }: {
   title: string;
   description: string;
   path: string;
   absoluteTitle?: boolean;
+  article?: { publishedTime: string; modifiedTime?: string; authors: string[]; tags: string[] };
 }): Metadata {
   const fullTitle = absoluteTitle ? title : `${title} · ${site.name}`;
+  const shared = { siteName: site.name, locale: "en_IN", url: path, title: fullTitle, description };
   return {
     title: absoluteTitle ? { absolute: title } : title,
     description,
     alternates: { canonical: path },
-    openGraph: {
-      type: "website",
-      siteName: site.name,
-      locale: "en_IN",
-      url: path,
-      title: fullTitle,
-      description,
-    },
+    openGraph: article ? { type: "article", ...shared, ...article } : { type: "website", ...shared },
     twitter: { card: "summary_large_image", title: fullTitle, description },
   };
 }

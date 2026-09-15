@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import founderPhoto from "@/assets/vivek-gupta.jpg";
+import { BlogCard } from "@/components/blog-card";
 import { JsonLd } from "@/components/json-ld";
+import { getAllPosts } from "@/lib/blog";
 import { faqSchema } from "@/lib/schema";
 import { pageMetadata } from "@/lib/metadata";
 import { CertificateSection } from "@/components/certificate-section";
@@ -386,6 +388,32 @@ export default function Home() {
           </Container>
         </div>
       </section>
+
+      {/* Latest articles */}
+      <Section>
+        <Container>
+          <div className="flex flex-wrap items-end justify-between gap-8">
+            <SectionHeading
+              eyebrow="From the blog"
+              title={
+                <>
+                  Practical guides to <Accent>working with AI</Accent>.
+                </>
+              }
+            />
+            <ButtonLink href="/blog" variant="outline">
+              All articles
+            </ButtonLink>
+          </div>
+          <div className="mt-12 grid gap-4 md:grid-cols-3">
+            {getAllPosts()
+              .slice(0, 3)
+              .map((post) => (
+                <BlogCard key={post.slug} post={post} />
+              ))}
+          </div>
+        </Container>
+      </Section>
 
       {/* FAQ */}
       <Section id="faq">

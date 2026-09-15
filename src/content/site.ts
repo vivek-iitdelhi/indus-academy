@@ -1,3 +1,5 @@
+import { programs } from "./programs";
+
 export const site = {
   name: "Indus AI Academy",
   tagline: "AI training and consulting",
@@ -29,10 +31,55 @@ export const company = {
   credentials: ["DPIIT-recognized startup (Startup India)", "ISO 9001:2015 certified", "MSME registered"],
 };
 
-export const nav = [
-  { href: "/programs", label: "Programs" },
-  { href: "/enterprise", label: "For Enterprise" },
-  { href: "/consulting", label: "Consulting" },
+export type NavLink = { href: string; label: string; description?: string; external?: boolean };
+
+export type NavItem = {
+  href: string;
+  label: string;
+  // Items with children render as a dropdown; overviewLabel links to the section's main page.
+  overviewLabel?: string;
+  children?: NavLink[];
+  cta?: NavLink;
+};
+
+export const nav: NavItem[] = [
+  {
+    href: "/programs",
+    label: "Programs",
+    overviewLabel: "Compare all programs",
+    children: programs.map((p) => ({ href: `/programs/${p.slug}`, label: p.name, description: p.duration })),
+    cta: { href: "/contact?interest=programs", label: "Enquire about the next cohort" },
+  },
+  {
+    href: "/enterprise",
+    label: "For Enterprise",
+    overviewLabel: "Corporate AI training overview",
+    children: [
+      { href: "/enterprise#tracks", label: "Role-based tracks", description: "Training for every department" },
+      { href: "/enterprise#formats", label: "Training formats", description: "Briefings, cohorts, sprints and champions" },
+      { href: "/enterprise#how-it-works", label: "How it works", description: "From assessment to lasting adoption" },
+      { href: "/enterprise#measurement", label: "Impact & governance", description: "Measurement, security and data policies" },
+    ],
+    cta: { href: "/contact?interest=enterprise", label: "Request a proposal" },
+  },
+  {
+    href: "/consulting",
+    label: "Consulting",
+    overviewLabel: "AI consulting overview",
+    children: [
+      { href: "/consulting#services", label: "Services", description: "Strategy, discovery, build and governance" },
+      { href: "/consulting#engagement", label: "Engagement model", description: "Discovery sprint, pilot, then scale" },
+      { href: "/consulting#what-we-build", label: "What we build", description: "Agents, voice AI and workflow automation" },
+      {
+        href: "https://induslabs.io",
+        label: "IndusLabs voice AI",
+        description: "Our sister company for voice agents",
+        external: true,
+      },
+    ],
+    cta: { href: "/contact?interest=consulting", label: "Book a discovery call" },
+  },
+  { href: "/blog", label: "Blog" },
   { href: "/contact", label: "Contact" },
 ];
 

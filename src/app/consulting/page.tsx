@@ -44,7 +44,7 @@ export default function ConsultingPage() {
       </PageHero>
 
       {/* Offerings */}
-      <Section>
+      <Section id="services">
         <Container>
           <SectionHeading
             eyebrow="What we do"
@@ -102,7 +102,7 @@ export default function ConsultingPage() {
       </Section>
 
       {/* What we build */}
-      <Section>
+      <Section id="what-we-build">
         <Container className="grid gap-14 lg:grid-cols-2 lg:items-center">
           <SectionHeading
             eyebrow="What we build"

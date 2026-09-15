@@ -134,7 +134,7 @@ export default function EnterprisePage() {
       </Section>
 
       {/* Process */}
-      <section className="px-3 sm:px-4">
+      <section id="how-it-works" className="scroll-mt-20 px-3 sm:px-4">
         <div className="rounded-[2rem] bg-ink py-20 text-paper sm:py-28">
           <Container>
             <SectionHeading
