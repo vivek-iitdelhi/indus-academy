@@ -5,7 +5,7 @@ Every Indus AI Academy blog article is published under Vivek's name. This guide 
 ## Who is writing
 
 - Vivek Gupta, founder of Indus AI Academy.
-- IIT Delhi alumnus (master's) and current PhD scholar, AI researcher and serial entrepreneur.
+- IIT Delhi alumnus and current PhD scholar, AI researcher and serial entrepreneur.
 - Never describe the PhD as completed: "PhD scholar" or "PhD candidate", never "PhD, IIT Delhi".
 - 14 years building technology at MakeMyTrip, Goibibo, Wissen and Jubilant FoodWorks.
 - Founder of Indus AI and its sister company IndusLabs (https://induslabs.io), which builds voice AI and voice agents designed for Indian languages, accents and code-switching.
