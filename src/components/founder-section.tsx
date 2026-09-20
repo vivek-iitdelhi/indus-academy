@@ -4,6 +4,26 @@ import { founder, site } from "@/content/site";
 import { FounderCarousel } from "./founder-carousel";
 import { Accent, ArrowIcon, Container, Section, SectionHeading } from "./ui";
 
+/** Links the first mention of IndusLabs in the bio to its own site. */
+function linkVenture(paragraph: string) {
+  const [before, ...rest] = paragraph.split(founder.venture.name);
+  if (rest.length === 0) return paragraph;
+  return (
+    <>
+      {before}
+      <a
+        href={founder.venture.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-pine underline decoration-pine/30 underline-offset-4 hover:decoration-pine"
+      >
+        {founder.venture.name}
+      </a>
+      {rest.join(founder.venture.name)}
+    </>
+  );
+}
+
 export function FounderSection() {
   return (
     <Section id="founder">
@@ -13,7 +33,7 @@ export function FounderSection() {
             {
               src: photo,
               alt: `${founder.name}, founder of ${site.name}`,
-              caption: `${founder.name}, founder of ${site.name}.`,
+              caption: `${founder.name}, founder of Indus AI, IndusLabs and ${site.name}.`,
             },
             {
               src: award,
@@ -34,25 +54,9 @@ export function FounderSection() {
           />
           <div className="mt-8 space-y-4 text-lg leading-relaxed text-muted">
             {founder.bio.map((paragraph) => (
-              <p key={paragraph}>{paragraph}</p>
+              <p key={paragraph}>{linkVenture(paragraph)}</p>
             ))}
           </div>
-
-          <a
-            href={founder.venture.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group mt-8 flex items-center justify-between gap-6 rounded-2xl border border-line bg-white/60 px-6 py-5 transition-colors hover:border-ink/25 hover:bg-white"
-          >
-            <span>
-              <span className="block font-semibold tracking-tight">Founder of {founder.venture.name}</span>
-              <span className="mt-1 block text-sm text-muted">{founder.venture.blurb}</span>
-            </span>
-            <span className="flex shrink-0 items-center gap-2 text-sm font-medium text-pine">
-              {founder.venture.url.replace("https://", "")}
-              <ArrowIcon className="size-4 transition-transform group-hover:translate-x-0.5" />
-            </span>
-          </a>
 
           <ul className="mt-8 flex flex-wrap gap-2">
             {founder.highlights.map((h) => (
