@@ -16,12 +16,17 @@ export const founder = {
   credential: "IIT Delhi alumnus",
   linkedin: "https://www.linkedin.com/in/vivekgupta668/",
   highlights: ["IIT Delhi alumnus", "PhD scholar", "AI researcher", "Serial entrepreneur", "14 years in technology"],
+  venture: {
+    name: "IndusLabs",
+    url: "https://induslabs.io",
+    blurb: "Voice AI and workflow automation for Indian businesses",
+  },
   awardCaption:
-    "Honoured for his work in AI by Union Cabinet Minister Shri Chirag Paswan and Governor Shri Arif Mohammed Khan, at the 79th birth anniversary celebration of Padma Bhushan Shri Ram Vilas Paswan.",
+    "Honoured for his work in AI by Union Cabinet Minister Shri Chirag Paswan and Governor Shri Arif Mohammed Khan.",
   previously: ["MakeMyTrip", "Goibibo", "Wissen", "Jubilant FoodWorks"],
   bio: [
     "Vivek Gupta is an IIT Delhi alumnus and PhD scholar, an AI researcher and serial entrepreneur with 14 years of building technology at MakeMyTrip, Goibibo, Wissen and Jubilant FoodWorks.",
-    "As founder of Indus AI, he leads a team building voice AI agents for Indian businesses. Indus AI Academy brings that same hands-on, production-grade experience to the professionals and teams learning to work with AI.",
+    "As founder of IndusLabs, he leads a team building voice AI agents and workflow automation for Indian businesses. Indus AI Academy brings that same hands-on, production-grade experience to the professionals and teams learning to work with AI.",
   ],
 };
 

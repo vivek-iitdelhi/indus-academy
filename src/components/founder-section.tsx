@@ -38,6 +38,22 @@ export function FounderSection() {
             ))}
           </div>
 
+          <a
+            href={founder.venture.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group mt-8 flex items-center justify-between gap-6 rounded-2xl border border-line bg-white/60 px-6 py-5 transition-colors hover:border-ink/25 hover:bg-white"
+          >
+            <span>
+              <span className="block font-semibold tracking-tight">Founder of {founder.venture.name}</span>
+              <span className="mt-1 block text-sm text-muted">{founder.venture.blurb}</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-2 text-sm font-medium text-pine">
+              {founder.venture.url.replace("https://", "")}
+              <ArrowIcon className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </a>
+
           <ul className="mt-8 flex flex-wrap gap-2">
             {founder.highlights.map((h) => (
               <li key={h} className="rounded-full border border-line bg-white/60 px-4 py-1.5 text-sm">
