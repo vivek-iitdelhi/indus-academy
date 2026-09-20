@@ -32,7 +32,7 @@ export function FounderSection() {
           slides={[
             {
               src: photo,
-              alt: `${founder.name}, founder of ${site.name}`,
+              alt: `${founder.name}, founder of Indus AI, IndusLabs and ${site.name}`,
               caption: `${founder.name}, founder of Indus AI, IndusLabs and ${site.name}.`,
             },
             {
