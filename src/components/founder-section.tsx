@@ -17,7 +17,7 @@ export function FounderSection() {
             },
             {
               src: award,
-              alt: `${founder.name} being honoured for his work in AI`,
+              alt: `${founder.name} receiving an award for his work in AI from Union Cabinet Minister Shri Chirag Paswan`,
               caption: founder.awardCaption,
             },
           ]}
