@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { programs } from "@/content/programs";
 import { company, site } from "@/content/site";
+import { newsletterConfigured } from "@/lib/newsletter";
 import { Logo } from "./logo";
+import { NewsletterForm } from "./newsletter-form";
 import { Container } from "./ui";
 
 const columns = [
@@ -47,6 +49,15 @@ export function SiteFooter() {
           >
             {site.email}
           </a>
+
+          {newsletterConfigured() && (
+            <div className="mt-8">
+              <h2 className="font-mono text-[0.72rem] uppercase tracking-[0.18em] text-paper/60">
+                AI updates by email
+              </h2>
+              <NewsletterForm tone="dark" className="mt-4" />
+            </div>
+          )}
         </div>
 
         <div className="grid gap-10 sm:grid-cols-3">

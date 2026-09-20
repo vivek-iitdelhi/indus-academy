@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { BlogCard } from "@/components/blog-card";
 import { CtaBand } from "@/components/cta-band";
 import { JsonLd } from "@/components/json-ld";
+import { NewsletterForm } from "@/components/newsletter-form";
 import { PageHero } from "@/components/page-hero";
-import { Accent, Container, Section } from "@/components/ui";
+import { Accent, Container, Eyebrow, Section } from "@/components/ui";
 import { getAllPosts } from "@/lib/blog";
 import { pageMetadata } from "@/lib/metadata";
+import { newsletterConfigured } from "@/lib/newsletter";
 import { breadcrumbSchema } from "@/lib/schema";
 
 const base = pageMetadata({
@@ -46,6 +48,21 @@ export default function BlogPage() {
           {posts.map((post) => (
             <BlogCard key={post.slug} post={post} headingLevel={2} />
           ))}
+        </Container>
+
+        <Container className="mt-5" hidden={!newsletterConfigured()}>
+          <div className="reveal grid gap-8 rounded-3xl border border-line bg-white/60 p-8 sm:p-10 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+            <div>
+              <Eyebrow>AI updates by email</Eyebrow>
+              <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
+                Get each new article in your inbox.
+              </h2>
+              <p className="mt-3 leading-relaxed text-muted">
+                A short summary and a direct link, on the days we publish. No other email.
+              </p>
+            </div>
+            <NewsletterForm />
+          </div>
         </Container>
       </Section>
 

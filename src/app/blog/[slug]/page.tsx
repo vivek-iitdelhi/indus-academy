@@ -6,10 +6,12 @@ import photo from "@/assets/vivek-gupta.jpg";
 import { BlogCard } from "@/components/blog-card";
 import { CtaBand } from "@/components/cta-band";
 import { JsonLd } from "@/components/json-ld";
+import { NewsletterForm } from "@/components/newsletter-form";
 import { Accent, ArrowIcon, Container, Section, SectionHeading } from "@/components/ui";
 import { founder } from "@/content/site";
 import { formatDate, getAllPosts, getPost } from "@/lib/blog";
 import { pageMetadata } from "@/lib/metadata";
+import { newsletterConfigured } from "@/lib/newsletter";
 import { blogPostingSchema, breadcrumbSchema } from "@/lib/schema";
 
 export const dynamicParams = false;
@@ -149,6 +151,11 @@ export default async function BlogPostPage({ params }: PageProps<"/blog/[slug]">
               </div>
             </div>
           )}
+          <div className="rounded-3xl border border-line bg-white/60 p-6 sm:p-8" hidden={!newsletterConfigured()}>
+            <p className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-muted">AI updates by email</p>
+            <p className="mt-2 text-lg font-semibold tracking-tight">Get each new article in your inbox.</p>
+            <NewsletterForm className="mt-5" />
+          </div>
         </div>
       </article>
 
