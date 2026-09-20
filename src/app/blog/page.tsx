@@ -55,10 +55,10 @@ export default function BlogPage() {
             <div>
               <Eyebrow>AI updates by email</Eyebrow>
               <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
-                Get each new article in your inbox.
+                The week&apos;s AI articles, in your inbox.
               </h2>
               <p className="mt-3 leading-relaxed text-muted">
-                A short summary and a direct link, on the days we publish. No other email.
+                One email every Tuesday: each new article with a short summary and a direct link. Nothing else.
               </p>
             </div>
             <NewsletterForm />

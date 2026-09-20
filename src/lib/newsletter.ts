@@ -76,7 +76,7 @@ export async function sendConfirmationEmail(email: string) {
   const html = shell(
     `<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;color:#0b1916">Confirm your subscription</h1>
      <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#56655f">
-       Click below to start receiving our AI updates: new articles on using AI at work, as they are published.
+       Click below to start receiving our weekly AI update: practical articles on using AI at work, every Tuesday.
      </p>
      <a href="${url}" style="display:inline-block;background:#0b1916;color:#f5f3ec;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Confirm subscription</a>
      <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#56655f">
@@ -121,7 +121,7 @@ export async function digestAlreadySent(name: string) {
 }
 
 export async function sendDigest(posts: Post[], date: string) {
-  const campaign = `daily-${date}`;
+  const campaign = `weekly-${date}`;
   const articles = posts
     .map(
       (post) => `
@@ -135,14 +135,15 @@ export async function sendDigest(posts: Post[], date: string) {
     .join("");
 
   const html = shell(
-    `<h1 style="margin:0 0 8px;font-size:22px;line-height:1.3;color:#0b1916">${posts.length > 1 ? "Today's AI updates" : "Today's AI update"}</h1>
-     <p style="margin:0 0 28px;font-size:14px;line-height:1.6;color:#56655f">Practical ways to work better with AI, from ${escapeHtml(site.name)}.</p>
+    `<h1 style="margin:0 0 8px;font-size:22px;line-height:1.3;color:#0b1916">This week at ${escapeHtml(site.name)}</h1>
+     <p style="margin:0 0 28px;font-size:14px;line-height:1.6;color:#56655f">Practical ways to work better with AI, ${posts.length > 1 ? `${posts.length} new articles` : "one new article"} this week.</p>
      ${articles}
      <a href="${trackedUrl("/blog", campaign)}" style="font-size:14px;font-weight:600;color:#2a524a">Read all articles &rarr;</a>`,
     `<p style="margin:0">You subscribed to AI updates at ${escapeHtml(site.url.replace("https://", ""))}.
       <a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#56655f">Unsubscribe</a>.</p>`
   );
 
+  // Lead with the newest article: a specific subject line beats "weekly digest".
   const subject =
     posts.length > 1 ? `${posts[0].title} (+${posts.length - 1} more)` : posts[0].title;
 

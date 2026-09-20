@@ -153,7 +153,7 @@ export default async function BlogPostPage({ params }: PageProps<"/blog/[slug]">
           )}
           <div className="rounded-3xl border border-line bg-white/60 p-6 sm:p-8" hidden={!newsletterConfigured()}>
             <p className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-muted">AI updates by email</p>
-            <p className="mt-2 text-lg font-semibold tracking-tight">Get each new article in your inbox.</p>
+            <p className="mt-2 text-lg font-semibold tracking-tight">The week&apos;s AI articles, in your inbox.</p>
             <NewsletterForm className="mt-5" />
           </div>
         </div>

@@ -13,7 +13,7 @@ type Outcome = { heading: string; body: string };
 const OUTCOMES: Record<string, Outcome> = {
   valid: {
     heading: "You're subscribed.",
-    body: "You'll get an email whenever we publish, with a short summary and a link to the article. Nothing else.",
+    body: "Every Tuesday you'll get that week's articles, each with a short summary and a direct link. Nothing else.",
   },
   expired: {
     heading: "That link has expired.",

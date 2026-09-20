@@ -60,7 +60,7 @@ export function NewsletterForm({ tone = "light", className = "" }: { tone?: "lig
         </p>
       )}
       <p className={`mt-3 text-xs leading-relaxed ${dark ? "text-paper/50" : "text-muted"}`}>
-        New articles only, and a confirmation email first. Unsubscribe any time.
+        One email on Tuesdays, and a confirmation email first. Unsubscribe any time.
       </p>
     </form>
   );
