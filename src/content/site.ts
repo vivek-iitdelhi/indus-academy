@@ -4,7 +4,7 @@ export const site = {
   name: "Indus AI Academy",
   tagline: "AI training and consulting",
   description:
-    "Live, hands-on AI courses and certification, corporate AI training for employees, and AI consulting for businesses in India. Founded by an IIT Delhi PhD.",
+    "Live, hands-on AI courses and certification, corporate AI training for employees, and AI consulting for businesses in India. Founded by an IIT Delhi alumnus.",
   // NEXT_PUBLIC_SITE_URL overrides this, e.g. for preview deployments.
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://indusai.academy",
   email: "hello@indusai.academy",
@@ -13,15 +13,15 @@ export const site = {
 export const founder = {
   name: "Vivek Gupta",
   role: "Founder",
-  credential: "PhD, IIT Delhi",
+  credential: "IIT Delhi alumnus",
   linkedin: "https://www.linkedin.com/in/vivekgupta668/",
-  highlights: ["PhD, IIT Delhi", "AI researcher", "Serial entrepreneur", "14 years in technology"],
+  highlights: ["IIT Delhi alumnus", "PhD scholar", "AI researcher", "Serial entrepreneur", "14 years in technology"],
   // TODO: confirm the award name, event and year before this goes out widely.
   awardCaption:
     "Honoured for his work in AI at the 79th birth anniversary celebration of Padma Bhushan Ram Vilas Paswan.",
   previously: ["MakeMyTrip", "Goibibo", "Wissen", "Jubilant FoodWorks"],
   bio: [
-    "Vivek Gupta is an IIT Delhi PhD, AI researcher and serial entrepreneur with 14 years of building technology at MakeMyTrip, Goibibo, Wissen and Jubilant FoodWorks.",
+    "Vivek Gupta is an IIT Delhi alumnus and PhD scholar, an AI researcher and serial entrepreneur with 14 years of building technology at MakeMyTrip, Goibibo, Wissen and Jubilant FoodWorks.",
     "As founder of Indus AI, he leads a team building voice AI agents for Indian businesses. Indus AI Academy brings that same hands-on, production-grade experience to the professionals and teams learning to work with AI.",
   ],
 };
@@ -141,7 +141,7 @@ export const homeFaqs = [
   },
   {
     q: "Who runs Indus AI Academy?",
-    a: "Indus AI Academy is founded and led by Vivek Gupta (PhD, IIT Delhi), an AI researcher and entrepreneur with 14 years in technology. Programs are delivered with practitioners who build AI systems at Indus AI.",
+    a: "Indus AI Academy is founded and led by Vivek Gupta, an IIT Delhi alumnus and PhD scholar, AI researcher and entrepreneur with 14 years in technology. Programs are delivered with practitioners who build AI systems at Indus AI.",
   },
   {
     q: "Do participants get a certificate?",

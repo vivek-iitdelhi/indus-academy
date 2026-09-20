@@ -31,7 +31,7 @@ import { founder, homeFaqs, tools } from "@/content/site";
 export const metadata: Metadata = pageMetadata({
   title: "Indus AI Academy: AI Courses & Corporate AI Training",
   description:
-    "Live, hands-on AI courses and certification for professionals, corporate AI training for employees, and AI consulting. Founded by an IIT Delhi PhD.",
+    "Live, hands-on AI courses and certification for professionals, corporate AI training for employees, and AI consulting. Founded by an IIT Delhi alumnus.",
   path: "/",
   absoluteTitle: true,
 });

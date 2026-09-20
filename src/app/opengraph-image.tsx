@@ -8,6 +8,6 @@ export default function OpengraphImage() {
   return renderOgImage({
     eyebrow: "AI Academy",
     title: "Build an AI-fluent workforce.",
-    subtitle: "AI courses · Corporate AI training · AI consulting · Founded by an IIT Delhi PhD",
+    subtitle: "AI courses · Corporate AI training · AI consulting · Founded by an IIT Delhi alumnus",
   });
 }
