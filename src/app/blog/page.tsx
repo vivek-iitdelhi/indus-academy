@@ -41,7 +41,16 @@ export default function BlogPage() {
           </>
         }
         intro="Straightforward advice on AI upskilling, courses, careers and AI agents, from the team that trains professionals and builds AI systems."
-      />
+      >
+        {newsletterConfigured() && (
+          <div className="w-full max-w-xl">
+            <p className="mb-3 text-sm text-paper/70">
+              Join free: one email every Tuesday with the week&apos;s articles.
+            </p>
+            <NewsletterForm tone="dark" />
+          </div>
+        )}
+      </PageHero>
 
       <Section>
         <Container className="grid gap-5 md:grid-cols-2">
