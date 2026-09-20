@@ -27,6 +27,8 @@ export function NewsletterForm({ tone = "light", className = "" }: { tone?: "lig
         <label htmlFor={fieldId} className="sr-only">
           Email address
         </label>
+        {/* autoComplete lets the browser offer a saved address in one tap; the
+            rest stop phones capitalising or autocorrecting an address. */}
         <input
           id={fieldId}
           data-newsletter-form={tone}
@@ -34,6 +36,10 @@ export function NewsletterForm({ tone = "light", className = "" }: { tone?: "lig
           type="email"
           required
           autoComplete="email"
+          inputMode="email"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder="you@company.com"
           className={`h-12 w-full rounded-full border px-5 text-sm transition-colors focus:outline-none focus:ring-2 ${
             dark
