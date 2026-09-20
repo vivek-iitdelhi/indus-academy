@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId } from "react";
 import { subscribe, type SubscribeState } from "@/app/newsletter/actions";
 import { CheckIcon } from "./ui";
 
@@ -9,6 +9,8 @@ const initialState: SubscribeState = { status: "idle" };
 export function NewsletterForm({ tone = "light", className = "" }: { tone?: "light" | "dark"; className?: string }) {
   const [state, formAction, pending] = useActionState(subscribe, initialState);
   const dark = tone === "dark";
+  // The form appears more than once per page, so the input id has to be unique.
+  const fieldId = useId();
 
   if (state.status === "success") {
     return (
@@ -22,11 +24,12 @@ export function NewsletterForm({ tone = "light", className = "" }: { tone?: "lig
   return (
     <form action={formAction} className={className}>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <label htmlFor={`newsletter-email-${tone}`} className="sr-only">
+        <label htmlFor={fieldId} className="sr-only">
           Email address
         </label>
         <input
-          id={`newsletter-email-${tone}`}
+          id={fieldId}
+          data-newsletter-form={tone}
           name="email"
           type="email"
           required
