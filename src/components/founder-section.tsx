@@ -1,27 +1,27 @@
-import Image from "next/image";
+import award from "@/assets/vivek-award.jpg";
 import photo from "@/assets/vivek-gupta.jpg";
 import { founder, site } from "@/content/site";
+import { FounderCarousel } from "./founder-carousel";
 import { Accent, ArrowIcon, Container, Section, SectionHeading } from "./ui";
 
 export function FounderSection() {
   return (
     <Section id="founder">
       <Container className="grid gap-16 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-        <div className="reveal relative mx-auto w-full max-w-md pb-8">
-          <div className="overflow-hidden rounded-[2rem] bg-paper-2">
-            <Image
-              src={photo}
-              alt={`${founder.name}, founder of ${site.name}`}
-              placeholder="blur"
-              sizes="(min-width: 1024px) 28rem, 90vw"
-              className="aspect-[4/5] w-full object-cover"
-            />
-          </div>
-          <div className="absolute bottom-0 left-5 right-5 rounded-2xl bg-ink p-5 text-paper shadow-xl sm:left-auto sm:-right-6 sm:w-72">
-            <p className="font-serif text-2xl italic text-mint">{founder.credential}</p>
-            <p className="mt-1 text-sm text-paper/60">Indian Institute of Technology Delhi</p>
-          </div>
-        </div>
+        <FounderCarousel
+          slides={[
+            {
+              src: photo,
+              alt: `${founder.name}, founder of ${site.name}`,
+              caption: `${founder.name}, founder of ${site.name}.`,
+            },
+            {
+              src: award,
+              alt: `${founder.name} being honoured for his work in AI`,
+              caption: founder.awardCaption,
+            },
+          ]}
+        />
 
         <div>
           <SectionHeading

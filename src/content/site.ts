@@ -16,6 +16,9 @@ export const founder = {
   credential: "PhD, IIT Delhi",
   linkedin: "https://www.linkedin.com/in/vivekgupta668/",
   highlights: ["PhD, IIT Delhi", "AI researcher", "Serial entrepreneur", "14 years in technology"],
+  // TODO: confirm the award name, event and year before this goes out widely.
+  awardCaption:
+    "Honoured for his work in AI at the 79th birth anniversary celebration of Padma Bhushan Ram Vilas Paswan.",
   previously: ["MakeMyTrip", "Goibibo", "Wissen", "Jubilant FoodWorks"],
   bio: [
     "Vivek Gupta is an IIT Delhi PhD, AI researcher and serial entrepreneur with 14 years of building technology at MakeMyTrip, Goibibo, Wissen and Jubilant FoodWorks.",
