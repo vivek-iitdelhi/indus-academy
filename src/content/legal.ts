@@ -50,6 +50,20 @@ export const terms: LegalDocument = {
       ],
     },
     {
+      heading: "How and when services are delivered",
+      paragraphs: [
+        "Everything we sell is a service delivered live, not a physical product, so nothing is shipped.",
+      ],
+      list: [
+        "Within minutes of payment you receive a confirmation email with your cohort dates, schedule and payment reference.",
+        "Joining details, the welcome pack and pre-work are emailed at least 7 days before the first session, or within 24 hours if you book later than that.",
+        "Sessions are delivered live online at the times published on the program page, in Indian Standard Time. In-person and on-site sessions are delivered at the venue agreed in writing.",
+        "Session recordings are shared within 24 hours of each session and stay available to your cohort for 6 months.",
+        "Certificates are issued by email within 10 working days of the program ending, once attendance and assessed work are confirmed.",
+        "Corporate engagements are delivered on the dates set out in the signed proposal or statement of work.",
+      ],
+    },
+    {
       heading: "Changes to a program",
       paragraphs: [
         "We may adjust session dates, timings, the order of the curriculum or the faculty assigned, and will tell you as early as we can. If we cancel a cohort or reschedule it so that you can no longer attend, you may take a free transfer to a later cohort or a full refund, as set out in our Refunds and Cancellations policy.",
