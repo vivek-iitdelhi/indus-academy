@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CertificateSection } from "@/components/certificate-section";
+import { EnrollButton } from "@/components/enroll-button";
 import { CtaBand } from "@/components/cta-band";
 import { Faq } from "@/components/faq";
 import { JsonLd } from "@/components/json-ld";
@@ -10,6 +11,8 @@ import { ProgramFacts } from "@/components/program-facts";
 import { Accent, ArrowIcon, ButtonLink, CheckList, Container, Section, SectionHeading } from "@/components/ui";
 import { formatPrice, programBySlug, programs, SHOW_PRICES, totalHours } from "@/content/programs";
 import { pageMetadata } from "@/lib/metadata";
+import { activePrice, cohortIsOpen, formatDate } from "@/lib/pricing";
+import { razorpayConfigured } from "@/lib/razorpay";
 import { breadcrumbSchema, courseSchema, faqSchema } from "@/lib/schema";
 
 export const dynamicParams = false;
@@ -34,6 +37,8 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
   if (!program) notFound();
 
   const hours = totalHours(program);
+  const price = activePrice(program);
+  const canPayOnline = SHOW_PRICES && razorpayConfigured() && cohortIsOpen(program) && Boolean(price);
   const others = programs.filter((p) => p.slug !== program.slug);
   const crumbs = [
     { name: "Home", path: "/" },
@@ -78,20 +83,45 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
             <ProgramFacts program={program} />
 
             <div className="rounded-2xl border border-line bg-white/60 p-6">
-              <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Fees</p>
-              {SHOW_PRICES && program.price.seat ? (
+              {program.cohort && (
                 <>
-                  <p className="mt-2 text-3xl font-semibold tracking-tight">
-                    {formatPrice(program.price.seat)}
+                  <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Next cohort</p>
+                  <p className="mt-2 text-lg font-semibold tracking-tight">
+                    {program.cohort.name} · starts {formatDate(program.cohort.startDate)}
+                  </p>
+                  <p className="mt-1 text-sm text-muted">{program.cohort.schedule}</p>
+                  <p className="mt-1 text-sm text-muted">
+                    {program.cohort.startDate === program.cohort.endDate
+                      ? `${program.cohort.seats} seats`
+                      : `Ends ${formatDate(program.cohort.endDate)} · ${program.cohort.seats} seats`}
+                  </p>
+                </>
+              )}
+
+              {SHOW_PRICES && price ? (
+                <div className={program.cohort ? "mt-5 border-t border-line pt-5" : ""}>
+                  <p className="text-3xl font-semibold tracking-tight">
+                    {formatPrice(price.amount)}
+                    {price.isEarlyBird && (
+                      <span className="ml-2 text-lg font-normal text-muted line-through">
+                        {formatPrice(price.listPrice)}
+                      </span>
+                    )}
                     <span className="ml-2 text-base font-normal text-muted">per seat + GST</span>
                   </p>
+                  {price.isEarlyBird && price.until && (
+                    <p className="mt-2 rounded-lg bg-saffron/15 px-3 py-2 text-sm text-ink">
+                      <span className="font-medium">Early bird:</span> first {price.seats} seats, booked by{" "}
+                      {formatDate(price.until)}.
+                    </p>
+                  )}
                   {program.price.inHouseFrom && (
                     <p className="mt-2 text-sm text-muted">
                       Private cohort for your company from {formatPrice(program.price.inHouseFrom)}.
                     </p>
                   )}
                   {program.price.note && <p className="mt-1 text-sm text-muted">{program.price.note}</p>}
-                </>
+                </div>
               ) : (
                 <p className="mt-2 text-lg font-medium">
                   Enquire for cohort dates and fees
@@ -100,10 +130,15 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
                   </span>
                 </p>
               )}
+
               <div className="mt-5">
-                <ButtonLink href="/contact?interest=programs" variant="dark" className="w-full">
-                  Enquire now
-                </ButtonLink>
+                {canPayOnline ? (
+                  <EnrollButton slug={program.slug} programName={program.name} />
+                ) : (
+                  <ButtonLink href="/contact?interest=programs" variant="dark" className="w-full">
+                    Enquire now
+                  </ButtonLink>
+                )}
               </div>
             </div>
 

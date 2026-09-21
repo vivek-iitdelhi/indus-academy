@@ -91,6 +91,40 @@ Bootcamp capstones are additionally scored on evaluation coverage, guardrails, o
 3. Keep a register of issued certificates: name, email, program, cohort, date, capstone title.
 4. For corporate cohorts, send the sponsor the list of certified participants with the summary report.
 
+## Cohort dates
+
+| Program | Cohort | Starts | Ends | Schedule | Seats |
+| --- | --- | --- | --- | --- | --- |
+| AI Generalist Certification | Cohort 01 | Thu 15 Oct 2026 | Tue 10 Nov 2026 | Tue, Thu, Sat · 7–9 PM IST | 25 |
+| AI for Leaders | Cohort 01 | Sat 17 Oct 2026 | Sat 21 Nov 2026 | Saturdays · 10 AM–12 PM IST | 20 |
+| AI Automation & Agents Bootcamp | Cohort 01 | Mon 2 Nov 2026 | Wed 16 Dec 2026 | Mon, Wed · 7–10 PM IST | 20 |
+| AI Foundations Workshop | October workshop | Sat 24 Oct 2026 | Sat 24 Oct 2026 | One Saturday · 10 AM–5 PM IST | 40 |
+
+Cohort dates live in `src/content/programs.ts`. Change them there and the website, the Course schema and the payment flow all follow.
+
+## Early bird
+
+The early-bird price applies while **both** conditions hold, and the site shows the deadline:
+
+| Program | Early bird | Full price | Seats at early bird | Booked by |
+| --- | --- | --- | --- | --- |
+| AI Generalist Certification | ₹19,999 | ₹24,999 | First 15 | 5 Oct 2026 |
+| AI for Leaders | ₹31,999 | ₹39,999 | First 10 | 10 Oct 2026 |
+| AI Automation & Agents Bootcamp | ₹35,999 | ₹44,999 | First 10 | 20 Oct 2026 |
+| AI Foundations Workshop | ₹3,999 | ₹4,999 | First 20 | 15 Oct 2026 |
+
+- **The date is enforced automatically.** After the deadline the site charges the full price, with no action needed.
+- **The seat count is not.** Nothing counts seats sold, so watch enrolment emails and change the `until` date in `src/content/programs.ts` once the early-bird seats are gone. Publishing a seat cap you do not honour is worse than not offering one.
+- **Never extend a deadline quietly.** If you extend, say so; a deadline that always moves stops working.
+
+## Payments
+
+- Seats are paid online through **Razorpay**, using the same gateway as IndusLabs.
+- The price is calculated on our server at the moment of payment, so an edited page cannot change what is charged.
+- Every payment is verified against Razorpay's signature and then re-checked with Razorpay directly before a seat is confirmed.
+- On success, the learner gets a confirmation email with cohort dates and payment ID; the team gets an enrolment notification at the enquiries inbox.
+- **There is no database.** The enrolment emails and the Razorpay dashboard are the record. Keep a register per cohort from those.
+
 ## Pricing (live)
 
 Approved and live on the site. `SHOW_PRICES` in `src/content/programs.ts` controls whether they are shown.

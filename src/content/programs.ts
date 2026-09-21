@@ -23,6 +23,24 @@ export type Price = {
   note?: string;
 };
 
+export type Cohort = {
+  /** Public label, e.g. "Cohort 01". */
+  name: string;
+  /** ISO date of the first session. */
+  startDate: string;
+  /** ISO date of the last session. */
+  endDate: string;
+  schedule: string;
+  seats: number;
+  earlyBird?: {
+    price: number;
+    /** Early-bird pricing ends at the end of this day, India time. */
+    until: string;
+    /** Number of seats offered at the early-bird price. */
+    seats: number;
+  };
+};
+
 export type Program = {
   slug: string;
   name: string;
@@ -38,6 +56,7 @@ export type Program = {
   assessment: string;
   sessions: Session[];
   price: Price;
+  cohort?: Cohort;
   seoTitle: string;
   seoDescription: string;
   mode: "Online" | "Blended" | "Onsite";
@@ -68,7 +87,15 @@ export const programs: Program[] = [
       "Automations that start saving you time in the first week",
       "An Indus AI Academy certificate backed by real, assessed work",
     ],
-    price: { seat: 24999, inHouseFrom: 300000, note: "Early-bird and group discounts available." },
+    price: { seat: 24999, inHouseFrom: 300000, note: "Group discounts from 3 seats." },
+    cohort: {
+      name: "Cohort 01",
+      startDate: "2026-10-15",
+      endDate: "2026-11-10",
+      schedule: "Tuesdays, Thursdays and Saturdays, 7–9 PM IST",
+      seats: 25,
+      earlyBird: { price: 19999, until: "2026-10-05", seats: 15 },
+    },
     sessions: [
       {
         title: "How modern AI actually works",
@@ -239,6 +266,14 @@ export const programs: Program[] = [
       "A 90-day plan and a 12-month roadmap for your team",
     ],
     price: { seat: 39999, inHouseFrom: 250000, note: "In-house price covers one leadership team, up to 20 people." },
+    cohort: {
+      name: "Cohort 01",
+      startDate: "2026-10-17",
+      endDate: "2026-11-21",
+      schedule: "Saturdays, 10 AM–12 PM IST",
+      seats: 20,
+      earlyBird: { price: 31999, until: "2026-10-10", seats: 10 },
+    },
     sessions: [
       {
         title: "What AI can and cannot do in 2026",
@@ -344,6 +379,14 @@ export const programs: Program[] = [
       "Deployment and cost-control playbooks",
     ],
     price: { seat: 44999, inHouseFrom: 450000, note: "Team pricing available for four or more seats." },
+    cohort: {
+      name: "Cohort 01",
+      startDate: "2026-11-02",
+      endDate: "2026-12-16",
+      schedule: "Mondays and Wednesdays, 7–10 PM IST",
+      seats: 20,
+      earlyBird: { price: 35999, until: "2026-10-20", seats: 10 },
+    },
     sessions: [
       {
         title: "Agent architectures",
@@ -466,6 +509,14 @@ export const programs: Program[] = [
       "A personal AI toolkit, set up before you leave",
     ],
     price: { seat: 4999, inHouseFrom: 125000, note: "In-house day covers up to 40 participants at your office." },
+    cohort: {
+      name: "October workshop",
+      startDate: "2026-10-24",
+      endDate: "2026-10-24",
+      schedule: "One Saturday, 10 AM–5 PM IST",
+      seats: 40,
+      earlyBird: { price: 3999, until: "2026-10-15", seats: 20 },
+    },
     sessions: [
       {
         title: "What AI can do for your role",
