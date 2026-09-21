@@ -1,5 +1,5 @@
 import photo from "@/assets/vivek-gupta.jpg";
-import type { Program } from "@/content/programs";
+import { SHOW_PRICES, type Program } from "@/content/programs";
 import type { Track } from "@/content/tracks";
 import type { Post } from "@/lib/blog";
 import { company, founder, site } from "@/content/site";
@@ -112,6 +112,16 @@ export function courseSchema(program: Program) {
       timeRequired: `PT${session.hours}H`,
     })),
     coursePrerequisites: program.prerequisites,
+    ...(SHOW_PRICES &&
+      program.price.seat && {
+        offers: {
+          "@type": "Offer",
+          price: program.price.seat,
+          priceCurrency: "INR",
+          category: "Paid",
+          url: absolute(`/programs/${program.slug}`),
+        },
+      }),
     hasCourseInstance: {
       "@type": "CourseInstance",
       courseMode: program.mode,

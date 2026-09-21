@@ -4,7 +4,7 @@
  * Prices are drafted but not published: `SHOW_PRICES` stays false until the
  * numbers are signed off, and pages fall back to "Enquire for pricing".
  */
-export const SHOW_PRICES = false;
+export const SHOW_PRICES = true;
 
 export type Session = {
   title: string;

@@ -6,7 +6,7 @@ import { JsonLd } from "@/components/json-ld";
 import { PageHero } from "@/components/page-hero";
 import { ProgramFacts } from "@/components/program-facts";
 import { Accent, ButtonLink, Container, Section } from "@/components/ui";
-import { programs } from "@/content/programs";
+import { formatPrice, programs, SHOW_PRICES } from "@/content/programs";
 import { pageMetadata } from "@/lib/metadata";
 import { breadcrumbSchema } from "@/lib/schema";
 
@@ -54,6 +54,17 @@ export default function ProgramsPage() {
               <p className="mt-3 font-serif text-xl italic text-pine">{p.tagline}</p>
               <p className="mt-4 leading-relaxed text-muted">{p.summary}</p>
               <ProgramFacts program={p} className="mt-8" />
+              {SHOW_PRICES && p.price.seat && (
+                <p className="mt-6 text-lg font-semibold tracking-tight">
+                  {formatPrice(p.price.seat)}
+                  <span className="ml-2 text-sm font-normal text-muted">per seat + GST</span>
+                  {p.price.inHouseFrom && (
+                    <span className="mt-1 block text-sm font-normal text-muted">
+                      Private cohort from {formatPrice(p.price.inHouseFrom)}
+                    </span>
+                  )}
+                </p>
+              )}
               <div className="mt-auto flex flex-wrap gap-3 pt-8">
                 <ButtonLink href={`/programs/${p.slug}`} variant="dark">
                   View program

@@ -91,9 +91,9 @@ Bootcamp capstones are additionally scored on evaluation coverage, guardrails, o
 3. Keep a register of issued certificates: name, email, program, cohort, date, capstone title.
 4. For corporate cohorts, send the sponsor the list of certified participants with the summary report.
 
-## Pricing (proposed, not yet published)
+## Pricing (live)
 
-Draft list prices. `SHOW_PRICES` in `src/content/programs.ts` stays `false` until these are approved, so the site currently says "Enquire for pricing".
+Approved and live on the site. `SHOW_PRICES` in `src/content/programs.ts` controls whether they are shown.
 
 | Program | Per seat | Private cohort (up to 25) |
 | --- | --- | --- |
@@ -103,7 +103,7 @@ Draft list prices. `SHOW_PRICES` in `src/content/programs.ts` stays `false` unti
 | AI Foundations Workshop | ₹4,999 | from ₹1,25,000 per day (up to 40) |
 | Corporate role tracks | — | from ₹2,00,000 per track |
 
-Suggested policy, all subject to approval:
+Discount policy:
 
 - **Early bird:** 20% off for payment two weeks before a cohort starts.
 - **Groups:** 10% off for 3 or more seats from one company, 15% for 5 or more.
