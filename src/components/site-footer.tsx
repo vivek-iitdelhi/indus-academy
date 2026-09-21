@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { programs } from "@/content/programs";
 import { company, site } from "@/content/site";
+import { legalDocuments } from "@/content/legal";
 import { newsletterConfigured } from "@/lib/newsletter";
 import { Logo } from "./logo";
 import { NewsletterForm } from "./newsletter-form";
@@ -82,7 +83,13 @@ export function SiteFooter() {
         <p>
           © {new Date().getFullYear()} {company.legalName}. All rights reserved.
         </p>
-        <p>Built in India, for teams everywhere.</p>
+        <nav aria-label="Legal" className="flex flex-wrap gap-x-6 gap-y-2">
+          {legalDocuments.map((doc) => (
+            <Link key={doc.slug} href={`/${doc.slug}`} className="transition-colors hover:text-paper">
+              {doc.title}
+            </Link>
+          ))}
+        </nav>
       </Container>
     </footer>
   );
