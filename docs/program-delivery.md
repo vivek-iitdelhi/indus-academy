@@ -125,6 +125,22 @@ The early-bird price applies while **both** conditions hold, and the site shows 
 - On success, the learner gets a confirmation email with cohort dates and payment ID; the team gets an enrolment notification at the enquiries inbox.
 - **There is no database.** The enrolment emails and the Razorpay dashboard are the record. Keep a register per cohort from those.
 
+## Refunds (confirmed, published)
+
+Published at `/refunds` and confirmed on 21 Sep 2026. Handle requests against these terms, not case by case.
+
+| Situation | Outcome |
+| --- | --- |
+| Cancels more than 7 days before the cohort | Full refund including GST |
+| Cancels 7 days to 48 hours before | 50% refund |
+| Cancels within 48 hours, or after the start | No refund |
+| Asks to move cohort, 48+ hours ahead | One free transfer; early-bird price carries over; not refundable afterwards |
+| We cancel or reschedule | Learner chooses a full refund or a free transfer |
+| Workshop, within 7 days | Transfer only, no refund |
+| Corporate | Per the signed proposal; deposit refundable up to 14 days before delivery |
+
+Process: acknowledge within 2 working days, decide within 7, refund through Razorpay to the original method within 5–7 working days. We absorb the gateway fee. Log every refund against the cohort register.
+
 ## Pricing (live)
 
 Approved and live on the site. `SHOW_PRICES` in `src/content/programs.ts` controls whether they are shown.
