@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Post } from "@/lib/blog";
-import { company, site } from "@/content/site";
+import { company, companyAddress, site } from "@/content/site";
 
 const RESEND_API = "https://api.resend.com";
 const TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
@@ -67,7 +67,7 @@ const shell = (body: string, footer: string) => `
     </div>
     <div style="max-width:560px;margin:20px auto 0;font-size:12px;line-height:1.6;color:#56655f;text-align:center">
       ${footer}
-      <p style="margin:12px 0 0">${escapeHtml(company.legalName)}, ${escapeHtml(company.location)}</p>
+      <p style="margin:12px 0 0">${escapeHtml(company.legalName)}, ${escapeHtml(companyAddress)}</p>
     </div>
   </div>`;
 

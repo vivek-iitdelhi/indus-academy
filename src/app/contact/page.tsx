@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { Accent, Container, Eyebrow } from "@/components/ui";
-import { enquiryInterests, site } from "@/content/site";
+import { company, enquiryInterests, site } from "@/content/site";
 import { pageMetadata } from "@/lib/metadata";
+
+const linkClass = "font-medium text-pine underline decoration-pine/30 underline-offset-4 hover:decoration-pine";
 
 // Canonical stays /contact for every ?interest= variant, so they aren't indexed as duplicates.
 export const metadata: Metadata = pageMetadata({
@@ -47,15 +49,40 @@ export default async function ContactPage({ searchParams }: PageProps<"/contact"
           ))}
         </ol>
 
-        <p className="mt-12 text-muted">
-          Prefer email?{" "}
-          <a
-            href={`mailto:${site.email}`}
-            className="font-medium text-pine underline decoration-pine/30 underline-offset-4 hover:decoration-pine"
-          >
-            {site.email}
-          </a>
-        </p>
+        <h2 className="mt-12 font-mono text-[0.72rem] uppercase tracking-[0.18em] text-muted">Reach us directly</h2>
+        <dl className="mt-5 space-y-4 text-ink/80">
+          <div>
+            <dt className="text-sm text-muted">Email</dt>
+            <dd className="mt-1">
+              <a href={`mailto:${site.email}`} className={linkClass}>
+                {site.email}
+              </a>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted">Phone</dt>
+            <dd className="mt-1">
+              <a href={company.phoneHref} className={linkClass}>
+                {company.phone}
+              </a>
+              <span className="block text-sm text-muted">Mon–Sat, 10:00–19:00 IST</span>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted">Registered office</dt>
+            <dd className="mt-1 not-italic">
+              <address className="not-italic leading-relaxed">
+                {company.legalName}
+                <br />
+                {company.address.street}
+                <br />
+                {company.address.locality}
+                <br />
+                {company.address.region} {company.address.postalCode}, {company.address.country}
+              </address>
+            </dd>
+          </div>
+        </dl>
       </div>
 
       <div className="self-start rounded-[2rem] border border-line bg-white p-6 shadow-sm sm:p-10">

@@ -1,5 +1,5 @@
 import { programBySlug } from "@/content/programs";
-import { company, site } from "@/content/site";
+import { company, companyAddress, site } from "@/content/site";
 import { formatDate } from "@/lib/pricing";
 import { fetchPayment, razorpayConfigured, verifySignature } from "@/lib/razorpay";
 
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
           <tr><td style="padding:6px 16px 6px 0;color:#56655f">Payment ID</td><td>${escapeHtml(paymentId)}</td></tr>
         </table>
         <p style="line-height:1.7;color:#56655f">We'll send joining details and the welcome pack a week before the first session. Just reply to this email with any questions.</p>
-        <p style="font-size:12px;color:#56655f;margin-top:24px">${escapeHtml(company.legalName)}, ${escapeHtml(company.location)}</p>
+        <p style="font-size:12px;color:#56655f;margin-top:24px">${escapeHtml(company.legalName)}, ${escapeHtml(companyAddress)}</p>
       </div>`,
     });
   }

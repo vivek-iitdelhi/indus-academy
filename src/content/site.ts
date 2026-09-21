@@ -34,9 +34,26 @@ export const founder = {
 export const company = {
   legalName: "INDUS AI Private Limited",
   founded: "2023",
-  location: "Greater Noida, India",
+  location: "Noida, India",
+  address: {
+    street: "B-705, Bhutani Cyber Park",
+    locality: "Sector 62, Noida",
+    region: "Uttar Pradesh",
+    postalCode: "201301",
+    country: "India",
+  },
+  phone: "+91 81058 70564",
+  phoneHref: "tel:+918105870564",
   credentials: ["DPIIT-recognized startup (Startup India)", "ISO 9001:2015 certified", "MSME registered"],
 };
+
+// One-line registered office, used in the footer, policies and transactional email.
+export const companyAddress = [
+  company.address.street,
+  company.address.locality,
+  `${company.address.region} ${company.address.postalCode}`,
+  company.address.country,
+].join(", ");
 
 export type NavLink = { href: string; label: string; description?: string; external?: boolean };
 

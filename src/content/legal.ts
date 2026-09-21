@@ -1,4 +1,4 @@
-import { company, founder, site } from "./site";
+import { company, companyAddress, founder, site } from "./site";
 
 export type LegalSection = {
   heading: string;
@@ -24,12 +24,12 @@ export const terms: LegalDocument = {
   description:
     "The terms on which Indus AI Academy, operated by INDUS AI Private Limited, provides training programs, workshops and consulting services.",
   updated: LAST_UPDATED,
-  intro: `These terms govern your use of ${site.url.replace("https://", "")} and any program, workshop or service you buy from ${ENTITY}, with its registered office in ${company.location}.`,
+  intro: `These terms govern your use of ${site.url.replace("https://", "")} and any program, workshop or service you buy from ${ENTITY}, with its registered office at ${companyAddress}.`,
   sections: [
     {
       heading: "Who we are",
       paragraphs: [
-        `Indus AI Academy is the training and consulting business of ${company.legalName}, incorporated in India in ${company.founded}. You can reach us at ${site.email}.`,
+        `Indus AI Academy is the training and consulting business of ${company.legalName}, incorporated in India in ${company.founded}, with its registered office at ${companyAddress}. You can reach us at ${site.email} or ${company.phone}, Monday to Saturday between 10:00 and 19:00 IST.`,
       ],
     },
     {
@@ -113,7 +113,10 @@ export const terms: LegalDocument = {
     },
     {
       heading: "Contact",
-      paragraphs: [`Questions about these terms: ${site.email}. ${company.legalName}, ${company.location}.`],
+      paragraphs: [
+        `Questions about these terms: ${site.email} or ${company.phone}.`,
+        `${company.legalName}, ${companyAddress}.`,
+      ],
     },
   ],
 };
@@ -183,7 +186,7 @@ export const privacy: LegalDocument = {
     {
       heading: "Grievance officer",
       paragraphs: [
-        `${founder.name}, ${company.legalName}, ${company.location}. Email: ${site.email}. We respond to privacy grievances within 30 days.`,
+        `${founder.name}, ${company.legalName}, ${companyAddress}. Email: ${site.email}. Phone: ${company.phone}. We respond to privacy grievances within 30 days.`,
       ],
     },
     {
@@ -263,7 +266,7 @@ export const refunds: LegalDocument = {
     {
       heading: "Raising a request",
       paragraphs: [
-        `Email ${site.email} with your name, the program, and your payment reference. We acknowledge within 2 working days and decide within 7.`,
+        `Email ${site.email} with your name, the program, and your payment reference, or call ${company.phone} between 10:00 and 19:00 IST, Monday to Saturday. We acknowledge within 2 working days and decide within 7.`,
       ],
     },
   ],

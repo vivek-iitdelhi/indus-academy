@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { programs } from "@/content/programs";
-import { company, site } from "@/content/site";
+import { company, companyAddress, site } from "@/content/site";
 import { legalDocuments } from "@/content/legal";
 import { newsletterConfigured } from "@/lib/newsletter";
 import { Logo } from "./logo";
@@ -42,14 +42,23 @@ export function SiteFooter() {
             Hands-on AI education and consulting for professionals and the organizations they build.
           </p>
           <p className="mt-4 text-sm leading-relaxed text-paper/60">
-            An initiative of {company.legalName}, {company.location}. {company.credentials.join(" · ")}.
+            An initiative of {company.legalName}. {company.credentials.join(" · ")}.
           </p>
-          <a
-            href={`mailto:${site.email}`}
-            className="mt-6 inline-block text-mint underline decoration-mint/30 underline-offset-4 hover:decoration-mint"
-          >
-            {site.email}
-          </a>
+          <address className="mt-4 text-sm not-italic leading-relaxed text-paper/60">{companyAddress}</address>
+          <div className="mt-5 flex flex-col gap-2">
+            <a
+              href={`mailto:${site.email}`}
+              className="text-mint underline decoration-mint/30 underline-offset-4 hover:decoration-mint"
+            >
+              {site.email}
+            </a>
+            <a
+              href={company.phoneHref}
+              className="text-mint underline decoration-mint/30 underline-offset-4 hover:decoration-mint"
+            >
+              {company.phone}
+            </a>
+          </div>
 
           {newsletterConfigured() && (
             <div className="mt-8">
