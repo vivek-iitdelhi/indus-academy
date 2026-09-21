@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { CtaBand } from "@/components/cta-band";
 import { PageHero } from "@/components/page-hero";
-import { Accent, ButtonLink, CheckList, Container, Section, SectionHeading } from "@/components/ui";
+import { Accent, ArrowIcon, ButtonLink, CheckList, Container, Section, SectionHeading } from "@/components/ui";
 import { JsonLd } from "@/components/json-ld";
-import { formats, measurement, rolloutSteps, tracks } from "@/content/enterprise";
+import Link from "next/link";
+import { formats, measurement, rolloutSteps } from "@/content/enterprise";
+import { tracks } from "@/content/tracks";
 import { pageMetadata } from "@/lib/metadata";
 import { breadcrumbSchema, serviceSchema } from "@/lib/schema";
 
@@ -97,14 +99,40 @@ export default function EnterprisePage() {
           />
           <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {tracks.map((t) => (
-              <div key={t.role} className="reveal rounded-3xl border border-line bg-paper p-7">
-                <h3 className="text-xl font-semibold tracking-tight">{t.role}</h3>
-                <p className="mt-2 text-muted">{t.focus}</p>
-                <div className="mt-6">
-                  <CheckList items={t.outcomes} />
-                </div>
-              </div>
+              <Link
+                key={t.slug}
+                href={`/enterprise/${t.slug}`}
+                className="reveal group flex flex-col rounded-3xl border border-line bg-paper p-7 transition-colors hover:border-ink/25 hover:bg-white"
+              >
+                <span className="font-mono text-xs text-pine">{t.duration}</span>
+                <h3 className="mt-5 text-xl font-semibold tracking-tight">{t.name}</h3>
+                <p className="mt-2 text-muted">{t.tagline}</p>
+                <ul className="mt-6 space-y-2 text-sm text-muted">
+                  {t.sessions.map((session) => (
+                    <li key={session.title} className="flex gap-2.5">
+                      <span className="mt-2 size-1 shrink-0 rounded-full bg-saffron" aria-hidden="true" />
+                      {session.title}
+                    </li>
+                  ))}
+                </ul>
+                <span className="mt-auto inline-flex items-center gap-2 pt-6 text-sm font-medium text-ink">
+                  View curriculum
+                  <ArrowIcon className="size-4 transition-transform group-hover:translate-x-1" />
+                </span>
+              </Link>
             ))}
+            <Link
+              href="/programs/ai-for-leaders"
+              className="reveal group flex flex-col rounded-3xl border border-pine bg-pine p-7 text-paper transition-colors hover:bg-pine-2"
+            >
+              <span className="font-mono text-xs text-mint">6 sessions · 12 live hours</span>
+              <h3 className="mt-5 text-xl font-semibold tracking-tight">AI for Leaders</h3>
+              <p className="mt-2 text-paper/75">Strategy, investment and governance for your leadership team.</p>
+              <span className="mt-auto inline-flex items-center gap-2 pt-6 text-sm font-medium">
+                View program
+                <ArrowIcon className="size-4 transition-transform group-hover:translate-x-1" />
+              </span>
+            </Link>
           </div>
         </Container>
       </Section>

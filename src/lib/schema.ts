@@ -1,5 +1,6 @@
 import photo from "@/assets/vivek-gupta.jpg";
 import type { Program } from "@/content/programs";
+import type { Track } from "@/content/tracks";
 import type { Post } from "@/lib/blog";
 import { company, founder, site } from "@/content/site";
 
@@ -104,19 +105,43 @@ export function courseSchema(program: Program) {
     audience: { "@type": "Audience", audienceType: program.audience },
     teaches: program.outcomes,
     educationalCredentialAwarded: `${site.name} certificate, issued by ${company.legalName}`,
-    ...(program.modules && {
-      syllabusSections: program.modules.map((m) => ({
-        "@type": "Syllabus",
-        name: m.title,
-        description: m.topics.join("; "),
-        timeRequired: `PT${m.hours}H`,
-      })),
-    }),
+    syllabusSections: program.sessions.map((session) => ({
+      "@type": "Syllabus",
+      name: session.title,
+      description: session.topics.join("; "),
+      timeRequired: `PT${session.hours}H`,
+    })),
+    coursePrerequisites: program.prerequisites,
     hasCourseInstance: {
       "@type": "CourseInstance",
       courseMode: program.mode,
       ...(program.workloadHours && { courseWorkload: `PT${program.workloadHours}H` }),
       instructor: { "@id": FOUNDER_ID },
+    },
+  };
+}
+
+export function courseSchemaForTrack(track: Track) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Course",
+    name: track.name,
+    description: track.summary,
+    url: absolute(`/enterprise/${track.slug}`),
+    provider: organizationRef,
+    inLanguage: "en",
+    audience: { "@type": "Audience", audienceType: track.audience },
+    teaches: track.outcomes,
+    syllabusSections: track.sessions.map((session) => ({
+      "@type": "Syllabus",
+      name: session.title,
+      description: session.topics.join("; "),
+      timeRequired: `PT${session.hours}H`,
+    })),
+    hasCourseInstance: {
+      "@type": "CourseInstance",
+      courseMode: "Blended",
+      courseWorkload: `PT${track.sessions.reduce((sum, session) => sum + session.hours, 0)}H`,
     },
   };
 }

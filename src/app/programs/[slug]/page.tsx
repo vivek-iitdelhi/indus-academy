@@ -8,22 +8,18 @@ import { JsonLd } from "@/components/json-ld";
 import { PageHero } from "@/components/page-hero";
 import { ProgramFacts } from "@/components/program-facts";
 import { Accent, ArrowIcon, ButtonLink, CheckList, Container, Section, SectionHeading } from "@/components/ui";
-import { programs } from "@/content/programs";
+import { formatPrice, programBySlug, programs, SHOW_PRICES, totalHours } from "@/content/programs";
 import { pageMetadata } from "@/lib/metadata";
 import { breadcrumbSchema, courseSchema, faqSchema } from "@/lib/schema";
 
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return programs.map((p) => ({ slug: p.slug }));
-}
-
-function getProgram(slug: string) {
-  return programs.find((p) => p.slug === slug);
+  return programs.map((program) => ({ slug: program.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/programs/[slug]">): Promise<Metadata> {
-  const program = getProgram((await params).slug);
+  const program = programBySlug((await params).slug);
   if (!program) return {};
   return pageMetadata({
     title: program.seoTitle,
@@ -34,11 +30,10 @@ export async function generateMetadata({ params }: PageProps<"/programs/[slug]">
 }
 
 export default async function ProgramPage({ params }: PageProps<"/programs/[slug]">) {
-  const program = getProgram((await params).slug);
+  const program = programBySlug((await params).slug);
   if (!program) notFound();
 
-  const modules = program.modules ?? [];
-  const totalHours = modules.reduce((sum, m) => sum + m.hours, 0);
+  const hours = totalHours(program);
   const others = programs.filter((p) => p.slug !== program.slug);
   const crumbs = [
     { name: "Home", path: "/" },
@@ -54,18 +49,64 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
 
       <PageHero eyebrow={program.duration} title={program.name} intro={program.summary} breadcrumbs={crumbs}>
         <ButtonLink href="/contact?interest=programs">Enquire about the next cohort</ButtonLink>
-        {modules.length > 0 && (
-          <ButtonLink href="#curriculum" variant="outline-dark">
-            See the curriculum
-          </ButtonLink>
-        )}
+        <ButtonLink href="#curriculum" variant="outline-dark">
+          See the full curriculum
+        </ButtonLink>
       </PageHero>
 
       <Section>
         <Container className="grid gap-12 lg:grid-cols-2">
-          <SectionHeading eyebrow="Overview" title={program.tagline} intro={`Who it's for: ${program.audience}.`} />
+          <div>
+            <SectionHeading eyebrow="Overview" title={program.tagline} intro={`Who it's for: ${program.audience}.`} />
+            <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-line bg-line text-sm">
+              <div className="bg-paper p-5">
+                <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Prerequisites</p>
+                <p className="mt-2 leading-relaxed">{program.prerequisites}</p>
+              </div>
+              <div className="bg-paper p-5">
+                <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Assessment</p>
+                <p className="mt-2 leading-relaxed">{program.assessment}</p>
+              </div>
+              <div className="bg-paper p-5">
+                <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Certification</p>
+                <p className="mt-2 leading-relaxed">{program.certification}</p>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-8">
             <ProgramFacts program={program} />
+
+            <div className="rounded-2xl border border-line bg-white/60 p-6">
+              <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Fees</p>
+              {SHOW_PRICES && program.price.seat ? (
+                <>
+                  <p className="mt-2 text-3xl font-semibold tracking-tight">
+                    {formatPrice(program.price.seat)}
+                    <span className="ml-2 text-base font-normal text-muted">per seat + GST</span>
+                  </p>
+                  {program.price.inHouseFrom && (
+                    <p className="mt-2 text-sm text-muted">
+                      Private cohort for your company from {formatPrice(program.price.inHouseFrom)}.
+                    </p>
+                  )}
+                  {program.price.note && <p className="mt-1 text-sm text-muted">{program.price.note}</p>}
+                </>
+              ) : (
+                <p className="mt-2 text-lg font-medium">
+                  Enquire for cohort dates and fees
+                  <span className="mt-1 block text-sm font-normal text-muted">
+                    Individual seats and private company cohorts available.
+                  </span>
+                </p>
+              )}
+              <div className="mt-5">
+                <ButtonLink href="/contact?interest=programs" variant="dark" className="w-full">
+                  Enquire now
+                </ButtonLink>
+              </div>
+            </div>
+
             <div>
               <h3 className="font-mono text-[0.72rem] uppercase tracking-[0.18em] text-muted">You will leave with</h3>
               <div className="mt-5">
@@ -76,35 +117,47 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
         </Container>
       </Section>
 
-      {modules.length > 0 && (
-        <Section id="curriculum" className="bg-paper-2">
-          <Container>
-            <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-6">
-              <SectionHeading eyebrow="Curriculum" title={`What you'll learn in ${program.name}`} />
-              <p className="font-mono text-sm text-muted">
-                {modules.length} modules · {totalHours} live hours
-              </p>
-            </div>
-            <ol className="divide-y divide-line">
-              {modules.map((m, i) => (
-                <li key={m.title} className="reveal grid gap-4 py-8 md:grid-cols-[5rem_1fr_1.3fr_5rem]">
-                  <span className="font-mono text-sm text-pine">Module {String(i + 1).padStart(2, "0")}</span>
-                  <h3 className="text-xl font-semibold tracking-tight">{m.title}</h3>
+      <Section id="curriculum" className="bg-paper-2">
+        <Container>
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-6">
+            <SectionHeading eyebrow="Curriculum" title={`Session by session: ${program.name}`} />
+            <p className="font-mono text-sm text-muted">
+              {program.sessions.length} sessions · {hours} live hours
+            </p>
+          </div>
+          <ol className="divide-y divide-line">
+            {program.sessions.map((session, i) => (
+              <li key={session.title} className="reveal grid gap-5 py-8 md:grid-cols-[6rem_1fr_1.2fr]">
+                <div>
+                  <span className="font-mono text-sm text-pine">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="mt-1 block font-mono text-xs text-muted">{session.hours} hrs</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold tracking-tight">{session.title}</h3>
+                  <p className="mt-3 rounded-xl bg-mint/40 px-4 py-3 text-sm leading-relaxed text-pine">
+                    <span className="font-medium">You build:</span> {session.build}
+                  </p>
+                </div>
+                <div>
                   <ul className="space-y-2 text-muted">
-                    {m.topics.map((t) => (
-                      <li key={t} className="flex gap-2.5">
+                    {session.topics.map((topic) => (
+                      <li key={topic} className="flex gap-2.5">
                         <span className="mt-2.5 size-1 shrink-0 rounded-full bg-saffron" aria-hidden="true" />
-                        {t}
+                        {topic}
                       </li>
                     ))}
                   </ul>
-                  <span className="font-mono text-sm text-muted md:text-right">{m.hours} hrs</span>
-                </li>
-              ))}
-            </ol>
-          </Container>
-        </Section>
-      )}
+                  {session.homework && (
+                    <p className="mt-3 text-sm text-muted">
+                      <span className="font-medium text-ink">Practice:</span> {session.homework}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Container>
+      </Section>
 
       <CertificateSection programName={program.name} />
 

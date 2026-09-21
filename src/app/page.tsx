@@ -24,7 +24,8 @@ import {
   SectionHeading,
 } from "@/components/ui";
 import { offerings } from "@/content/consulting";
-import { rolloutSteps, tracks } from "@/content/enterprise";
+import { rolloutSteps } from "@/content/enterprise";
+import { tracks } from "@/content/tracks";
 import { flagship } from "@/content/programs";
 import { founder, homeFaqs, tools } from "@/content/site";
 
@@ -86,7 +87,8 @@ const principles = [
 ];
 
 export default function Home() {
-  const modules = flagship.modules ?? [];
+  // The home page previews the first half of the flagship curriculum.
+  const previewSessions = flagship.sessions.slice(0, 6);
 
   return (
     <>
@@ -271,20 +273,31 @@ export default function Home() {
             </div>
           </div>
 
-          <ol className="space-y-3">
-            {modules.map((m, i) => (
-              <li key={m.title} className="reveal flex gap-5 rounded-2xl border border-line bg-white/50 p-6">
-                <span className="font-mono text-sm text-pine">{String(i + 1).padStart(2, "0")}</span>
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="text-lg font-semibold tracking-tight">{m.title}</h3>
-                    <span className="font-mono text-xs text-muted">{m.hours} hrs</span>
+          <div>
+            <ol className="space-y-3">
+              {previewSessions.map((session, i) => (
+                <li key={session.title} className="reveal flex gap-5 rounded-2xl border border-line bg-white/50 p-6">
+                  <span className="font-mono text-sm text-pine">{String(i + 1).padStart(2, "0")}</span>
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h3 className="text-lg font-semibold tracking-tight">{session.title}</h3>
+                      <span className="font-mono text-xs text-muted">{session.hours} hrs</span>
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-muted">
+                      <span className="font-medium text-ink">You build:</span> {session.build}
+                    </p>
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">{m.topics.join(" · ")}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
+                </li>
+              ))}
+            </ol>
+            <Link
+              href={`/programs/${flagship.slug}#curriculum`}
+              className="group mt-4 inline-flex items-center gap-2 text-sm font-medium text-pine"
+            >
+              See all {flagship.sessions.length} sessions
+              <ArrowIcon className="size-4 transition-transform group-hover:translate-x-1" />
+            </Link>
+          </div>
         </Container>
       </Section>
 
@@ -310,17 +323,19 @@ export default function Home() {
 
           <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {tracks.map((t) => (
-              <div key={t.role} className="reveal rounded-3xl border border-line bg-paper p-7">
-                <h3 className="text-xl font-semibold tracking-tight">{t.role}</h3>
-                <p className="mt-2 text-muted">{t.focus}</p>
-                <ul className="mt-6 flex flex-wrap gap-2">
-                  {t.outcomes.map((o) => (
-                    <li key={o} className="rounded-full bg-mint/60 px-3 py-1 text-xs text-pine">
-                      {o}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <Link
+                key={t.slug}
+                href={`/enterprise/${t.slug}`}
+                className="reveal group flex flex-col rounded-3xl border border-line bg-paper p-7 transition-colors hover:border-ink/25 hover:bg-white"
+              >
+                <span className="font-mono text-xs text-pine">{t.duration}</span>
+                <h3 className="mt-5 text-xl font-semibold tracking-tight">{t.name}</h3>
+                <p className="mt-2 text-muted">{t.tagline}</p>
+                <span className="mt-auto inline-flex items-center gap-2 pt-6 text-sm font-medium text-ink">
+                  View curriculum
+                  <ArrowIcon className="size-4 transition-transform group-hover:translate-x-1" />
+                </span>
+              </Link>
             ))}
           </div>
         </Container>

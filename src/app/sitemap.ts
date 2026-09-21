@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { programs } from "@/content/programs";
 import { site } from "@/content/site";
+import { tracks } from "@/content/tracks";
 import { getAllPosts } from "@/lib/blog";
 
 const routes = [
@@ -11,6 +12,7 @@ const routes = [
   { path: "/blog", priority: 0.7 },
   { path: "/contact", priority: 0.5 },
   ...programs.map((p) => ({ path: `/programs/${p.slug}`, priority: 0.8 })),
+  ...tracks.map((t) => ({ path: `/enterprise/${t.slug}`, priority: 0.8 })),
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
