@@ -69,7 +69,7 @@ export default async function ContactPage({ searchParams }: PageProps<"/contact"
             </dd>
           </div>
           <div>
-            <dt className="text-sm text-muted">Registered office</dt>
+            <dt className="text-sm text-muted">Office address</dt>
             <dd className="mt-1 not-italic">
               <address className="not-italic leading-relaxed">
                 {company.legalName}

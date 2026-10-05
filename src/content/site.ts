@@ -47,7 +47,8 @@ export const company = {
   credentials: ["DPIIT-recognized startup (Startup India)", "ISO 9001:2015 certified", "MSME registered"],
 };
 
-// One-line registered office, used in the footer, policies and transactional email.
+// One-line office address, used in the footer, policies and transactional email.
+// NOTE: this is the corporate office, not the registered office on the CoI.
 export const companyAddress = [
   company.address.street,
   company.address.locality,

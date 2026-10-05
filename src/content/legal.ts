@@ -24,12 +24,12 @@ export const terms: LegalDocument = {
   description:
     "The terms on which Indus AI Academy, operated by INDUS AI Private Limited, provides training programs, workshops and consulting services.",
   updated: LAST_UPDATED,
-  intro: `These terms govern your use of ${site.url.replace("https://", "")} and any program, workshop or service you buy from ${ENTITY}, with its registered office at ${companyAddress}.`,
+  intro: `These terms govern your use of ${site.url.replace("https://", "")} and any program, workshop or service you buy from ${ENTITY}, with its office at ${companyAddress}.`,
   sections: [
     {
       heading: "Who we are",
       paragraphs: [
-        `Indus AI Academy is the training and consulting business of ${company.legalName}, incorporated in India in ${company.founded}, with its registered office at ${companyAddress}. You can reach us at ${site.email} or ${company.phone}, Monday to Saturday between 10:00 and 19:00 IST.`,
+        `Indus AI Academy is the training and consulting business of ${company.legalName}, incorporated in India in ${company.founded}, with its office at ${companyAddress}. You can reach us at ${site.email} or ${company.phone}, Monday to Saturday between 10:00 and 19:00 IST.`,
       ],
     },
     {
