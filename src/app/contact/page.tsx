@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { Accent, Container, Eyebrow } from "@/components/ui";
-import { company, enquiryInterests, site } from "@/content/site";
+import { company, enquiryInterests, registeredAddress, site } from "@/content/site";
 import { pageMetadata } from "@/lib/metadata";
 
 const linkClass = "font-medium text-pine underline decoration-pine/30 underline-offset-4 hover:decoration-pine";
@@ -80,6 +80,13 @@ export default async function ContactPage({ searchParams }: PageProps<"/contact"
                 <br />
                 {company.address.region} {company.address.postalCode}, {company.address.country}
               </address>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted">Registered office</dt>
+            <dd className="mt-1">
+              <address className="not-italic leading-relaxed">{registeredAddress}</address>
+              <span className="mt-1 block text-sm text-muted">CIN: {company.cin}</span>
             </dd>
           </div>
         </dl>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { programs } from "@/content/programs";
-import { company, companyAddress, site } from "@/content/site";
+import { company, companyAddress, registeredAddress, site } from "@/content/site";
 import { legalDocuments } from "@/content/legal";
 import { newsletterConfigured } from "@/lib/newsletter";
 import { Logo } from "./logo";
@@ -44,7 +44,17 @@ export function SiteFooter() {
           <p className="mt-4 text-sm leading-relaxed text-paper/60">
             An initiative of {company.legalName}. {company.credentials.join(" · ")}.
           </p>
-          <address className="mt-4 text-sm not-italic leading-relaxed text-paper/60">{companyAddress}</address>
+          <address className="mt-4 space-y-2 text-sm not-italic leading-relaxed text-paper/60">
+            <span className="block">
+              <span className="text-paper/45">Office:</span> {companyAddress}
+            </span>
+            <span className="block">
+              <span className="text-paper/45">Registered office:</span> {registeredAddress}
+            </span>
+            <span className="block">
+              <span className="text-paper/45">CIN:</span> {company.cin}
+            </span>
+          </address>
           <div className="mt-5 flex flex-col gap-2">
             <a
               href={`mailto:${site.email}`}

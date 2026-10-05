@@ -44,6 +44,18 @@ export const company = {
   },
   phone: "+91 81058 70564",
   phoneHref: "tel:+918105870564",
+  // Per the Certificate of Incorporation (21 Aug 2023). Section 12(3)(c) of the
+  // Companies Act requires the registered office and CIN to be published.
+  // The PAN and TAN on that certificate are deliberately NOT published here.
+  cin: "U62099UP2023PTC187699",
+  registeredOffice: {
+    street: "H-38, Beta 2",
+    locality: "Chitvan State Road, Alpha Greater Noida, Maicha",
+    district: "Gautam Buddha Nagar",
+    region: "Uttar Pradesh",
+    postalCode: "201310",
+    country: "India",
+  },
   credentials: ["DPIIT-recognized startup (Startup India)", "ISO 9001:2015 certified", "MSME registered"],
 };
 
@@ -54,6 +66,15 @@ export const companyAddress = [
   company.address.locality,
   `${company.address.region} ${company.address.postalCode}`,
   company.address.country,
+].join(", ");
+
+/** The address on the Certificate of Incorporation, as filed with the RoC. */
+export const registeredAddress = [
+  company.registeredOffice.street,
+  company.registeredOffice.locality,
+  company.registeredOffice.district,
+  `${company.registeredOffice.region} ${company.registeredOffice.postalCode}`,
+  company.registeredOffice.country,
 ].join(", ");
 
 export type NavLink = { href: string; label: string; description?: string; external?: boolean };
