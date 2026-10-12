@@ -95,10 +95,12 @@ Bootcamp capstones are additionally scored on evaluation coverage, guardrails, o
 
 | Program | Cohort | Starts | Ends | Schedule | Seats |
 | --- | --- | --- | --- | --- | --- |
-| AI Generalist Certification | Cohort 01 | Thu 15 Oct 2026 | Tue 10 Nov 2026 | Tue, Thu, Sat · 7–9 PM IST | 25 |
-| AI for Leaders | Cohort 01 | Sat 17 Oct 2026 | Sat 21 Nov 2026 | Saturdays · 10 AM–12 PM IST | 20 |
-| AI Automation & Agents Bootcamp | Cohort 01 | Mon 2 Nov 2026 | Wed 16 Dec 2026 | Mon, Wed · 7–10 PM IST | 20 |
-| AI Foundations Workshop | October workshop | Sat 24 Oct 2026 | Sat 24 Oct 2026 | One Saturday · 10 AM–5 PM IST | 40 |
+| AI Generalist Certification | Cohort 01 | Tue 17 Nov 2026 | Sat 12 Dec 2026 | Tue, Thu, Sat · 7–9 PM IST | 25 |
+| AI for Leaders | Cohort 01 | Sat 14 Nov 2026 | Sat 19 Dec 2026 | Saturdays · 10 AM–12 PM IST | 20 |
+| AI Automation & Agents Bootcamp | Cohort 01 | Mon 16 Nov 2026 | Wed 23 Dec 2026 | Mon, Wed · 7–10 PM IST | 20 |
+| AI Foundations Workshop | November workshop | Sun 1 Nov 2026 | Sun 1 Nov 2026 | One Sunday · 10 AM–5 PM IST | 40 |
+
+Diwali 2026 falls on Sun 8 Nov, with the festival running 6–10 Nov. No session is scheduled in that window, and the long programmes start after it. Keep that rule when setting future cohorts.
 
 Cohort dates live in `src/content/programs.ts`. Change them there and the website, the Course schema and the payment flow all follow.
 
@@ -108,10 +110,10 @@ The early-bird price applies while **both** conditions hold, and the site shows 
 
 | Program | Early bird | Full price | Seats at early bird | Booked by |
 | --- | --- | --- | --- | --- |
-| AI Generalist Certification | ₹19,999 | ₹24,999 | First 15 | 5 Oct 2026 |
-| AI for Leaders | ₹31,999 | ₹39,999 | First 10 | 10 Oct 2026 |
-| AI Automation & Agents Bootcamp | ₹35,999 | ₹44,999 | First 10 | 20 Oct 2026 |
-| AI Foundations Workshop | ₹3,999 | ₹4,999 | First 20 | 15 Oct 2026 |
+| AI Generalist Certification | ₹19,999 | ₹24,999 | First 15 | 5 Nov 2026 |
+| AI for Leaders | ₹31,999 | ₹39,999 | First 10 | 5 Nov 2026 |
+| AI Automation & Agents Bootcamp | ₹35,999 | ₹44,999 | First 10 | 5 Nov 2026 |
+| AI Foundations Workshop | ₹3,999 | ₹4,999 | First 20 | 25 Oct 2026 |
 
 - **The date is enforced automatically.** After the deadline the site charges the full price, with no action needed.
 - **The seat count is not.** Nothing counts seats sold, so watch enrolment emails and change the `until` date in `src/content/programs.ts` once the early-bird seats are gone. Publishing a seat cap you do not honour is worse than not offering one.

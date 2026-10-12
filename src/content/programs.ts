@@ -90,11 +90,13 @@ export const programs: Program[] = [
     price: { seat: 24999, inHouseFrom: 300000, note: "Group discounts from 3 seats." },
     cohort: {
       name: "Cohort 01",
-      startDate: "2026-10-15",
-      endDate: "2026-11-10",
+      // Starts after Diwali (6–10 Nov 2026): nobody books a four-week evening
+      // commitment that straddles the festival week.
+      startDate: "2026-11-17",
+      endDate: "2026-12-12",
       schedule: "Tuesdays, Thursdays and Saturdays, 7–9 PM IST",
       seats: 25,
-      earlyBird: { price: 19999, until: "2026-10-05", seats: 15 },
+      earlyBird: { price: 19999, until: "2026-11-05", seats: 15 },
     },
     sessions: [
       {
@@ -268,11 +270,11 @@ export const programs: Program[] = [
     price: { seat: 39999, inHouseFrom: 250000, note: "In-house price covers one leadership team, up to 20 people." },
     cohort: {
       name: "Cohort 01",
-      startDate: "2026-10-17",
-      endDate: "2026-11-21",
+      startDate: "2026-11-14",
+      endDate: "2026-12-19",
       schedule: "Saturdays, 10 AM–12 PM IST",
       seats: 20,
-      earlyBird: { price: 31999, until: "2026-10-10", seats: 10 },
+      earlyBird: { price: 31999, until: "2026-11-05", seats: 10 },
     },
     sessions: [
       {
@@ -381,11 +383,11 @@ export const programs: Program[] = [
     price: { seat: 44999, inHouseFrom: 450000, note: "Team pricing available for four or more seats." },
     cohort: {
       name: "Cohort 01",
-      startDate: "2026-11-02",
-      endDate: "2026-12-16",
+      startDate: "2026-11-16",
+      endDate: "2026-12-23",
       schedule: "Mondays and Wednesdays, 7–10 PM IST",
       seats: 20,
-      earlyBird: { price: 35999, until: "2026-10-20", seats: 10 },
+      earlyBird: { price: 35999, until: "2026-11-05", seats: 10 },
     },
     sessions: [
       {
@@ -510,12 +512,14 @@ export const programs: Program[] = [
     ],
     price: { seat: 4999, inHouseFrom: 125000, note: "In-house day covers up to 40 participants at your office." },
     cohort: {
-      name: "October workshop",
-      startDate: "2026-10-24",
-      endDate: "2026-10-24",
-      schedule: "One Saturday, 10 AM–5 PM IST",
+      name: "November workshop",
+      startDate: "2026-11-01",
+      endDate: "2026-11-01",
+      // Sunday on purpose: AI for Leaders runs every Saturday morning through
+      // 12 December, and a 10–5 workshop would collide with it.
+      schedule: "One Sunday, 10 AM–5 PM IST",
       seats: 40,
-      earlyBird: { price: 3999, until: "2026-10-15", seats: 20 },
+      earlyBird: { price: 3999, until: "2026-10-25", seats: 20 },
     },
     sessions: [
       {
