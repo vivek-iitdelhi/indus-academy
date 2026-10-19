@@ -37,7 +37,7 @@ traffic.
 | ORM | Drizzle | TypeScript-native, light, fast cold starts |
 | Auth | Auth.js v5 — Resend magic links + Google | No new vendor, no passwords to leak, Resend is already paid for and DNS-verified |
 | Payments | Razorpay | Already integrated for cohort seats; same account, same keys |
-| Video | **undecided** | Leaving YouTube unlisted; see §7 |
+| Video | Gumlet | INR billing, Indian PoPs, React player with `onProgress`, DRM available later; see §7 |
 | Certificates | `next/og` ImageResponse | Already used for OG images; no new dependency |
 | Email | Resend | Already sending enquiry, enrolment and newsletter mail |
 
@@ -131,32 +131,77 @@ pages only.
 Reuse `verifySignature()` and the payment re-fetch that already exist — do not write a
 second payment path.
 
-## 7. Video — open question
+## 7. Video — Gumlet
 
-Moving off YouTube unlisted. The reason is protection: unlisted means anyone with the
-link can watch forever, with no domain restriction, no signed URLs and no expiry.
+Moving off YouTube unlisted, because unlisted means anyone with the link can watch
+forever: no domain restriction, no signed URLs, no expiry.
 
-Whatever is chosen, **every lesson renders through one `<VideoPlayer lessonId=…>`
-component**, so the provider can be swapped in one file. That abstraction costs nothing
-now and is the difference between a one-file change and a refactor later.
+**Chosen: [Gumlet](https://www.gumlet.com/pricing/).** Growth plan, $19/month.
 
-Requirements to judge against:
+Every lesson still renders through one `<VideoPlayer lessonId=...>` component, so the
+provider stays swappable in a single file. That costs nothing now and is the difference
+between a one-file change and a refactor later.
 
-- Signed or expiring playback URLs, and domain restriction
-- A playback-position API, since progress tracking depends on it
-- Adaptive bitrate — the audience is Indian professionals on mobile networks
-- Indian edge presence
-- INR billing with a GST invoice, ideally
-- DRM (Widevine/FairPlay) is worth pricing, though it is a real cost step and does not
-  stop a phone pointed at a screen
+### Why
 
-Costing is being done against two scenarios so vendors are comparable:
+| | Launch: 20 h stored, 100 students x 10 h/mo | Growth: 60 h stored, 2,000 students x 8 h/mo |
+| --- | --- | --- |
+| **Gumlet** | **$19** | $591 |
+| Bunny Stream | $21 | **$337** |
+| Mux | $0 | $851 |
+| Cloudflare Stream | $70 | $980 |
+| VdoCipher | $82 | $909 |
+| api.video | $105 | $1,642 |
 
-- **Launch:** 20 hours stored, 100 students, 10 hours watched each per month
-- **Growth:** 60 hours stored, 2,000 students, 8 hours watched each per month
+Assumes 0.7 GB per hour delivered — a mobile-weighted ABR ladder. At 0.4 GB/h every
+per-GB vendor drops about 43%; the per-minute vendors (Mux, Cloudflare, api.video) do
+not move at all.
 
-Delivery, not storage, is what grows. At the growth scenario the per-GB rate decides
-the bill.
+Gumlet is the only vendor that scores on all four things this project needs:
+
+- **INR billing.** Everyone else is USD-only.
+- **Indian delivery.** 40+ embedded PoPs plus a Mumbai regional edge cache, for an
+  audience on Indian mobile networks.
+- **`@gumlet/react-embed-player` with an `onProgress` callback**, plus
+  `event.embed.viewed` webhooks. Progress tracking is the hardest part of an LMS
+  player and this hands it to us.
+- **Widevine + FairPlay DRM as a $99/month switch to flip later**, not a contract to
+  sign now.
+
+Rejected, with reasons:
+
+- **Mux** — free at launch and the best Next.js DX of the eight, but publishes no India
+  PoP list and its own engineering blog says the custom-PoP CDN covers only North
+  America and Europe. Disqualifying for this audience.
+- **Bunny** — 43% cheaper at growth with the same five Indian metros. Take it if cost at
+  scale becomes the dominant criterion; the price is no INR invoice, no GST, and
+  wrapping their Player.js iframe by hand.
+- **Cloudflare Stream** — best Indian network and simplest pricing, but **no DRM at
+  all**, which is the thing we are switching for.
+- **Vimeo** — every self-serve plan caps bandwidth at 2 TB/month, which the growth
+  scenario exceeds 5.6x, and DRM is Enterprise-only.
+- **VdoCipher** — strongest protection in the set (DRM and dynamic watermarking on
+  every tier, from $49) and actually cheapest *with DRM* at launch. Rejected on prepaid
+  annual-only billing and the worst growth figure of any DRM-capable vendor.
+
+### Decisions that follow
+
+- **Do not buy DRM yet.** $99/month is five times the hosting cost, to protect a course
+  that does not exist. Signed URLs plus domain restriction are included from the $6 tier
+  and stop casual link-sharing, which is the realistic threat. DRM does not stop a phone
+  pointed at a screen.
+- **Budget for the storage cliff.** Gumlet meters storage in minutes and sells no
+  storage overage below the $99 Business plan. Growth covers 3,000 minutes = **50
+  hours**. Crossing ~50 hours of library forces $99/month whatever the audience size.
+
+### Verify before paying
+
+- Ask Gumlet whether they issue a **GSTIN-bearing tax invoice**. Their payment policy
+  confirms INR billing but is silent on GST, and the entity is Singapore-incorporated
+  with Bengaluru operations. It affects input-credit recovery.
+- VdoCipher's non-DRM page lists overage at $0.011/GB against $0.11/GB on its DRM
+  plans. Almost certainly a decimal error, but if it is real it is the cheapest Indian
+  option available and worth reopening this decision for.
 
 ## 8. Certificates and LinkedIn
 
