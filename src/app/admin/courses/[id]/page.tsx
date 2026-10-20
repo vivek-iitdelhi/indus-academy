@@ -284,6 +284,7 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
                       </Link>
                       <span className="ml-2 text-xs text-muted">
                         {meta}
+                        {lesson.pendingVideoUid && " · replacement processing"}
                         {lesson.isPreview && " · free preview"}
                       </span>
                     </span>

@@ -4,12 +4,13 @@ import { courses, lessons } from "@/db/schema";
 import { isUuid } from "@/lib/admin/courses";
 import { revalidateCourse } from "@/lib/catalog-cache";
 import { requireAdminApi } from "@/lib/session";
-import { getVideoStatus, videoConfigured } from "@/lib/video";
+import { deleteVideo, getVideoStatus, videoConfigured } from "@/lib/video";
 
 /**
  * Processing status of a lesson's video, polled by the lesson editor after an upload.
- * Once the provider reports it ready, copies its duration onto the lesson (progress and
- * publishing both need duration_seconds > 0).
+ * Polls the pending replacement when there is one, else the live video. A pending video
+ * that is ready replaces the live one; a ready live video gets its duration copied
+ * (progress and publishing both need duration_seconds > 0).
  */
 export async function GET(_request: Request, ctx: RouteContext<"/api/admin/lessons/[lessonId]/video">) {
   await requireAdminApi();
@@ -22,20 +23,35 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/admin/lesso
     .from(lessons)
     .innerJoin(courses, eq(lessons.courseId, courses.id))
     .where(eq(lessons.id, lessonId));
-  if (!row?.lesson.videoUid) return Response.json({ error: "This lesson has no video." }, { status: 404 });
+  const uid = row?.lesson.pendingVideoUid ?? row?.lesson.videoUid;
+  if (!row || !uid) return Response.json({ error: "This lesson has no video." }, { status: 404 });
+  const { lesson } = row;
 
-  const status = await getVideoStatus(row.lesson.videoUid).catch((e) => {
+  const status = await getVideoStatus(uid).catch((e) => {
     console.error("getVideoStatus failed", e);
     return null;
   });
   if (!status) return Response.json({ error: "Could not reach the video provider." }, { status: 502 });
-  if (status.ready && status.durationSeconds > 0 && status.durationSeconds !== row.lesson.durationSeconds) {
-    // Matching the uid too: a replacement upload may have started since we read the row.
+  const ready = status.ready && status.durationSeconds > 0;
+
+  if (ready && uid === lesson.pendingVideoUid) {
+    // Conditional on the pending uid: a newer upload may have replaced it since we read the row.
+    const promoted = await db
+      .update(lessons)
+      .set({ videoUid: uid, durationSeconds: status.durationSeconds, pendingVideoUid: null })
+      .where(and(eq(lessons.id, lesson.id), eq(lessons.pendingVideoUid, uid)))
+      .returning({ id: lessons.id });
+    if (promoted.length) {
+      const old = lesson.videoUid;
+      if (old && old !== uid) await deleteVideo(old).catch((e) => console.error(`deleteVideo ${old} failed`, e));
+      revalidateCourse(row.courseSlug);
+    }
+  } else if (ready && status.durationSeconds !== lesson.durationSeconds) {
     await db
       .update(lessons)
       .set({ durationSeconds: status.durationSeconds })
-      .where(and(eq(lessons.id, row.lesson.id), eq(lessons.videoUid, row.lesson.videoUid)));
+      .where(and(eq(lessons.id, lesson.id), eq(lessons.videoUid, uid)));
     revalidateCourse(row.courseSlug);
   }
-  return Response.json({ state: status.state, ready: status.ready && status.durationSeconds > 0, durationSeconds: status.durationSeconds });
+  return Response.json({ state: status.state, ready, durationSeconds: status.durationSeconds });
 }

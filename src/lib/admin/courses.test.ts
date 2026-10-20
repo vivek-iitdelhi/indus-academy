@@ -61,4 +61,7 @@ test("publishProblems lists every blocker", () => {
   assert.deepEqual(publishProblems([video, quiz], [{ lessonId: "q", options: ["a", "b"], correct: [0] }]), []);
   assert.equal(publishProblems([{ ...video, videoUid: null }, { ...video, durationSeconds: 0 }, quiz], []).length, 3);
   assert.equal(publishProblems([quiz], [{ lessonId: "q", options: ["a"], correct: [0] }]).length, 1);
+  // A replacement still processing doesn't count: only the live video does.
+  const replacing = { ...video, videoUid: null, durationSeconds: 0, pendingVideoUid: "new" };
+  assert.equal(publishProblems([replacing], []).length, 1);
 });

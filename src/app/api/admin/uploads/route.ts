@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { courses, lessons } from "@/db/schema";
 import { isUuid } from "@/lib/admin/courses";
-import { revalidateCourse } from "@/lib/catalog-cache";
 import { requireAdminApi } from "@/lib/session";
 import { createTusUpload, deleteVideo, videoConfigured } from "@/lib/video";
 
@@ -46,12 +45,15 @@ export async function POST(request: NextRequest) {
     return fail(502, "The video provider refused the upload. Try again; if it keeps failing, check the server logs.");
   }
   const { uploadUrl, uid } = ticket;
-  // Saved before any bytes move, so a half-finished upload is never orphaned.
-  await db.update(lessons).set({ videoUid: uid, durationSeconds: 0 }).where(eq(lessons.id, row.lesson.id));
-  revalidateCourse(row.courseSlug);
+  // Saved before any bytes move, so a half-finished upload is never orphaned. Learners keep
+  // the live video_uid until the status check promotes this one once it is ready.
+  await db.update(lessons).set({ pendingVideoUid: uid }).where(eq(lessons.id, row.lesson.id));
 
-  const old = row.lesson.videoUid;
-  if (old && old !== uid) await deleteVideo(old).catch((e) => console.error(`deleteVideo ${old} failed`, e));
+  // An earlier replacement that never got promoted is abandoned now.
+  const abandoned = row.lesson.pendingVideoUid;
+  if (abandoned && abandoned !== uid) {
+    await deleteVideo(abandoned).catch((e) => console.error(`deleteVideo ${abandoned} failed`, e));
+  }
 
   return new Response(null, {
     status: 201,

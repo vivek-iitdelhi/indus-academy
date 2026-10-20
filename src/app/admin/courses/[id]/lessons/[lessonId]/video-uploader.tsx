@@ -24,17 +24,22 @@ function reason(err: Error) {
 export function VideoUploader({
   lessonId,
   hasVideo,
+  pending,
   ready,
-  published,
 }: {
   lessonId: string;
+  /** A live video is attached. */
   hasVideo: boolean;
+  /** A replacement is uploading or processing. */
+  pending: boolean;
+  /** The live video is ready. */
   ready: boolean;
-  published: boolean;
 }) {
   const router = useRouter();
   const upload = useRef<Upload | null>(null);
-  const [phase, setPhase] = useState<Phase>(hasVideo ? (ready ? "ready" : "processing") : "idle");
+  const [phase, setPhase] = useState<Phase>(
+    pending || (hasVideo && !ready) ? "processing" : hasVideo ? "ready" : "idle",
+  );
   const [percent, setPercent] = useState(0);
   const [note, setNote] = useState<Note>(null);
 
@@ -43,6 +48,12 @@ export function VideoUploader({
     if (phase !== "processing") return;
     const timer = setInterval(async () => {
       const res = await fetch(`/api/admin/lessons/${lessonId}/video`).catch(() => null);
+      if (res?.status === 404) {
+        // The replacement was discarded and there is no live video: nothing to wait for.
+        setPhase("idle");
+        setNote(null);
+        return;
+      }
       if (!res?.ok) return;
       const status = (await res.json()) as { state: string; ready: boolean };
       if (status.ready) {
@@ -107,12 +118,6 @@ export function VideoUploader({
 
   return (
     <div className="space-y-4">
-      {published && (
-        <p className="text-xs text-muted">
-          This course is live. While a replacement uploads and processes, learners can&apos;t play this lesson.
-        </p>
-      )}
-
       {busy && (
         <div className="space-y-2">
           <div className="h-2 overflow-hidden rounded-full bg-paper-2" role="progressbar" aria-label="Upload progress" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
@@ -145,7 +150,7 @@ export function VideoUploader({
               </button>
             )}
             <label className={`${phase === "stopped" ? secondaryButtonClass : buttonClass} cursor-pointer`}>
-              {hasVideo || phase === "stopped" ? "Choose a different file" : "Upload video"}
+              {phase === "stopped" ? "Choose a different file" : hasVideo || pending ? "Replace video" : "Upload video"}
               <input
                 type="file"
                 accept="video/*"

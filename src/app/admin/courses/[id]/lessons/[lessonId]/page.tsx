@@ -6,7 +6,15 @@ import { courses, lessonProgress, lessons, quizQuestions, type QuizQuestion } fr
 import { formatDuration, isUuid } from "@/lib/admin/courses";
 import { requireAdmin } from "@/lib/session";
 import { iframeUrl, signPlaybackToken, videoConfigured } from "@/lib/video";
-import { deleteLesson, deleteQuestion, moveQuestion, saveQuestion, setManualVideo, updateLesson } from "../../../actions";
+import {
+  deleteLesson,
+  deleteQuestion,
+  discardPendingVideo,
+  moveQuestion,
+  saveQuestion,
+  setManualVideo,
+  updateLesson,
+} from "../../../actions";
 import { ActionForm, ConfirmButton } from "../../../client";
 import {
   cardClass,
@@ -131,14 +139,30 @@ export default async function LessonEditorPage({ params }: PageProps<"/admin/cou
         <section className={cardClass}>
           <SectionTitle>Video</SectionTitle>
           <p className="mt-1 text-sm text-muted">
+            Live video:{" "}
             {!lesson.videoUid
-              ? "No video yet."
+              ? "none yet."
               : ready
-                ? `Ready · ${formatDuration(lesson.durationSeconds)}`
-                : "Uploading or processing."}
+                ? `ready · ${formatDuration(lesson.durationSeconds)}`
+                : "uploading or processing."}
           </p>
           {configured ? (
             <div className="mt-4 space-y-5">
+              {lesson.pendingVideoUid && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-saffron/15 p-4 text-sm">
+                  <p>
+                    <span className="font-medium">Replacement processing…</span>{" "}
+                    {lesson.videoUid
+                      ? "Learners keep the live video until it is ready, then it replaces it."
+                      : "It becomes the live video once it is ready."}
+                  </p>
+                  <ActionForm
+                    action={discardPendingVideo.bind(null, lesson.id)}
+                    submitLabel="Discard replacement"
+                    submitClass={secondaryButtonClass}
+                  />
+                </div>
+              )}
               {ready && lesson.videoUid && (
                 <div className="aspect-video overflow-hidden rounded-xl bg-ink">
                   <iframe
@@ -153,8 +177,8 @@ export default async function LessonEditorPage({ params }: PageProps<"/admin/cou
               <VideoUploader
                 lessonId={lesson.id}
                 hasVideo={Boolean(lesson.videoUid)}
+                pending={Boolean(lesson.pendingVideoUid)}
                 ready={ready}
-                published={course.status === "published"}
               />
             </div>
           ) : (

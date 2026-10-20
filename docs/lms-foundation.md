@@ -59,6 +59,8 @@ video → quiz → video; first video is a preview) and `chatgpt-for-professiona
   order; chapter `position` orders chapters. `quiz_questions.correct` holds option
   indices (more than one = multi-select).
 - `enrollments.nudged_at`: when the idle-learner reminder was last sent.
+- `lessons.pending_video_uid`: a replacement video still uploading/processing; learners keep
+  `video_uid` until the admin status check promotes the pending one (then the old one is deleted).
   `payments.razorpay_refund_id`: set when an admin refunds.
 - Deleting a course with enrolments/payments/certificates is blocked: archive it. A user
   with certificates or payments cannot be hard-deleted without handling those first.

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
@@ -77,6 +77,8 @@ function changed(slug: string) {
 }
 
 /** Best effort: a failed delete leaves an orphan in the video library, not a broken course. */
+const videoColumns = { videoUid: lessons.videoUid, pendingVideoUid: lessons.pendingVideoUid };
+
 async function deleteVideos(uids: (string | null)[]) {
   if (!videoConfigured()) return;
   for (const uid of uids) {
@@ -185,12 +187,9 @@ export async function deleteCourse(courseId: string) {
   if (records.enrollments || records.payments || records.certificates) {
     throw new Error("This course has enrolments, payments or certificates; archive it instead.");
   }
-  const videos = await db
-    .select({ uid: lessons.videoUid })
-    .from(lessons)
-    .where(and(eq(lessons.courseId, course.id), isNotNull(lessons.videoUid)));
+  const videos = await db.select(videoColumns).from(lessons).where(eq(lessons.courseId, course.id));
   await db.delete(courses).where(eq(courses.id, course.id)); // chapters, lessons, questions cascade
-  await deleteVideos(videos.map((v) => v.uid));
+  await deleteVideos(videos.flatMap((v) => [v.videoUid, v.pendingVideoUid]));
   revalidateCourse(course.slug);
   redirect("/admin/courses");
 }
@@ -230,12 +229,12 @@ export async function moveChapter(chapterId: string, delta: number) {
 export async function deleteChapter(chapterId: string) {
   await requireAdminApi();
   const { chapter, course } = await findChapter(chapterId);
-  const videos = await db.select({ uid: lessons.videoUid }).from(lessons).where(eq(lessons.chapterId, chapter.id));
+  const videos = await db.select(videoColumns).from(lessons).where(eq(lessons.chapterId, chapter.id));
   await db.transaction(async (tx) => {
     await tx.delete(chapters).where(eq(chapters.id, chapter.id)); // its lessons cascade
     await renumberOutline(tx, course.id);
   });
-  await deleteVideos(videos.map((v) => v.uid));
+  await deleteVideos(videos.flatMap((v) => [v.videoUid, v.pendingVideoUid]));
   changed(course.slug);
 }
 
@@ -306,9 +305,26 @@ export async function deleteLesson(lessonId: string) {
     await tx.delete(lessons).where(eq(lessons.id, lesson.id));
     await renumberOutline(tx, course.id);
   });
-  await deleteVideos([lesson.videoUid]);
+  await deleteVideos([lesson.videoUid, lesson.pendingVideoUid]);
   revalidateCourse(course.slug);
   redirect(`/admin/courses/${course.id}`);
+}
+
+/** Drops a replacement that is still uploading or processing; the live video stays. */
+export async function discardPendingVideo(lessonId: string): Promise<ActionResult> {
+  await requireAdminApi();
+  const { lesson, course } = await findLesson(lessonId);
+  const uid = lesson.pendingVideoUid;
+  if (!uid) return { ok: "Nothing to discard." };
+  // Conditional: if it was promoted meanwhile, it is the live video now and must stay.
+  const cleared = await db
+    .update(lessons)
+    .set({ pendingVideoUid: null })
+    .where(and(eq(lessons.id, lesson.id), eq(lessons.pendingVideoUid, uid)))
+    .returning({ id: lessons.id });
+  if (cleared.length) await deleteVideos([uid]);
+  changed(course.slug);
+  return { ok: "Replacement discarded." };
 }
 
 export async function updateLesson(lessonId: string, form: FormData): Promise<ActionResult> {
