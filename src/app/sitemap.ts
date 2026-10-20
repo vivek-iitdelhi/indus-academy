@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { listPublishedCourses } from "@/app/courses/catalog";
 import { legalDocuments } from "@/content/legal";
 import { programs } from "@/content/programs";
 import { site } from "@/content/site";
@@ -8,6 +9,7 @@ import { getAllPosts } from "@/lib/blog";
 const routes = [
   { path: "", priority: 1 },
   { path: "/programs", priority: 0.9 },
+  { path: "/courses", priority: 0.9 },
   { path: "/enterprise", priority: 0.9 },
   { path: "/consulting", priority: 0.8 },
   { path: "/blog", priority: 0.7 },
@@ -17,9 +19,13 @@ const routes = [
   ...legalDocuments.map((doc) => ({ path: `/${doc.slug}`, priority: 0.3 })),
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+// Courses come from the database; revalidateCourse() and the hourly pass keep this current.
+export const revalidate = 3600;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const courses = await listPublishedCourses();
   return [
-    ...routes.map((route) => ({
+    ...[...routes, ...courses.map((c) => ({ path: `/courses/${c.slug}`, priority: 0.8 }))].map((route) => ({
       url: `${site.url}${route.path}`,
       changeFrequency: "monthly" as const,
       priority: route.priority,

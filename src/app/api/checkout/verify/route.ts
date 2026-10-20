@@ -3,12 +3,19 @@ import { company, companyAddress, site } from "@/content/site";
 import { formatDate } from "@/lib/pricing";
 import { sendEmail } from "@/lib/email";
 import { fetchPayment, razorpayConfigured, verifySignature } from "@/lib/razorpay";
+import { fulfilAndNotify, paymentProblemMessage } from "@/app/api/checkout/course-fulfilment";
 
 const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** Confirms a completed payment, then emails the learner and the team. */
 export async function POST(request: Request) {
+  const peek = (await request
+    .clone()
+    .json()
+    .catch(() => null)) as CourseVerifyBody | null;
+  if (peek?.courseSlug !== undefined) return verifyCourse(peek);
+
   if (!razorpayConfigured()) {
     return Response.json({ error: "Online payment is not available" }, { status: 503 });
   }
@@ -92,4 +99,37 @@ export async function POST(request: Request) {
   });
 
   return Response.json({ ok: true, program: program.name, paymentId });
+}
+
+type CourseVerifyBody = { courseSlug?: unknown; orderId?: unknown; paymentId?: unknown; signature?: unknown };
+
+/** A course payment: enrol (via the same fulfilment as the webhook) and send the learner into it. */
+async function verifyCourse(body: CourseVerifyBody) {
+  if (!razorpayConfigured()) {
+    return Response.json({ error: "Online payment is not available" }, { status: 503 });
+  }
+  const { orderId, paymentId, signature } = body;
+  if (typeof orderId !== "string" || typeof paymentId !== "string" || typeof signature !== "string") {
+    return Response.json({ error: "Missing payment details" }, { status: 400 });
+  }
+  if (!verifySignature({ orderId, paymentId, signature })) {
+    console.error("[checkout] signature mismatch for course order", orderId);
+    return Response.json({ error: "Payment could not be verified" }, { status: 400 });
+  }
+
+  let result: Awaited<ReturnType<typeof fulfilAndNotify>>;
+  try {
+    result = await fulfilAndNotify(orderId, paymentId, "verify");
+  } catch {
+    return Response.json({ error: paymentProblemMessage(paymentId), paymentId }, { status: 502 });
+  }
+  switch (result.outcome) {
+    case "fulfilled":
+    case "already-fulfilled":
+      return Response.json({ redirect: `/learn/${result.courseSlug}` });
+    case "not-paid":
+      return Response.json({ error: `Payment status is ${result.status}` }, { status: 409 });
+    default:
+      return Response.json({ error: paymentProblemMessage(paymentId), paymentId }, { status: 502 });
+  }
 }

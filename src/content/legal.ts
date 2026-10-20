@@ -15,16 +15,16 @@ export type LegalDocument = {
   sections: LegalSection[];
 };
 
-const LAST_UPDATED = "2026-09-21";
+const LAST_UPDATED = "2026-10-20";
 const ENTITY = `${company.legalName} ("Indus AI Academy", "we", "us")`;
 
 export const terms: LegalDocument = {
   slug: "terms",
   title: "Terms and Conditions",
   description:
-    "The terms on which Indus AI Academy, operated by INDUS AI Private Limited, provides training programs, workshops and consulting services.",
+    "The terms on which Indus AI Academy, operated by INDUS AI Private Limited, provides training programs, workshops, self-paced online courses and consulting services.",
   updated: LAST_UPDATED,
-  intro: `These terms govern your use of ${site.url.replace("https://", "")} and any program, workshop or service you buy from ${ENTITY}, with its registered office at ${registeredAddress}.`,
+  intro: `These terms govern your use of ${site.url.replace("https://", "")} and any program, workshop, online course or service you buy from ${ENTITY}, with its registered office at ${registeredAddress}.`,
   sections: [
     {
       heading: "Who we are",
@@ -36,6 +36,7 @@ export const terms: LegalDocument = {
       heading: "What we provide",
       paragraphs: [
         "We provide live, instructor-led AI training programs for individuals and organizations, one-day workshops, and AI consulting engagements. Session counts, hours and schedules are as published on the relevant program page at the time you book.",
+        "We also sell self-paced online courses: recorded video lessons, with quizzes in some courses, that you take through your account on this website. The lessons in each course are as listed on its course page.",
         "Programs are educational. They do not guarantee any job, salary, business result or examination outcome, and nothing we teach is legal, financial, tax or medical advice.",
       ],
     },
@@ -52,7 +53,7 @@ export const terms: LegalDocument = {
     {
       heading: "How and when services are delivered",
       paragraphs: [
-        "Everything we sell is a service delivered live, not a physical product, so nothing is shipped.",
+        "Everything we sell is a service, delivered live or online, not a physical product, so nothing is shipped.",
       ],
       list: [
         "Within minutes of payment you receive a confirmation email with your cohort dates, schedule and payment reference.",
@@ -61,6 +62,18 @@ export const terms: LegalDocument = {
         "Session recordings are shared within 24 hours of each session and stay available to your cohort for 6 months.",
         "Certificates are issued by email within 10 working days of the program ending, once attendance and assessed work are confirmed.",
         "Corporate engagements are delivered on the dates set out in the signed proposal or statement of work.",
+        "Online courses open in your account as soon as your payment is confirmed, and you receive a confirmation email with your payment reference.",
+      ],
+    },
+    {
+      heading: "Self-paced online courses",
+      list: [
+        "Online course prices are shown inclusive of GST, and are what you pay.",
+        "You get lifetime access to a course you buy, unless its course page states a different period.",
+        "Your account is personal. Do not share your sign-in or let anyone else take lessons or quizzes on your account. We may suspend an account that is shared.",
+        "Lessons are for watching on this website. Do not download, record or redistribute them.",
+        "Where a course offers a certificate, it is issued when you have completed every lesson and passed every quiz in the course, in the name on your account. Check that your name is correct before you finish.",
+        "Refunds for online courses are covered by our Refunds and Cancellations policy.",
       ],
     },
     {
@@ -82,7 +95,8 @@ export const terms: LegalDocument = {
     {
       heading: "Certification",
       paragraphs: [
-        "Certificates are issued by INDUS AI Private Limited on completion of the attendance requirement and any assessed work stated on the program page. A certificate records completion of our program. It is not a university degree, a government qualification or an accreditation by any regulator.",
+        "Certificates are issued by INDUS AI Private Limited on completion of the attendance requirement and any assessed work stated on the program page, or, for an online course, on completing every lesson and passing every quiz. A certificate records completion of our program or course. It is not a university degree, a government qualification or an accreditation by any regulator.",
+        "Every certificate has a public verification page, so that anyone you share it with can confirm it is genuine.",
       ],
     },
     {
@@ -125,16 +139,18 @@ export const privacy: LegalDocument = {
   slug: "privacy",
   title: "Privacy Policy",
   description:
-    "What personal data Indus AI Academy collects, why we collect it, who processes it, and the rights you have under India's Digital Personal Data Protection Act.",
+    "What personal data Indus AI Academy collects when you browse, enquire, enrol or learn online, why we collect it, who processes it, and your rights under India's Digital Personal Data Protection Act.",
   updated: LAST_UPDATED,
-  intro: `${ENTITY} respects your privacy. This policy explains what we collect when you use ${site.url.replace("https://", "")}, enquire, subscribe or enrol, and what you can ask us to do about it.`,
+  intro: `${ENTITY} respects your privacy. This policy explains what we collect when you use ${site.url.replace("https://", "")}, enquire, subscribe, enrol or take an online course, and what you can ask us to do about it.`,
   sections: [
     {
       heading: "What we collect",
       list: [
         "Enquiries: your name, work email, and optionally company, role, team size and your message.",
         "Newsletter: your email address, and the fact that you confirmed your subscription.",
-        "Enrolment: your name, email, phone number, the program you bought, and the payment reference returned by our payment gateway.",
+        "Your account: your name, email address and, once you buy a course, your phone number. You sign in with a one-time link sent to your email, or with Google if you choose; we never ask for or store a password. If you use Google, we receive your name, email address and profile picture from Google.",
+        "Enrolment and purchases: your name, email, phone number, the program or course you bought, the amount, and the order and payment references returned by our payment gateway.",
+        "Learning records: the courses you are enrolled in, how far you have watched each lesson, which lessons you have completed, your quiz answers and scores, and the certificates issued to you.",
         "Server logs: our hosting provider records standard request data such as IP address and browser type, for security and reliability.",
       ],
       paragraphs: [
@@ -144,7 +160,7 @@ export const privacy: LegalDocument = {
     {
       heading: "Card details",
       paragraphs: [
-        "We never see or store your card, UPI or bank details. Payments are processed by Razorpay, which is certified to handle them. We receive only a payment identifier and the amount.",
+        "We never see or store your card, UPI or bank details, whether you pay for a program seat or an online course. Payments are processed by Razorpay, which is certified to handle them. We receive only a payment identifier, the amount and whether the payment succeeded.",
       ],
     },
     {
@@ -152,6 +168,8 @@ export const privacy: LegalDocument = {
       list: [
         "To answer your enquiry and send you the program information you asked for.",
         "To confirm your seat, deliver the program, and issue your certificate.",
+        "To run your account: give you access to the courses you are enrolled in, save your progress, grade your quizzes, and issue and verify your certificates.",
+        "To send you emails about your account and purchases, such as sign-in links, purchase confirmations and an occasional reminder to finish a course you started.",
         "To send the weekly newsletter, if you subscribed, until you unsubscribe.",
         "To meet legal, tax and accounting obligations.",
       ],
@@ -159,13 +177,28 @@ export const privacy: LegalDocument = {
     {
       heading: "Who processes it for us",
       list: [
-        "Vercel, for website hosting and server logs.",
-        "Resend, for sending enquiry, enrolment and newsletter emails.",
+        "A website hosting provider, for running this website and keeping server logs.",
+        "A cloud database provider, for storing accounts, enrolments, learning progress, payment records and certificates.",
+        "A video hosting and streaming provider, for storing and playing course videos. It receives the technical data your device sends when a video plays, such as your IP address.",
+        "An email delivery provider, for sending sign-in links and enquiry, enrolment, purchase and newsletter emails.",
+        "An email inbox provider, for the mail you send us.",
         "Razorpay, for processing payments.",
-        "Zoho, for our email inbox.",
+        "Google, if you choose to sign in with Google.",
       ],
       paragraphs: [
         "These providers process data on our instructions. Some store data outside India; where that happens it is under contractual protections offered by that provider.",
+      ],
+    },
+    {
+      heading: "Certificate verification pages",
+      paragraphs: [
+        "Every certificate we issue has its own verification page, so that an employer or anyone else you share it with can confirm it is genuine. That page is public: anyone with its link or the certificate's serial number can see the holder's name, the course, the date of issue and whether the certificate is valid. It does not show your email address or any other contact details.",
+      ],
+    },
+    {
+      heading: "Cookies",
+      paragraphs: [
+        "When you sign in, we set a session cookie that keeps you signed in for up to 30 days, renewed while you keep using the site. Signing in with Google also sets short-lived security cookies for the duration of the sign-in. These cookies are needed for your account to work, and signing out removes the session cookie. We do not use advertising or analytics cookies.",
       ],
     },
     {
@@ -174,6 +207,7 @@ export const privacy: LegalDocument = {
         "Enquiries: up to 24 months from your last contact with us.",
         "Newsletter subscribers: until you unsubscribe, plus a record of the unsubscribe.",
         "Enrolment and payment records: as long as tax and company law require, currently eight years.",
+        "Your account and learning records: while your account is open. If you ask us to delete your account, we delete them, except records the law requires us to keep.",
       ],
     },
     {
@@ -192,7 +226,7 @@ export const privacy: LegalDocument = {
     {
       heading: "Security",
       paragraphs: [
-        "The site runs over HTTPS, payment verification happens on our servers, and access to our email and payment dashboards is restricted to the people who need it. No system is perfectly secure, so please do not send us sensitive personal information by email.",
+        "The site runs over HTTPS, payment verification happens on our servers, course videos play only through short-lived signed links, and access to our email, database and payment dashboards is restricted to the people who need it. No system is perfectly secure, so please do not send us sensitive personal information by email.",
       ],
     },
     {
@@ -208,11 +242,21 @@ export const refunds: LegalDocument = {
   slug: "refunds",
   title: "Refunds and Cancellations",
   description:
-    "Cancellation, transfer and refund terms for Indus AI Academy programs, workshops and corporate training.",
+    "Refund terms for Indus AI Academy self-paced online courses, and cancellation, transfer and refund terms for live programs, workshops and corporate training.",
   updated: LAST_UPDATED,
   intro:
-    "We would rather you attend than get a refund, so transfers are free and generous. Where a refund is due, these are the terms.",
+    "Online courses can be refunded in full until you are a quarter of the way through. For live programs we would rather you attend than get a refund, so transfers are free and generous. Where a refund is due, these are the terms.",
   sections: [
+    {
+      heading: "Self-paced online courses",
+      list: [
+        "Before you have completed 25% of the course: full refund, including GST.",
+        "Once you have completed 25% or more of the course: no refund.",
+      ],
+      paragraphs: [
+        "How much of a course you have completed is the share of its lessons marked complete in your account, on the date we receive your request. Write to us from the email address on your account. Your access to the course ends when the refund is made.",
+      ],
+    },
     {
       heading: "Individual seats: cancelling",
       list: [
@@ -266,7 +310,7 @@ export const refunds: LegalDocument = {
     {
       heading: "Raising a request",
       paragraphs: [
-        `Email ${site.email} with your name, the program, and your payment reference, or call ${company.phone} between 10:00 and 19:00 IST, Monday to Saturday. We acknowledge within 2 working days and decide within 7.`,
+        `Email ${site.email} with your name, the program or course, and your payment reference, or call ${company.phone} between 10:00 and 19:00 IST, Monday to Saturday. We acknowledge within 2 working days and decide within 7.`,
       ],
     },
   ],
