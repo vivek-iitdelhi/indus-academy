@@ -78,3 +78,16 @@ export function verifyWebhookSignature(
   const given = Buffer.from(signature);
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
+
+/** Refunds a captured payment: the full amount, or `amountPaise` of it. */
+export async function refundPayment(paymentId: string, amountPaise?: number) {
+  const { header } = auth();
+  const res = await fetch(`${RAZORPAY_API}/payments/${encodeURIComponent(paymentId)}/refund`, {
+    method: "POST",
+    headers: { authorization: header, "content-type": "application/json" },
+    body: JSON.stringify(amountPaise === undefined ? {} : { amount: amountPaise }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`Razorpay refund failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { id: string; amount: number; status: string };
+}
