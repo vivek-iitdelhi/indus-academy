@@ -5,6 +5,7 @@ import { courses, enrollments, payments, user } from "@/db/schema";
 import { formatDateTime, formatRupees } from "@/lib/admin/ops";
 import { requireAdmin } from "@/lib/session";
 import { Badge, SectionTitle, Table } from "./learners/admin-ui";
+import { SetupStatus } from "./setup-status";
 
 type Stats = {
   signups: number; signups30: number;
@@ -125,6 +126,7 @@ export default async function AdminOverviewPage() {
   return (
     <div>
       <h1 className="text-3xl font-semibold tracking-[-0.03em]">Overview</h1>
+      <SetupStatus />
       <dl className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
           <div key={card.label} className="rounded-2xl border border-line bg-white p-5">

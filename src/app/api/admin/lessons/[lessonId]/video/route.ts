@@ -4,7 +4,7 @@ import { courses, lessons } from "@/db/schema";
 import { isUuid } from "@/lib/admin/courses";
 import { revalidateCourse } from "@/lib/catalog-cache";
 import { requireAdminApi } from "@/lib/session";
-import { deleteVideo, getVideoStatus, videoConfigured } from "@/lib/video";
+import { deleteVideo, ENCODER_OFFLINE_MS, encoderLastSeen, getVideoStatus, videoConfigured } from "@/lib/video";
 
 /**
  * Processing status of a lesson's video, polled by the lesson editor after an upload.
@@ -53,5 +53,10 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/admin/lesso
       .where(and(eq(lessons.id, lesson.id), eq(lessons.videoUid, uid)));
     revalidateCourse(row.courseSlug);
   }
-  return Response.json({ state: status.state, ready, durationSeconds: status.durationSeconds });
+  let encoderOffline = false;
+  if (status.state === "processing") {
+    const seen = await encoderLastSeen().catch(() => null);
+    encoderOffline = !seen || Date.now() - seen.getTime() > ENCODER_OFFLINE_MS;
+  }
+  return Response.json({ state: status.state, ready, durationSeconds: status.durationSeconds, encoderOffline });
 }

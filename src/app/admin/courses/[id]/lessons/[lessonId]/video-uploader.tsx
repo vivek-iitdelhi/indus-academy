@@ -79,7 +79,7 @@ export function VideoUploader({
         return;
       }
       if (!res?.ok) return;
-      const status = (await res.json()) as { state: string; ready: boolean };
+      const status = (await res.json()) as { state: string; ready: boolean; encoderOffline?: boolean };
       if (status.ready) {
         setPhase("ready");
         setNote(null);
@@ -87,6 +87,8 @@ export function VideoUploader({
       } else if (status.state === "error") {
         setPhase("idle");
         setNote({ text: "The video could not be processed. Upload it again, or another file.", error: true });
+      } else if (status.encoderOffline) {
+        setNote({ text: "Waiting for the encoder machine, which looks offline. The video is safe and will be processed once it is back." });
       } else {
         setNote({ text: "Processing… this can take a while for long videos." });
       }

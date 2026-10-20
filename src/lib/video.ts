@@ -9,6 +9,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 //   videos/<uid>/meta.json        written last: {"durationSeconds": n}; its presence = ready
 //   videos/<uid>/error.txt        the encoder could not process the upload
 //   trash/<uid>                   asks the encoder to delete everything for <uid>
+//   encoder/heartbeat.json        {"at": ISO time}, rewritten every minute while the encoder runs
 // Playlists are served by /api/video/<uid>/… (token-checked, segment URLs presigned);
 // segments come straight from R2, whose egress is free.
 
@@ -187,6 +188,17 @@ export async function getVideoStatus(uid: string): Promise<VideoStatus> {
 export async function deleteVideo(uid: string): Promise<void> {
   await check(await r2Fetch("PUT", `trash/${uid}`, { body: "" }), "PUT trash");
 }
+
+/** When the encoder machine last checked in, or null if it never has. */
+export async function encoderLastSeen(): Promise<Date | null> {
+  const res = await r2Fetch("GET", "encoder/heartbeat.json");
+  if (res.status === 404) return null;
+  const { at } = JSON.parse(await check(res, "GET heartbeat")) as { at: string };
+  return new Date(at);
+}
+
+/** No heartbeat for this long: treat the encoder as offline. */
+export const ENCODER_OFFLINE_MS = 3 * 60_000;
 
 // --- Playback ---------------------------------------------------------------
 

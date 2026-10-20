@@ -181,11 +181,21 @@ async function pass() {
   for (const uid of (await list("uploads/")).map(uidOf)) if (uid) await encode(uid);
 }
 
+// Lets the admin panel tell "processing" from "encoder machine is off". Runs on its own
+// timer because one encode can take hours.
+const heartbeat = () =>
+  put("encoder/heartbeat.json", JSON.stringify({ at: new Date().toISOString(), codec: CODEC })).catch((e) =>
+    log("heartbeat failed", e),
+  );
+
 const once = process.argv.includes("--once");
 log(`encoder started (${CODEC}, work dir ${WORK_DIR})`);
+await heartbeat();
+const heartbeats = once ? undefined : setInterval(heartbeat, 60_000);
 for (;;) {
   // Network or storage errors: log and try again next pass; the upload stays queued.
   await pass().catch((e) => log("pass failed", e));
   if (once) break;
   await sleep(POLL_MS);
 }
+clearInterval(heartbeats);
