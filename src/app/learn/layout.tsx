@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SignOutButton } from "@/components/sign-out-button";
 import { Container } from "@/components/ui";
 import { requireUser } from "@/lib/session";
 
@@ -20,10 +19,14 @@ export default async function LearnLayout({ children }: LayoutProps<"/learn">) {
           <Link href="/learn" className="font-medium text-ink hover:text-pine">
             My learning
           </Link>
-          <div className="flex items-center gap-4 text-muted">
-            <span className="hidden sm:inline">{user.name || user.email}</span>
-            <SignOutButton />
-          </div>
+          <nav aria-label="Learner" className="flex min-w-0 items-center gap-5 text-muted">
+            <Link href="/learn/certificates" className="hover:text-ink">
+              Certificates
+            </Link>
+            <Link href="/learn/account" className="max-w-40 truncate hover:text-ink">
+              {user.name || "Account"}
+            </Link>
+          </nav>
         </Container>
       </div>
       {children}
