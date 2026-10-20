@@ -193,6 +193,7 @@ export const privacy: LegalDocument = {
       heading: "Certificate verification pages",
       paragraphs: [
         "Every certificate we issue has its own verification page, so that an employer or anyone else you share it with can confirm it is genuine. That page is public: anyone with its link or the certificate's serial number can see the holder's name, the course, the date of issue and whether the certificate is valid. It does not show your email address or any other contact details.",
+        "Valid certificate pages are listed in our sitemap, so search engines may show them when someone searches the holder's name. You can hide your page from search engines at any time from the Certificates section of your account; it then stays available to anyone you give the link to.",
       ],
     },
     {
@@ -245,16 +246,16 @@ export const refunds: LegalDocument = {
     "Refund terms for Indus AI Academy self-paced online courses, and cancellation, transfer and refund terms for live programs, workshops and corporate training.",
   updated: LAST_UPDATED,
   intro:
-    "Online courses can be refunded in full until you are a quarter of the way through. For live programs we would rather you attend than get a refund, so transfers are free and generous. Where a refund is due, these are the terms.",
+    "Online courses can be refunded in full within 24 hours of purchase, if you have completed less than a quarter of the course. For live programs we would rather you attend than get a refund, so transfers are free and generous. Where a refund is due, these are the terms.",
   sections: [
     {
       heading: "Self-paced online courses",
       list: [
-        "Before you have completed 25% of the course: full refund, including GST.",
-        "Once you have completed 25% or more of the course: no refund.",
+        "Within 24 hours of purchase, and before you have completed 25% of the course: full refund, including GST.",
+        "After 24 hours, or once you have completed 25% or more of the course: no refund.",
       ],
       paragraphs: [
-        "How much of a course you have completed is the share of its lessons marked complete in your account, on the date we receive your request. Write to us from the email address on your account. Your access to the course ends when the refund is made.",
+        "The 24 hours run from the time of your payment, and your request must reach us within them. How much of a course you have completed is the share of its lessons marked complete in your account when we receive your request. Write to us from the email address on your account. Your access to the course ends when the refund is made.",
       ],
     },
     {

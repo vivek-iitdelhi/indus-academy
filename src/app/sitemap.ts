@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { listPublishedCourses } from "@/app/courses/catalog";
 import { legalDocuments } from "@/content/legal";
+import { listSearchableCertificates } from "@/lib/lms/certificates";
 import { programs } from "@/content/programs";
 import { site } from "@/content/site";
 import { tracks } from "@/content/tracks";
@@ -23,12 +24,19 @@ const routes = [
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const courses = await listPublishedCourses();
+  const [courses, certificates] = await Promise.all([listPublishedCourses(), listSearchableCertificates().catch(() => [])]);
   return [
     ...[...routes, ...courses.map((c) => ({ path: `/courses/${c.slug}`, priority: 0.8 }))].map((route) => ({
       url: `${site.url}${route.path}`,
       changeFrequency: "monthly" as const,
       priority: route.priority,
+    })),
+    // Certificate pages, so a holder's name search can find their certificate.
+    ...certificates.map((c) => ({
+      url: `${site.url}/verify/${c.serial}`,
+      lastModified: c.issuedAt,
+      changeFrequency: "yearly" as const,
+      priority: 0.4,
     })),
     ...getAllPosts().map((post) => ({
       url: `${site.url}/blog/${post.slug}`,

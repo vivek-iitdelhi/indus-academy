@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { db } from "@/db";
 import { enrollments, payments } from "@/db/schema";
-import { completionPercent, completionSql, isUuid, refundEligible } from "@/lib/admin/ops";
+import { completionSql, isUuid, refundBlocker } from "@/lib/admin/ops";
 import { razorpayConfigured, refundPayment } from "@/lib/razorpay";
 import { requireAdminApi } from "@/lib/session";
 import type { ActionState } from "../learners/action-form";
@@ -24,14 +24,16 @@ export async function refund(_prev: ActionState, formData: FormData): Promise<Ac
       razorpayPaymentId: payments.razorpayPaymentId,
       userId: payments.userId,
       courseId: payments.courseId,
+      createdAt: payments.createdAt,
       ...completionSql(payments.userId, payments.courseId),
     })
     .from(payments)
     .where(eq(payments.id, id));
   if (!payment) return { error: "Payment not found." };
   if (payment.status !== "paid" || !payment.razorpayPaymentId) return { error: `Only paid payments can be refunded (this one is ${payment.status}).` };
-  if (!refundEligible(payment.done, payment.total) && formData.get("override") !== "1") {
-    return { error: `Not eligible: ${completionPercent(payment.done, payment.total)}% of the course is complete. Confirm the override to refund anyway.` };
+  const blocker = refundBlocker(payment.done, payment.total, payment.createdAt);
+  if (blocker && formData.get("override") !== "1") {
+    return { error: `Not eligible: ${blocker}. Confirm the override to refund anyway.` };
   }
   if (!razorpayConfigured()) return { error: "Razorpay keys are not configured (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET), so refunds are unavailable. Nothing was changed." };
 

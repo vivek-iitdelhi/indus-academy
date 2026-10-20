@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import { certificates, courses, user, type Certificate } from "../../db/schema.ts";
 
@@ -106,6 +106,22 @@ export async function getCertificate(serial: string) {
     .innerJoin(courses, eq(certificates.courseId, courses.id))
     .where(eq(certificates.serial, serial));
   return row ?? null;
+}
+
+/** Valid certificates whose holders let search engines list them (for the sitemap). */
+export async function listSearchableCertificates() {
+  return db
+    .select({ serial: certificates.serial, issuedAt: certificates.issuedAt })
+    .from(certificates)
+    .where(and(isNull(certificates.revokedAt), eq(certificates.searchVisible, true), sql`trim(${certificates.holderName}) <> ''`));
+}
+
+/** The holder shows or hides their own certificate's page from search engines. */
+export async function setSearchVisible(userId: string, serial: string, visible: boolean) {
+  await db
+    .update(certificates)
+    .set({ searchVisible: visible })
+    .where(and(eq(certificates.serial, serial), eq(certificates.userId, userId)));
 }
 
 /** The learner's certificates, newest first, revoked included. */

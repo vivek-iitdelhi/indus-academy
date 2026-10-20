@@ -4,9 +4,17 @@ import { getTableName, sql, type Column } from "drizzle-orm";
 export const completionPercent = (done: number, total: number) =>
   total > 0 ? Math.floor((Math.min(done, total) * 100) / total) : 0;
 
-/** Refund policy (self-paced): a full refund while the learner has completed under 25% of the course. */
+/**
+ * Refund policy (self-paced): a full refund when asked within 24 hours of purchase AND
+ * before 25% of the course is complete. Returns why a refund is not due, or null if it is.
+ */
 export const REFUND_LIMIT_PERCENT = 25;
-export const refundEligible = (done: number, total: number) => done * 100 < total * REFUND_LIMIT_PERCENT || total === 0;
+export const REFUND_WINDOW_HOURS = 24;
+export function refundBlocker(done: number, total: number, purchasedAt: Date, now = new Date()): string | null {
+  if (now.getTime() - purchasedAt.getTime() > REFUND_WINDOW_HOURS * 3_600_000) return `bought over ${REFUND_WINDOW_HOURS} hours ago`;
+  if (total > 0 && done * 100 >= total * REFUND_LIMIT_PERCENT) return `${completionPercent(done, total)}% complete`;
+  return null;
+}
 
 /**
  * An `<input type="date">` value as an expiry: the end of that day in India. "" means

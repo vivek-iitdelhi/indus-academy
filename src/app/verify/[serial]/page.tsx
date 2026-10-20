@@ -3,6 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
+import { JsonLd } from "@/components/json-ld";
 import { Accent, CheckIcon, Container, Eyebrow } from "@/components/ui";
 import { company, site } from "@/content/site";
 import { formatIssueDate, getCertificate, verifyCertificateHash } from "@/lib/lms/certificates";
@@ -29,14 +30,17 @@ export async function generateMetadata({ params }: PageProps<"/verify/[serial]">
   const r = await load(serial);
   if (!r) return { title: "Certificate not found", robots: { index: false } };
   const { certificate: c } = r;
-  const title = `Certificate ${c.serial}`;
+  const named = c.holderName.trim() !== "";
+  // The holder's name leads the title: this page is what someone finds by searching it.
+  const title = named ? `${c.holderName} · ${r.courseTitle} certificate` : `Certificate ${c.serial}`;
   const description = `${c.holderName || "A learner"} completed ${r.courseTitle} with ${site.name}. Issued ${formatIssueDate(c.issuedAt)} by ${company.legalName}. Status: ${statusLine(r)}.`;
   const image = { url: `/api/certificates/${c.serial}/image`, width: 1600, height: 1131, alt: `${title}: ${r.courseTitle}` };
   return {
     title,
     description,
-    // Public so anyone can check it, but people's names stay out of search results.
-    robots: { index: false, follow: false },
+    // Valid certificates are listed by search engines unless the holder opted out;
+    // revoked or unverifiable ones never are.
+    robots: r.status === "valid" && named && c.searchVisible ? { index: true, follow: true } : { index: false, follow: false },
     alternates: { canonical: `/verify/${c.serial}` },
     openGraph: { title, description, url: `/verify/${c.serial}`, images: [image] },
     twitter: { card: "summary_large_image", title, description, images: [image] },
@@ -57,6 +61,25 @@ export default async function VerifyPage({ params }: PageProps<"/verify/[serial]
 
   return (
     <Container className="max-w-5xl! py-16 sm:py-24">
+      {r.status === "valid" && c.holderName.trim() && (
+        <JsonLd
+          data={{
+            "@context": "https://schema.org",
+            "@type": "Person",
+            name: c.holderName,
+            hasCredential: {
+              "@type": "EducationalOccupationalCredential",
+              name: `${r.courseTitle} certificate`,
+              credentialCategory: "certificate",
+              identifier: c.serial,
+              dateCreated: c.issuedAt.toISOString(),
+              url: `${site.url}/verify/${c.serial}`,
+              about: { "@type": "Course", name: r.courseTitle, url: `${site.url}/courses/${r.courseSlug}` },
+              recognizedBy: { "@type": "Organization", name: company.legalName, url: site.url },
+            },
+          }}
+        />
+      )}
       <Eyebrow>Certificate verification</Eyebrow>
       <h1 className="mt-6 text-4xl font-semibold tracking-[-0.03em] text-balance sm:text-5xl">
         {r.status === "valid" ? (

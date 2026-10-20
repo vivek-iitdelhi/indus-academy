@@ -308,6 +308,8 @@ export const certificates = pgTable(
     holderName: text("holder_name").notNull(), // snapshot of user.name at issue
     issuedAt: ts("issued_at").notNull(),
     revokedAt: ts("revoked_at"), // set, never deleted: verification must answer "revoked"
+    // The holder can keep their verification page out of search engines; it stays public by link.
+    searchVisible: boolean("search_visible").notNull().default(true),
     hash: text("hash").notNull(),
   },
   (t) => [unique("certificates_user_id_course_id_unique").on(t.userId, t.courseId)],

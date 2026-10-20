@@ -5,6 +5,7 @@ import { CertificateActions, HolderNameForm } from "@/components/certificate-act
 import { Accent, ButtonLink, Container, Eyebrow } from "@/components/ui";
 import { company, site } from "@/content/site";
 import { formatIssueDate, linkedInAddUrl, listCertificates } from "@/lib/lms/certificates";
+import { setCertificateSearchVisible } from "./actions";
 import { requireUser } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -93,6 +94,18 @@ export default async function CertificatesPage() {
                       organizationName: company.legalName,
                     })}
                   />
+                )}
+                {!c.revokedAt && c.holderName.trim() !== "" && (
+                  <form action={setCertificateSearchVisible} className="text-sm text-muted">
+                    <input type="hidden" name="serial" value={c.serial} />
+                    <input type="hidden" name="visible" value={c.searchVisible ? "0" : "1"} />
+                    {c.searchVisible
+                      ? "Search engines can list this certificate's page, so it shows up when someone searches your name. "
+                      : "Hidden from search engines. Anyone with the link can still check it. "}
+                    <button type="submit" className="font-medium text-pine underline underline-offset-4 hover:text-ink">
+                      {c.searchVisible ? "Hide from search" : "Show in search"}
+                    </button>
+                  </form>
                 )}
               </div>
             </li>

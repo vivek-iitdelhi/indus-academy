@@ -62,6 +62,8 @@ video → quiz → video; first video is a preview) and `chatgpt-for-professiona
 - `lessons.pending_video_uid`: a replacement video still uploading/processing; learners keep
   `video_uid` until the admin status check promotes the pending one (then the old one is deleted).
   `payments.razorpay_refund_id`: set when an admin refunds.
+  `certificates.search_visible`: the holder can hide their verification page from search
+  engines (default shown; valid pages are in the sitemap).
 - Deleting a course with enrolments/payments/certificates is blocked: archive it. A user
   with certificates or payments cannot be hard-deleted without handling those first.
 

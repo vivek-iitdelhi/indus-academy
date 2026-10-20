@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { payments } from "../../db/schema.ts";
-import { completionPercent, completionSql, parseExpiryDate, refundEligible, toDateInput } from "./ops.ts";
+import { completionPercent, completionSql, parseExpiryDate, refundBlocker, toDateInput } from "./ops.ts";
 
 test("completion percent floors and handles empty courses", () => {
   assert.equal(completionPercent(0, 6), 0);
@@ -12,16 +12,21 @@ test("completion percent floors and handles empty courses", () => {
   assert.equal(completionPercent(0, 0), 0);
 });
 
-test("refund: eligible strictly under 25% of lessons complete", () => {
-  assert.equal(refundEligible(0, 6), true);
-  assert.equal(refundEligible(1, 6), true); // 16.7%
-  assert.equal(refundEligible(1, 4), false); // exactly 25%
-  assert.equal(refundEligible(2, 6), false); // 33%
-  assert.equal(refundEligible(24, 100), true);
-  assert.equal(refundEligible(25, 100), false);
-  assert.equal(refundEligible(0, 1), true);
-  assert.equal(refundEligible(1, 1), false);
-  assert.equal(refundEligible(0, 0), true); // nothing to complete yet
+test("refund: within 24 hours and strictly under 25% of lessons complete", () => {
+  const now = new Date("2026-10-20T12:00:00Z");
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
+  const ok = (done: number, total: number, h = 1) => refundBlocker(done, total, hoursAgo(h), now) === null;
+  assert.equal(ok(0, 6), true);
+  assert.equal(ok(1, 6), true); // 16.7%
+  assert.equal(ok(1, 4), false); // exactly 25%
+  assert.equal(ok(2, 6), false); // 33%
+  assert.equal(ok(24, 100), true);
+  assert.equal(ok(25, 100), false);
+  assert.equal(ok(0, 0), true); // nothing to complete yet
+  assert.equal(ok(0, 6, 24), true); // the 24th hour still counts
+  assert.equal(ok(0, 6, 24.01), false);
+  assert.equal(refundBlocker(0, 6, hoursAgo(30), now), "bought over 24 hours ago");
+  assert.equal(refundBlocker(2, 6, hoursAgo(1), now), "33% complete");
 });
 
 test("expiry dates end the chosen day in India", () => {

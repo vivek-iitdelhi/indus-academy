@@ -1,0 +1,1 @@
+ALTER TABLE "certificates" ADD COLUMN "search_visible" boolean DEFAULT true NOT NULL;

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { site } from "@/content/site";
-import { setEmptyHolderName } from "@/lib/lms/certificates";
+import { setEmptyHolderName, setSearchVisible } from "@/lib/lms/certificates";
 import { requireUser } from "@/lib/session";
 
 export type NameState = { error: string | null };
@@ -20,4 +20,12 @@ export async function setCertificateName(_prev: NameState, formData: FormData): 
   }
   revalidatePath("/learn/certificates");
   return { error: null };
+}
+
+/** Shows or hides one of the learner's certificate pages in search engines. */
+export async function setCertificateSearchVisible(formData: FormData) {
+  const user = await requireUser("/learn/certificates");
+  await setSearchVisible(user.id, String(formData.get("serial") ?? ""), formData.get("visible") === "1");
+  revalidatePath("/learn/certificates");
+  revalidatePath("/sitemap.xml");
 }

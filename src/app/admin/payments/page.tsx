@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { courses, paymentStatuses, payments, user, type PaymentStatus } from "@/db/schema";
-import { completionPercent, completionSql, formatDateTime, formatRupees, refundEligible, REFUND_LIMIT_PERCENT } from "@/lib/admin/ops";
+import { completionPercent, completionSql, formatDateTime, formatRupees, REFUND_LIMIT_PERCENT, REFUND_WINDOW_HOURS, refundBlocker } from "@/lib/admin/ops";
 import { requireAdmin } from "@/lib/session";
 import { ActionForm } from "../learners/action-form";
 import { Badge, btn, PAGE_SIZE, PageTitle, Pager, pageParam, param, Table } from "../learners/admin-ui";
@@ -46,7 +46,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps<"/ad
   return (
     <div>
       <PageTitle
-        intro={`Refund policy: a full refund while the learner has completed under ${REFUND_LIMIT_PERCENT}% of the course; none from ${REFUND_LIMIT_PERCENT}%.`}
+        intro={`Refund policy: a full refund if asked within ${REFUND_WINDOW_HOURS} hours of purchase and before ${REFUND_LIMIT_PERCENT}% of the course is complete.`}
       >
         Payments
       </PageTitle>
@@ -71,7 +71,8 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps<"/ad
       <Table head={["Date", "Learner", "Course", "Amount", "Status", "Razorpay", "Refund"]} empty="No payments.">
         {rows.slice(0, PAGE_SIZE).map((p) => {
           const percent = completionPercent(p.done, p.total);
-          const eligible = refundEligible(p.done, p.total);
+          const blocker = refundBlocker(p.done, p.total, p.createdAt);
+          const eligible = !blocker;
           return (
             <tr key={p.id}>
               <td className="whitespace-nowrap">{formatDateTime(p.createdAt)}</td>
@@ -97,7 +98,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps<"/ad
                 {p.status === "paid" && (
                   <div className="flex flex-col items-start gap-2">
                     <Badge tone={eligible ? "good" : "bad"}>
-                      {eligible ? "eligible" : "not eligible"} ({percent}% complete)
+                      {eligible ? `eligible (${percent}% complete)` : `not eligible: ${blocker}`}
                     </Badge>
                     <ActionForm
                       action={refund}
@@ -105,7 +106,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps<"/ad
                       override={
                         eligible
                           ? undefined
-                          : `This learner has completed ${percent}% of the course, which is past the ${REFUND_LIMIT_PERCENT}% refund limit. Override the policy and refund anyway?`
+                          : `Outside the refund policy (${blocker}). Override the policy and refund anyway?`
                       }
                       className="flex flex-col items-start gap-1"
                     >
