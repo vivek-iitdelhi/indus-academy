@@ -19,6 +19,9 @@ import { pipeline } from "node:stream/promises";
 import { r2Fetch } from "../src/lib/video.ts";
 
 const POLL_MS = 30_000;
+// Deleted videos stay until every playback link to them has expired (links last ≤ 24 h).
+const PURGE_AFTER_MS = 25 * 3_600_000;
+const RETRY_DELAYS_MS = [1000, 5000, 20_000];
 const SEGMENT_SECONDS = 6;
 const PARALLEL_REQUESTS = 16;
 const WORK_DIR = process.env.ENCODER_WORK_DIR ?? join(tmpdir(), "iaa-encoder");
@@ -42,16 +45,33 @@ async function ok(res: Response, what: string) {
   return res;
 }
 
+/** Retries network errors and 5xx (with backoff); other statuses are returned as they are. */
+async function request(...args: Parameters<typeof r2Fetch>) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await r2Fetch(...args);
+      if (res.status < 500 || attempt >= RETRY_DELAYS_MS.length) return res;
+    } catch (e) {
+      if (attempt >= RETRY_DELAYS_MS.length) throw e;
+    }
+    await sleep(RETRY_DELAYS_MS[attempt]);
+  }
+}
+
 async function list(prefix: string) {
-  const keys: string[] = [];
+  const objects: { key: string; lastModified: Date }[] = [];
   let token: string | undefined;
   do {
     const query: Record<string, string> = { "list-type": "2", prefix, ...(token && { "continuation-token": token }) };
-    const xml = await (await ok(await r2Fetch("GET", "", { query }), `list ${prefix}`)).text();
-    keys.push(...[...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]));
+    const xml = await (await ok(await request("GET", "", { query }), `list ${prefix}`)).text();
+    for (const [, body] of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const key = body.match(/<Key>([^<]+)<\/Key>/)?.[1];
+      const lastModified = new Date(body.match(/<LastModified>([^<]+)<\/LastModified>/)?.[1] ?? 0);
+      if (key) objects.push({ key, lastModified });
+    }
     token = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)?.[1];
   } while (token);
-  return keys;
+  return objects;
 }
 
 /** Runs `task` on every item, at most PARALLEL_REQUESTS at a time. */
@@ -64,12 +84,12 @@ async function each<T>(items: T[], task: (item: T) => Promise<unknown>) {
 }
 
 const remove = async (key: string) => {
-  const res = await r2Fetch("DELETE", key);
+  const res = await request("DELETE", key);
   if (!res.ok && res.status !== 404) await ok(res, `delete ${key}`);
 };
 
 const put = async (key: string, body: Blob | string) =>
-  ok(await r2Fetch("PUT", key, { body, headers: { "content-type": CONTENT_TYPES[key.split(".").pop()!] ?? "application/octet-stream" }, timeoutMs: 120_000 }), `put ${key}`);
+  ok(await request("PUT", key, { body, headers: { "content-type": CONTENT_TYPES[key.split(".").pop()!] ?? "application/octet-stream" }, timeoutMs: 120_000 }), `put ${key}`);
 
 /** Runs a command; resolves with stdout, rejects with the end of stderr. */
 function run(command: string, args: string[]) {
@@ -121,6 +141,14 @@ function ffmpegArgs(source: string, out: string, { shortSide, hasAudio }: { shor
   ];
 }
 
+const MACHINE_TROUBLE = /No space left|ENOSPC|Cannot allocate memory|out of memory|ENOENT|nvenc|CUDA|OpenEncodeSessionEx/i;
+
+async function reject(uid: string, e: unknown) {
+  log(uid, "failed", e);
+  await put(`videos/${uid}/error.txt`, String(e instanceof Error ? e.message : e));
+  await remove(`uploads/${uid}`);
+}
+
 async function encode(uid: string) {
   const work = join(WORK_DIR, uid);
   const source = join(work, "source");
@@ -129,26 +157,31 @@ async function encode(uid: string) {
   await mkdir(out, { recursive: true });
   try {
     log(uid, "downloading");
-    const res = await ok(await r2Fetch("GET", `uploads/${uid}`, { timeoutMs: 6 * 3_600_000 }), "download");
+    const res = await ok(await request("GET", `uploads/${uid}`, { timeoutMs: 6 * 3_600_000 }), "download");
     await pipeline(Readable.fromWeb(res.body as import("node:stream/web").ReadableStream), createWriteStream(source));
 
-    let durationSeconds: number;
+    // A file ffprobe can't read is the upload's fault: tell the admin and drop it.
+    let info: Awaited<ReturnType<typeof probe>>;
     try {
-      const info = await probe(source);
-      durationSeconds = info.durationSeconds;
-      log(uid, `encoding ${Math.round(durationSeconds)} s, short side ${info.shortSide}px, ${CODEC}`);
-      const started = Date.now();
+      info = await probe(source);
+    } catch (e) {
+      await reject(uid, e);
+      return;
+    }
+    const { durationSeconds } = info;
+    log(uid, `encoding ${Math.round(durationSeconds)} s, short side ${info.shortSide}px, ${CODEC}`);
+    const started = Date.now();
+    try {
       await run("ffmpeg", ffmpegArgs(source, out, info));
       const at = Math.min(5, durationSeconds / 3).toFixed(2);
       await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss", at, "-i", source, "-frames:v", "1", "-vf", "scale=-2:720", "-q:v", "3", join(out, "thumb.jpg")]);
-      log(uid, `encoded in ${Math.round((Date.now() - started) / 1000)} s`);
     } catch (e) {
-      // The file itself is the problem: tell the admin, drop the upload.
-      log(uid, "failed", e);
-      await put(`videos/${uid}/error.txt`, String(e instanceof Error ? e.message : e));
-      await remove(`uploads/${uid}`);
+      // The machine's fault (disk, memory, GPU): keep the upload and try again next pass.
+      if (MACHINE_TROUBLE.test(String(e))) throw e;
+      await reject(uid, e);
       return;
     }
+    log(uid, `encoded in ${Math.round((Date.now() - started) / 1000)} s`);
 
     const files = (await readdir(out, { recursive: true, withFileTypes: true })).filter((f) => f.isFile());
     log(uid, `uploading ${files.length} files`);
@@ -165,7 +198,7 @@ async function encode(uid: string) {
 }
 
 async function purge(uid: string) {
-  const keys = await list(`videos/${uid}/`);
+  const keys = (await list(`videos/${uid}/`)).map((o) => o.key);
   log(uid, `deleting ${keys.length} files`);
   await each([...keys, `uploads/${uid}`], remove);
   await remove(`trash/${uid}`);
@@ -176,9 +209,27 @@ const uidOf = (key: string) => {
   return /^[\w-]+$/.test(uid) ? uid : null;
 };
 
+/** Runs one job; a failure is logged and retried next pass without holding up the others. */
+const attempt = (what: string, uid: string, job: () => Promise<void>) =>
+  job().catch((e) => log(uid, `${what} failed, will retry`, e));
+
 async function pass() {
-  for (const uid of (await list("trash/")).map(uidOf)) if (uid) await purge(uid);
-  for (const uid of (await list("uploads/")).map(uidOf)) if (uid) await encode(uid);
+  const trash = await list("trash/");
+  const trashed = new Set(trash.map((o) => uidOf(o.key)));
+  for (const { key, lastModified } of trash) {
+    const uid = uidOf(key);
+    if (uid && Date.now() - lastModified.getTime() > PURGE_AFTER_MS) await attempt("delete", uid, () => purge(uid));
+  }
+  for (const { key } of await list("uploads/")) {
+    const uid = uidOf(key);
+    if (uid && !trashed.has(uid)) await attempt("encode", uid, () => encode(uid));
+  }
+}
+
+/** Refuses to start without ffmpeg, or with a GPU encoder that doesn't work. */
+async function preflight() {
+  await run("ffprobe", ["-version"]);
+  await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=640x360:duration=1", "-c:v", CODEC, "-f", "null", "-"]);
 }
 
 // Lets the admin panel tell "processing" from "encoder machine is off". Runs on its own
@@ -189,6 +240,12 @@ const heartbeat = () =>
   );
 
 const once = process.argv.includes("--once");
+try {
+  await preflight();
+} catch (e) {
+  log(`cannot encode with ${CODEC}; is ffmpeg installed (with this encoder)?`, e);
+  process.exit(1);
+}
 log(`encoder started (${CODEC}, work dir ${WORK_DIR})`);
 await heartbeat();
 const heartbeats = once ? undefined : setInterval(heartbeat, 60_000);

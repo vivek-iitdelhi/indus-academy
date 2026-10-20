@@ -67,8 +67,12 @@ quality from their connection and switches mid-video.
    ExecStart=/usr/bin/npm run encoder
    Restart=always
    ```
-5. While it is off, uploads wait as "Processing…" and deletions wait too; nothing is
-   lost. To update: `git pull`, restart.
+5. While it is off, uploads wait as "Processing…" (the admin page says the encoder looks
+   offline) and nothing is lost. It refuses to start if ffmpeg or the chosen encoder
+   doesn't work. To update: `git pull`, restart.
+
+Deleted and replaced videos are removed 25 hours later, once every playback link to
+them has expired, so nobody's video stops mid-lesson.
 
 The encoder deletes each original once encoded: **keep your master files**.
 
@@ -83,8 +87,9 @@ in front is the next step.
 - `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` (live keys). Set them **before** the build:
   program pages read them at build time.
 - Webhook: Razorpay dashboard → Webhooks → add `https://indusai.academy/api/razorpay/webhook`,
-  events `payment.captured` and `order.paid`, and a secret you choose →
-  `RAZORPAY_WEBHOOK_SECRET`. This enrols a learner who paid and closed the tab.
+  events `payment.captured`, `order.paid` and `refund.processed`, and a secret you choose →
+  `RAZORPAY_WEBHOOK_SECRET`. This enrols a learner who paid and closed the tab, and removes
+  access when a payment is fully refunded from the Razorpay dashboard.
 - Test: buy a course at ₹1 (set a test course's price to ₹1 in `/admin/courses`), check
   you land in the course, then refund it from `/admin/payments`.
 

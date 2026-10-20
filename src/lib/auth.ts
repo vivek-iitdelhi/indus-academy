@@ -48,9 +48,12 @@ async function sendMagicLinkEmail(email: string, url: string) {
 export const auth = betterAuth({
   // BETTER_AUTH_SECRET and BETTER_AUTH_URL are read from the environment.
   database: drizzleAdapter(db, { provider: "pg", schema }),
+  // Name and phone change only through the account form (saveAccount), which validates
+  // them; the name is printed on certificates.
+  disabledPaths: ["/update-user"],
   user: {
     additionalFields: {
-      phone: { type: "string", required: false },
+      phone: { type: "string", required: false, input: false },
     },
   },
   session: {

@@ -10,11 +10,16 @@ import { onLessonCompleted } from "./completion.ts";
  * played since the last report (not wall time, not seek distance).
  */
 export type ProgressReport = { position: number; watchedDelta: number };
-export type ProgressState = Pick<LessonProgress, "secondsWatched" | "furthestSeconds" | "completedAt">;
+export type ProgressState = Pick<LessonProgress, "secondsWatched" | "furthestSeconds" | "completedAt"> & {
+  /** When the previous report was saved; bounds progress by real time elapsed. */
+  updatedAt?: Date;
+};
 
 export const MAX_WATCHED_DELTA = 30; // one 15 s report at up to 2x speed
 export const SEEK_TOLERANCE_SECONDS = 5; // report jitter and rounding
 export const COMPLETION_RATIO = 0.9;
+/** 2x playback plus slack for request timing: the most media time per second of real time. */
+export const MAX_ADVANCE_PER_SECOND = 2.2;
 
 const EMPTY: ProgressState = { secondsWatched: 0, furthestSeconds: 0, completedAt: null };
 const clamp = (n: number, min: number, max: number) => Math.min(Math.max(Number.isFinite(n) ? n : 0, min), max);
@@ -22,7 +27,9 @@ const clamp = (n: number, min: number, max: number) => Math.min(Math.max(Number.
 /**
  * Pure. Anti-scrub rule: the high-water mark can only advance by what was actually
  * played (watchedDelta, capped at 30) plus a 5 s tolerance beyond its previous value.
- * Dragging the scrubber to the end therefore moves nothing; only watching does.
+ * Dragging the scrubber to the end therefore moves nothing; only watching does. The advance
+ * is also capped by the real time since the previous report (2.2x), so a script firing
+ * reports cannot finish a video faster than watching it at double speed.
  * Completion is set once when furthest >= 90% of duration and is never cleared.
  */
 export function applyProgressReport(
@@ -34,7 +41,8 @@ export function applyProgressReport(
   const state = prev ?? EMPTY;
   const delta = Math.floor(clamp(report.watchedDelta, 0, MAX_WATCHED_DELTA));
   const position = Math.floor(clamp(report.position, 0, Math.max(durationSeconds, 0)));
-  const reachable = state.furthestSeconds + delta + SEEK_TOLERANCE_SECONDS;
+  const elapsed = state.updatedAt ? Math.max(now.getTime() - state.updatedAt.getTime(), 0) / 1000 : Infinity;
+  const reachable = state.furthestSeconds + Math.floor(Math.min(delta + SEEK_TOLERANCE_SECONDS, MAX_ADVANCE_PER_SECOND * elapsed));
   const furthestSeconds = Math.max(state.furthestSeconds, Math.min(position, reachable));
   const reachedEnd = durationSeconds > 0 && furthestSeconds >= COMPLETION_RATIO * durationSeconds;
   return {

@@ -1,8 +1,8 @@
 import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { courses, enrollments, lessonProgress, lessons, user, type Certificate } from "../../db/schema.ts";
+import { certificates, courses, enrollments, lessonProgress, lessons, user, type Certificate } from "../../db/schema.ts";
 import { sendEmail } from "../email.ts";
-import { getCourseOutline, nextIncompleteLesson } from "./courses.ts";
+import { getCourseOutline, lessonReady, nextIncompleteLesson } from "./courses.ts";
 
 // Lifecycle emails: the certificate-issued note and the idle-learner nudge.
 
@@ -103,7 +103,7 @@ export function pickNudges<T extends NudgeCandidate>(rows: T[], now: Date, limit
 
 /** The daily idle-learner run (GET /api/cron/nudge). Returns counts for the cron log. */
 export async function sendNudges(now = new Date()) {
-  // Active, unexpired enrolments in courses the learner has not finished.
+  // Active, unexpired enrolments in courses the learner has not finished (or been certified in).
   // ponytail: scans every such enrolment; push the idle cutoff into SQL when this gets large.
   const rows = await db
     .select({
@@ -121,9 +121,15 @@ export async function sendNudges(now = new Date()) {
     .from(enrollments)
     .innerJoin(user, eq(user.id, enrollments.userId))
     .innerJoin(courses, eq(courses.id, enrollments.courseId))
-    .innerJoin(lessons, eq(lessons.courseId, enrollments.courseId))
+    .innerJoin(lessons, and(eq(lessons.courseId, enrollments.courseId), lessonReady))
     .leftJoin(lessonProgress, and(eq(lessonProgress.lessonId, lessons.id), eq(lessonProgress.userId, enrollments.userId)))
-    .where(and(eq(enrollments.status, "active"), or(isNull(enrollments.expiresAt), gt(enrollments.expiresAt, now))))
+    .where(
+      and(
+        eq(enrollments.status, "active"),
+        or(isNull(enrollments.expiresAt), gt(enrollments.expiresAt, now)),
+        sql`not exists (select 1 from ${certificates} where ${certificates.userId} = ${enrollments.userId} and ${certificates.courseId} = ${enrollments.courseId})`,
+      ),
+    )
     .groupBy(enrollments.id, user.id, courses.id)
     .having(sql`count(${lessonProgress.completedAt}) < count(${lessons.id})`);
 

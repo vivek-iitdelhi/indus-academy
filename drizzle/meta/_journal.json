@@ -29,6 +29,13 @@
       "when": 1792479472021,
       "tag": "0003_certificate_search_visible",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792502589635,
+      "tag": "0004_certificate_counters",
+      "breakpoints": true
     }
   ]
 }

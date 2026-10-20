@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { certificates, courses, user, type Certificate } from "../../db/schema.ts";
+import { certificateCounters, certificates, courses, user, type Certificate } from "../../db/schema.ts";
 
 /** IAA-<year>-<n>, n zero-padded to at least 4 digits. */
 export const formatSerial = (year: number, n: number) => `IAA-${year}-${String(n).padStart(4, "0")}`;
@@ -76,9 +76,14 @@ export async function issueOrGetCertificate(
   const [holder] = await db.select({ name: user.name }).from(user).where(eq(user.id, userId));
   if (!holder) throw new Error(`No user ${userId}`);
 
-  const [{ n }] = await db.execute<{ n: string }>(sql`select nextval('certificate_serial_seq') as n`);
   const issuedAt = new Date(); // millisecond precision round-trips through timestamptz
-  const fields = { serial: formatSerial(yearInIndia(issuedAt), Number(n)), userId, courseId, issuedAt };
+  const year = yearInIndia(issuedAt);
+  const [{ n }] = await db
+    .insert(certificateCounters)
+    .values({ year, last: 1 })
+    .onConflictDoUpdate({ target: certificateCounters.year, set: { last: sql`${certificateCounters.last} + 1` } })
+    .returning({ n: certificateCounters.last });
+  const fields = { serial: formatSerial(year, n), userId, courseId, issuedAt };
 
   const [inserted] = await db
     .insert(certificates)
@@ -86,7 +91,7 @@ export async function issueOrGetCertificate(
     .onConflictDoNothing({ target: [certificates.userId, certificates.courseId] })
     .returning();
   if (inserted) return { certificate: inserted, issued: true };
-  // Lost a race: another request issued it first (the sequence number is skipped).
+  // Lost a race: another request issued it first (its number is skipped).
   return { certificate: (await findCertificate(userId, courseId))!, issued: false };
 }
 

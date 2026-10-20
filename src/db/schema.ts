@@ -3,7 +3,6 @@ import {
   index,
   integer,
   jsonb,
-  pgSequence,
   pgTable,
   primaryKey,
   text,
@@ -292,7 +291,11 @@ export const payments = pgTable("payments", {
 });
 
 // Numbers the serials: IAA-<year>-<nextval, zero-padded to 4>.
-export const certificateSerialSeq = pgSequence("certificate_serial_seq");
+/** Last certificate number issued in each year (India time); serials restart at 0001 every year. */
+export const certificateCounters = pgTable("certificate_counters", {
+  year: integer("year").primaryKey(),
+  last: integer("last").notNull(),
+});
 
 // unique(user_id, course_id) leads with user_id, so it also serves user_id lookups.
 export const certificates = pgTable(

@@ -99,7 +99,10 @@ video → quiz → video; first video is a preview) and `chatgpt-for-professiona
 `courses.ts` (types `CourseOutline = OutlineChapter[]`, `OutlineChapter = Chapter & {lessons}`, `ProgressRow`)
 - `getCourseBySlug(slug, {includeDrafts?}): Promise<Course | null>` — drafts hidden by
   default; archived still returned (enrolled learners keep access). Sell only `published`.
-- `getCourseOutline(courseId): Promise<CourseOutline>` — chapters and lessons, in order.
+- `getCourseOutline(courseId, {includeUnready?}): Promise<CourseOutline>` — chapters and
+  lessons, in order. Learners only ever see **ready** lessons (`lessonReady`: a video with a
+  duration, a quiz with questions); completion and unlocking count the same set. Only the
+  course builder passes `includeUnready`.
 - `getLesson(courseSlug, lessonSlug): Promise<{course, lesson} | null>` — no access check.
 - `flattenOutline(outline): Lesson[]`, `totalDurationSeconds(outline): number`.
 - `nextIncompleteLesson(outline, progress): Lesson | null` — the "continue" target.
@@ -134,7 +137,7 @@ video → quiz → video; first video is a preview) and `chatgpt-for-professiona
 
 `certificates.ts`
 - `issueCertificate(userId, courseId): Promise<Certificate>` — idempotent and race-safe;
-  serial `IAA-<year in IST>-<0001…>` from `certificate_serial_seq`; snapshots `user.name`.
+  serial `IAA-<year in IST>-<0001…>` from `certificate_counters` (restarts each year); snapshots `user.name`.
 - `getCertificate(serial): Promise<{certificate, courseTitle, courseSlug} | null>`.
 - `verifyCertificateHash(cert): boolean` — HMAC-SHA256(`CERTIFICATE_SECRET`) over
   `serial|user_id|course_id|issued_at ISO`. Revoke by setting `revoked_at`; never delete.

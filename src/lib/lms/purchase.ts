@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import { courses, enrollments, payments, user } from "../../db/schema.ts";
 import { fetchPayment, type RazorpayPayment } from "../razorpay.ts";
@@ -116,5 +116,54 @@ export async function fulfilCoursePayment(
   }
   // Lost the race to the other caller: re-read, which now lands on a non-"created" branch.
   if (!won) return fulfilCoursePayment(orderId, paymentId, lookup);
+  // Two tabs, two payments: both stand (the money moved), but the team must refund one.
+  const [earlier] = await db
+    .select({ orderId: payments.razorpayOrderId })
+    .from(payments)
+    .where(
+      and(eq(payments.userId, userId), eq(payments.courseId, payment.courseId), eq(payments.status, "paid"), ne(payments.id, payment.id)),
+    )
+    .limit(1);
+  if (earlier) {
+    return problem(`paid twice: this learner already paid for this course (order ${earlier.orderId}). They are enrolled; refund one of the two payments.`);
+  }
   return { ...purchase, outcome: "fulfilled", status: paid.status };
+}
+
+/**
+ * Records a full refund: the payment becomes refunded and the enrolment is revoked, unless
+ * another paid payment still covers the course. Used by the admin refund and the
+ * refund.processed webhook. False if the payment was not "paid" (already recorded).
+ */
+export async function recordRefund(
+  match: { id: string } | { razorpayPaymentId: string },
+  refundId: string,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(payments)
+      .set({ status: "refunded", razorpayRefundId: refundId })
+      .where(
+        and(
+          "id" in match ? eq(payments.id, match.id) : eq(payments.razorpayPaymentId, match.razorpayPaymentId),
+          eq(payments.status, "paid"),
+        ),
+      )
+      .returning({ userId: payments.userId, courseId: payments.courseId });
+    if (!row) return false;
+    if (row.userId) {
+      const [stillPaid] = await tx
+        .select({ id: payments.id })
+        .from(payments)
+        .where(and(eq(payments.userId, row.userId), eq(payments.courseId, row.courseId), eq(payments.status, "paid")))
+        .limit(1);
+      if (!stillPaid) {
+        await tx
+          .update(enrollments)
+          .set({ status: "revoked" })
+          .where(and(eq(enrollments.userId, row.userId), eq(enrollments.courseId, row.courseId)));
+      }
+    }
+    return true;
+  });
 }

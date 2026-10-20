@@ -1,17 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { courses, lessons } from "@/db/schema";
 import { isUuid } from "@/lib/admin/courses";
-import { revalidateCourse } from "@/lib/catalog-cache";
+import { syncLessonVideo } from "@/lib/admin/video-sync";
 import { requireAdminApi } from "@/lib/session";
-import { deleteVideo, ENCODER_OFFLINE_MS, encoderLastSeen, getVideoStatus, videoConfigured } from "@/lib/video";
+import { ENCODER_OFFLINE_MS, encoderLastSeen, videoConfigured } from "@/lib/video";
 
-/**
- * Processing status of a lesson's video, polled by the lesson editor after an upload.
- * Polls the pending replacement when there is one, else the live video. A pending video
- * that is ready replaces the live one; a ready live video gets its duration copied
- * (progress and publishing both need duration_seconds > 0).
- */
+/** Processing status of a lesson's video, polled by the lesson editor after an upload. */
 export async function GET(_request: Request, ctx: RouteContext<"/api/admin/lessons/[lessonId]/video">) {
   await requireAdminApi();
   const { lessonId } = await ctx.params;
@@ -23,40 +18,19 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/admin/lesso
     .from(lessons)
     .innerJoin(courses, eq(lessons.courseId, courses.id))
     .where(eq(lessons.id, lessonId));
-  const uid = row?.lesson.pendingVideoUid ?? row?.lesson.videoUid;
-  if (!row || !uid) return Response.json({ error: "This lesson has no video." }, { status: 404 });
-  const { lesson } = row;
+  if (!row) return Response.json({ error: "No such lesson." }, { status: 404 });
 
-  const status = await getVideoStatus(uid).catch((e) => {
-    console.error("getVideoStatus failed", e);
-    return null;
+  const status = await syncLessonVideo(row.lesson, row.courseSlug).catch((e) => {
+    console.error("syncLessonVideo failed", e);
+    return undefined;
   });
-  if (!status) return Response.json({ error: "Could not reach the video provider." }, { status: 502 });
-  const ready = status.ready && status.durationSeconds > 0;
+  if (status === undefined) return Response.json({ error: "Could not reach video storage." }, { status: 502 });
+  if (!status) return Response.json({ error: "This lesson has no video." }, { status: 404 });
 
-  if (ready && uid === lesson.pendingVideoUid) {
-    // Conditional on the pending uid: a newer upload may have replaced it since we read the row.
-    const promoted = await db
-      .update(lessons)
-      .set({ videoUid: uid, durationSeconds: status.durationSeconds, pendingVideoUid: null })
-      .where(and(eq(lessons.id, lesson.id), eq(lessons.pendingVideoUid, uid)))
-      .returning({ id: lessons.id });
-    if (promoted.length) {
-      const old = lesson.videoUid;
-      if (old && old !== uid) await deleteVideo(old).catch((e) => console.error(`deleteVideo ${old} failed`, e));
-      revalidateCourse(row.courseSlug);
-    }
-  } else if (ready && status.durationSeconds !== lesson.durationSeconds) {
-    await db
-      .update(lessons)
-      .set({ durationSeconds: status.durationSeconds })
-      .where(and(eq(lessons.id, lesson.id), eq(lessons.videoUid, uid)));
-    revalidateCourse(row.courseSlug);
-  }
   let encoderOffline = false;
   if (status.state === "processing") {
     const seen = await encoderLastSeen().catch(() => null);
     encoderOffline = !seen || Date.now() - seen.getTime() > ENCODER_OFFLINE_MS;
   }
-  return Response.json({ state: status.state, ready, durationSeconds: status.durationSeconds, encoderOffline });
+  return Response.json({ state: status.state, ready: status.ready, durationSeconds: status.durationSeconds, encoderOffline });
 }

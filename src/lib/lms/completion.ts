@@ -1,26 +1,29 @@
 import { and, count, eq, isNotNull } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { courses, lessonProgress, lessons, type Certificate } from "../../db/schema.ts";
+import { courses, lessonProgress, lessons, user, type Certificate } from "../../db/schema.ts";
+import { lessonReady } from "./courses.ts";
 import { issueOrGetCertificate } from "./certificates.ts";
 import { emailCertificateIssued } from "./lifecycle.ts";
 
-/** Every lesson in the course is complete for this learner. Empty courses never are. */
+/** Every ready lesson in the course is complete for this learner. Empty courses never are. */
 export async function isCourseComplete(userId: string, courseId: string): Promise<boolean> {
   const [[total], [done]] = await Promise.all([
-    db.select({ n: count() }).from(lessons).where(eq(lessons.courseId, courseId)),
+    db.select({ n: count() }).from(lessons).where(and(eq(lessons.courseId, courseId), lessonReady)),
     db
       .select({ n: count() })
       .from(lessonProgress)
       .innerJoin(lessons, eq(lessonProgress.lessonId, lessons.id))
       .where(
-        and(eq(lessonProgress.userId, userId), eq(lessons.courseId, courseId), isNotNull(lessonProgress.completedAt)),
+        and(eq(lessonProgress.userId, userId), eq(lessons.courseId, courseId), isNotNull(lessonProgress.completedAt), lessonReady),
       ),
   ]);
   return total.n > 0 && done.n >= total.n;
 }
 
 /**
- * Called whenever a lesson newly completes (progress.ts, quiz.ts). Issues the
+ * Called whenever a lesson newly completes (progress.ts, quiz.ts), and when a learner who
+ * has finished everything opens the course without a certificate (an admin removed their
+ * last open lesson, or turned certificates on later). Issues the
  * certificate when that finished the course, and emails the learner (after the
  * response) only when this call issued it. Returns the certificate if there is one.
  */
@@ -31,6 +34,8 @@ export async function onLessonCompleted(userId: string, courseId: string): Promi
     .where(eq(courses.id, courseId));
   if (!course?.certificateEnabled) return null;
   if (!(await isCourseComplete(userId, courseId))) return null;
+  const [holder] = await db.select({ name: user.name }).from(user).where(eq(user.id, userId));
+  if (!holder?.name.trim()) return null; // the certificate prints the name; the name gate asks first
   const { certificate, issued } = await issueOrGetCertificate(userId, courseId);
   if (issued) await emailCertificateIssued(certificate);
   return certificate;

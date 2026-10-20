@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { lessons } from "@/db/schema";
 import { isUuid } from "@/lib/admin/courses";
@@ -36,10 +36,20 @@ export async function POST(request: NextRequest) {
   }
   // Saved before any bytes move, so a half-finished upload is never orphaned. Learners keep
   // the live video_uid until the status check promotes this one once it is ready.
-  await db.update(lessons).set({ pendingVideoUid: ticket.uid }).where(eq(lessons.id, lesson.id));
+  // Conditional: if the earlier replacement was promoted meanwhile, it is live now and
+  // must not be discarded below.
+  const abandoned = lesson.pendingVideoUid;
+  const saved = await db
+    .update(lessons)
+    .set({ pendingVideoUid: ticket.uid })
+    .where(and(eq(lessons.id, lesson.id), abandoned ? eq(lessons.pendingVideoUid, abandoned) : isNull(lessons.pendingVideoUid)))
+    .returning({ id: lessons.id });
+  if (!saved.length) {
+    await deleteVideo(ticket.uid).catch((e) => console.error(`deleteVideo ${ticket.uid} failed`, e));
+    return fail(409, "The lesson's video just changed. Reload the page and upload again.");
+  }
 
   // An earlier replacement that never got promoted is abandoned now.
-  const abandoned = lesson.pendingVideoUid;
   if (abandoned) await deleteVideo(abandoned).catch((e) => console.error(`deleteVideo ${abandoned} failed`, e));
 
   return Response.json(ticket);

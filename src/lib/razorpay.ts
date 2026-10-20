@@ -79,6 +79,17 @@ export function verifyWebhookSignature(
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
+/** Refunds already made against a payment (e.g. from the dashboard, or a refund we failed to record). */
+export async function fetchRefunds(paymentId: string) {
+  const { header } = auth();
+  const res = await fetch(`${RAZORPAY_API}/payments/${encodeURIComponent(paymentId)}/refunds`, {
+    headers: { authorization: header },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`Razorpay refund lookup failed: ${res.status}`);
+  return ((await res.json()) as { items: { id: string; amount: number; status: string }[] }).items;
+}
+
 /** Refunds a captured payment: the full amount, or `amountPaise` of it. */
 export async function refundPayment(paymentId: string, amountPaise?: number) {
   const { header } = auth();

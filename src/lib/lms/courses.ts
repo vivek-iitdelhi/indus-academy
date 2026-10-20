@@ -1,6 +1,15 @@
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { chapters, courses, lessons, type Chapter, type Course, type Lesson, type LessonProgress } from "../../db/schema.ts";
+import {
+  chapters,
+  courses,
+  lessons,
+  quizQuestions,
+  type Chapter,
+  type Course,
+  type Lesson,
+  type LessonProgress,
+} from "../../db/schema.ts";
 
 export type OutlineChapter = Chapter & { lessons: Lesson[] };
 /** Chapters in order, each with its lessons in order. */
@@ -23,10 +32,25 @@ export async function getCourseBySlug(
   return course ?? null;
 }
 
-export async function getCourseOutline(courseId: string): Promise<CourseOutline> {
+/**
+ * SQL condition on `lessons`: the lesson is ready for learners (a video with a duration, a
+ * quiz with questions). Lessons added to a live course stay hidden, and do not block
+ * sequential courses or completion, until they are.
+ */
+export const lessonReady = sql`((${lessons.kind} = 'video' and ${lessons.durationSeconds} > 0) or (${lessons.kind} = 'quiz' and exists (select 1 from ${quizQuestions} where ${quizQuestions.lessonId} = ${lessons.id})))`;
+
+/** Chapters with their ready lessons; the course builder passes includeUnready. */
+export async function getCourseOutline(
+  courseId: string,
+  { includeUnready = false }: { includeUnready?: boolean } = {},
+): Promise<CourseOutline> {
   const [chapterRows, lessonRows] = await Promise.all([
     db.select().from(chapters).where(eq(chapters.courseId, courseId)).orderBy(asc(chapters.position)),
-    db.select().from(lessons).where(eq(lessons.courseId, courseId)).orderBy(asc(lessons.position)),
+    db
+      .select()
+      .from(lessons)
+      .where(includeUnready ? eq(lessons.courseId, courseId) : and(eq(lessons.courseId, courseId), lessonReady))
+      .orderBy(asc(lessons.position)),
   ]);
   return chapterRows.map((chapter) => ({
     ...chapter,

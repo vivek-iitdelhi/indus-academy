@@ -20,6 +20,7 @@ import {
   updateCourse,
 } from "../actions";
 import { ActionForm, ConfirmButton } from "../client";
+import { SyncPendingVideos } from "./sync-videos";
 import {
   buttonClass,
   cardClass,
@@ -57,7 +58,7 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
   if (!course) notFound();
 
   const [outline, problems, records, progressRows, questionRows] = await Promise.all([
-    getCourseOutline(course.id),
+    getCourseOutline(course.id, { includeUnready: true }),
     coursePublishProblems(course.id),
     learnerRecordCounts(course.id),
     db
@@ -78,8 +79,14 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
   const hasRecords = records.enrollments + records.payments + records.certificates > 0;
   const lessonCount = outline.reduce((n, c) => n + c.lessons.length, 0);
 
+  const waiting = outline
+    .flatMap((c) => c.lessons)
+    .filter((l) => l.pendingVideoUid || (l.videoUid && l.durationSeconds === 0))
+    .map((l) => l.id);
+
   return (
     <div className="space-y-8">
+      <SyncPendingVideos lessonIds={waiting} />
       <div>
         <Link href="/admin/courses" className="text-sm text-muted hover:text-ink">
           ← Courses

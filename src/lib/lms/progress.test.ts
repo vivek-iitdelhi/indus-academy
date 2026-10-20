@@ -64,3 +64,22 @@ test("garbage input is treated as zero", () => {
   const s = applyProgressReport(undefined, { position: NaN, watchedDelta: Infinity }, 300, now);
   assert.deepEqual(s, start);
 });
+
+test("progress cannot outrun real time, however many reports arrive", () => {
+  const t0 = new Date("2026-01-01T00:00:00Z");
+  let s: ProgressState & { updatedAt: Date } = { secondsWatched: 0, furthestSeconds: 0, completedAt: null, updatedAt: t0 };
+  // A script sends 1,000 maximal reports within one second.
+  for (let i = 1; i <= 1000; i++) {
+    const now = new Date(t0.getTime() + i);
+    s = { ...applyProgressReport(s, { position: 10_800, watchedDelta: 30 }, 10_800, now), updatedAt: now };
+  }
+  assert.ok(s.furthestSeconds <= 3, `advanced ${s.furthestSeconds}s in 1s of real time`);
+  // Honest 2x viewing, a report every 15 s (arriving a little early), still keeps pace.
+  let h: ProgressState & { updatedAt: Date } = { secondsWatched: 0, furthestSeconds: 0, completedAt: null, updatedAt: t0 };
+  for (let i = 1; i <= 360; i++) {
+    const now = new Date(t0.getTime() + i * 14_500);
+    h = { ...applyProgressReport(h, { position: i * 30, watchedDelta: 30 }, 10_800, now), updatedAt: now };
+  }
+  assert.ok(h.completedAt, `honest viewer reached ${h.furthestSeconds}s of 10800`);
+  assert.ok(Number.isInteger(s.furthestSeconds) && Number.isInteger(h.furthestSeconds), "whole seconds (integer column)");
+});

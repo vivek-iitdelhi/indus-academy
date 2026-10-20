@@ -1,11 +1,12 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { db } from "@/db";
-import { enrollments, payments } from "@/db/schema";
+import { payments } from "@/db/schema";
 import { completionSql, isUuid, refundBlocker } from "@/lib/admin/ops";
-import { razorpayConfigured, refundPayment } from "@/lib/razorpay";
+import { recordRefund } from "@/lib/lms/purchase";
+import { fetchRefunds, razorpayConfigured, refundPayment } from "@/lib/razorpay";
 import { requireAdminApi } from "@/lib/session";
 import type { ActionState } from "../learners/action-form";
 
@@ -41,26 +42,25 @@ export async function refund(_prev: ActionState, formData: FormData): Promise<Ac
   try {
     refundId = (await refundPayment(payment.razorpayPaymentId)).id;
   } catch (error) {
-    console.error("[admin] refund failed", id, error);
-    return { error: `Razorpay did not accept the refund, so nothing was changed. ${error instanceof Error ? error.message : ""}`.trim() };
+    // Already refunded at Razorpay (an earlier attempt that failed to save, or the dashboard)?
+    const existing = await fetchRefunds(payment.razorpayPaymentId)
+      .then((refunds) => refunds.find((r) => r.status !== "failed"))
+      .catch(() => undefined);
+    if (!existing) {
+      console.error("[admin] refund failed", id, error);
+      return { error: `Razorpay did not accept the refund, so nothing was changed. ${error instanceof Error ? error.message : ""}`.trim() };
+    }
+    refundId = existing.id;
   }
 
   try {
-    await db.transaction(async (tx) => {
-      await tx.update(payments).set({ status: "refunded", razorpayRefundId: refundId }).where(eq(payments.id, id));
-      if (payment.userId) {
-        await tx
-          .update(enrollments)
-          .set({ status: "revoked" })
-          .where(and(eq(enrollments.userId, payment.userId), eq(enrollments.courseId, payment.courseId)));
-      }
-    });
+    if (!(await recordRefund({ id }, refundId))) return { ok: `Already recorded as refunded (${refundId}).` };
   } catch (error) {
-    // The money has gone back; only our bookkeeping failed. Say exactly what to fix.
+    // The money has gone back; only our bookkeeping failed. Pressing Refund again records it.
     console.error("[admin] refund recorded by Razorpay but not saved", { id, refundId, error });
-    return { error: `Razorpay refunded it (${refundId}) but saving failed. Set this payment to refunded and revoke the enrolment by hand.` };
+    return { error: `Razorpay refunded it (${refundId}) but saving failed. Press Refund again to record it.` };
   }
   console.info("[admin] refunded", { id, refundId, by: admin.email });
   refresh();
-  return { ok: `Refunded (${refundId}). Enrolment revoked.` };
+  return { ok: `Refunded (${refundId}). Access removed unless another paid order covers the course.` };
 }

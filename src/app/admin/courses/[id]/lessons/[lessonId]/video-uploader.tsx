@@ -80,7 +80,11 @@ export function VideoUploader({
       }
       if (!res?.ok) return;
       const status = (await res.json()) as { state: string; ready: boolean; encoderOffline?: boolean };
-      if (status.ready) {
+      if (status.state === "pendingupload") {
+        // The upload was never finished (tab closed, or cancelled and reloaded).
+        setPhase("idle");
+        setNote({ text: "The last upload was not finished. Choose the file again.", error: true });
+      } else if (status.ready) {
         setPhase("ready");
         setNote(null);
         router.refresh();

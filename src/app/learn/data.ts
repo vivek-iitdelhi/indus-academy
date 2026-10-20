@@ -2,6 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { certificates, courses, enrollments, lessons, type Course, type LessonProgress } from "@/db/schema";
 import { hasAccess } from "@/lib/lms/access";
+import { onLessonCompleted } from "@/lib/lms/completion";
 import {
   flattenOutline,
   getCourseOutline,
@@ -52,16 +53,23 @@ export async function loadCourseState(userId: string, course: Course) {
     })),
   }));
   const all = flattenOutline(outline);
+  const done = all.filter((l) => doneIds.has(l.id)).length;
+  // Finished, but no certificate: the course changed after they finished (see onLessonCompleted).
+  let held: { serial: string; revokedAt: Date | null } | null = certificate ?? null;
+  if (!held && enrolled && course.certificateEnabled && all.length > 0 && done === all.length) {
+    const issued = await onLessonCompleted(userId, course.id);
+    if (issued) held = { serial: issued.serial, revokedAt: issued.revokedAt };
+  }
   return {
     enrolled,
     outline,
     progress,
     chapters,
     total: all.length,
-    done: all.filter((l) => doneIds.has(l.id)).length,
+    done,
     next: enrolled ? nextIncompleteLesson(outline, progress) : null,
     hasPreviews: all.some((l) => l.isPreview),
-    certificate: certificate ?? null,
+    certificate: held,
   };
 }
 
