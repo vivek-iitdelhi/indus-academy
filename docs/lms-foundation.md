@@ -22,6 +22,8 @@ course structure lives **in the database**, video is **Cloudflare Stream**.
 7. **Email goes through `sendEmail(payload)` in `@/lib/email`** (Resend body; never
    throws; logs and skips without `RESEND_API_KEY`). Use `shell`/`escapeHtml` from
    `@/lib/newsletter` for the visual frame.
+9. **Catalogue cache:** after any admin change to a course call `revalidateCourse(slug)` from
+   `@/lib/catalog-cache` (keep that signature; the catalogue owner may change its body).
 8. `hls.js` (player) and `tus-js-client` (admin uploads) are already installed. Do not add
    other dependencies without a reason you state in your report.
 6. Inside `src/db` and `src/lib/lms`, import with **relative paths and `.ts` extensions**
