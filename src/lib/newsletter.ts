@@ -53,13 +53,14 @@ export function verifySubscription(email: string, token: string): "valid" | "exp
   return Date.now() - Number(issuedAt) > TOKEN_TTL_MS ? "expired" : "valid";
 }
 
-const escapeHtml = (value: string) =>
+export const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const trackedUrl = (path: string, campaign: string) =>
   `${site.url}${path}?utm_source=newsletter&utm_medium=email&utm_campaign=${campaign}`;
 
-const shell = (body: string, footer: string) => `
+/** The branded email frame shared by every transactional email. */
+export const shell = (body: string, footer: string) => `
   <div style="margin:0;padding:24px;background:#f5f3ec;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">
     <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:20px;padding:32px">
       <p style="margin:0 0 28px;font-size:15px;font-weight:600;color:#2a524a">${escapeHtml(site.name)}</p>

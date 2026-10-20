@@ -1,5 +1,8 @@
 # LMS — data model
 
+> **Superseded in part:** the stack and data model changed (Supabase, Better Auth, courses in the
+> database, Cloudflare Stream). [`lms-foundation.md`](lms-foundation.md) is the current contract.
+
 Postgres on Neon, accessed through Drizzle. Companion to [`lms-plan.md`](lms-plan.md)
 and [`lms-prd.md`](lms-prd.md).
 

@@ -1,5 +1,8 @@
 # LMS — Phase 1
 
+> **Superseded in part:** the stack and data model changed (Supabase, Better Auth, courses in the
+> database, Cloudflare Stream). [`lms-foundation.md`](lms-foundation.md) is the current contract.
+
 The milestone: **a stranger can buy a course, sign in, watch it, and come back
 tomorrow to where they stopped.** Everything after Phase 1 is additive; nothing before
 it is provable.

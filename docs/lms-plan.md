@@ -1,5 +1,8 @@
 # LMS build plan
 
+> **Superseded in part:** the stack and data model changed (Supabase, Better Auth, courses in the
+> database, Cloudflare Stream). [`lms-foundation.md`](lms-foundation.md) is the current contract.
+
 The LMS is built in this repository, as a route group alongside the marketing site.
 It shares this site's auth, Razorpay integration and design, and deploys with it.
 

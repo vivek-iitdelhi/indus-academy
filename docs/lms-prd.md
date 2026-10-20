@@ -1,5 +1,8 @@
 # LMS — product requirements
 
+> **Superseded in part:** the stack and data model changed (Supabase, Better Auth, courses in the
+> database, Cloudflare Stream). [`lms-foundation.md`](lms-foundation.md) is the current contract.
+
 Companion to [`lms-plan.md`](lms-plan.md), which covers architecture and the decisions
 behind it. This document covers what we are building and how we will know it works.
 
