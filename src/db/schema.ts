@@ -268,6 +268,7 @@ export const enrollments = pgTable(
     distributorId: uuid("distributor_id").references(() => distributors.id),
     startedAt: ts("started_at").notNull().defaultNow(),
     expiresAt: ts("expires_at"), // null = never
+    nudgedAt: ts("nudged_at"), // last "pick up where you left off" email, so it is sent once per idle spell
   },
   (t) => [unique("enrollments_user_id_course_id_unique").on(t.userId, t.courseId)],
 );
@@ -283,6 +284,7 @@ export const payments = pgTable("payments", {
     .references(() => courses.id),
   amountPaise: integer("amount_paise").notNull(),
   status: text("status", { enum: paymentStatuses }).notNull().default("created"),
+  razorpayRefundId: text("razorpay_refund_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

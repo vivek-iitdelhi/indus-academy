@@ -17,6 +17,13 @@ course structure lives **in the database**, video is **Cloudflare Stream**.
    handler and server action checks auth itself** (the layouts' checks are a backstop).
 5. **Schema changes only through new Drizzle migrations**: edit `src/db/schema.ts`, run
    `npm run db:generate -- --name <what>`, commit the SQL. Never edit an applied migration.
+   While feature agents work in parallel, **they do not generate migrations** (journal
+   numbers would collide): if you need a column, stop and report it to the reviewer.
+7. **Email goes through `sendEmail(payload)` in `@/lib/email`** (Resend body; never
+   throws; logs and skips without `RESEND_API_KEY`). Use `shell`/`escapeHtml` from
+   `@/lib/newsletter` for the visual frame.
+8. `hls.js` (player) and `tus-js-client` (admin uploads) are already installed. Do not add
+   other dependencies without a reason you state in your report.
 6. Inside `src/db` and `src/lib/lms`, import with **relative paths and `.ts` extensions**
    and use `import type` for types, so `node --test` can load them. Elsewhere use `@/`.
 
@@ -49,6 +56,8 @@ video → quiz → video; first video is a preview) and `chatgpt-for-professiona
 - Prices are `price_paise` (GST-inclusive, 0 = free). Lesson `position` is course-wide
   order; chapter `position` orders chapters. `quiz_questions.correct` holds option
   indices (more than one = multi-select).
+- `enrollments.nudged_at`: when the idle-learner reminder was last sent.
+  `payments.razorpay_refund_id`: set when an admin refunds.
 - Deleting a course with enrolments/payments/certificates is blocked: archive it. A user
   with certificates or payments cannot be hard-deleted without handling those first.
 

@@ -1,34 +1,11 @@
 import { programBySlug } from "@/content/programs";
 import { company, companyAddress, site } from "@/content/site";
 import { formatDate } from "@/lib/pricing";
+import { sendEmail } from "@/lib/email";
 import { fetchPayment, razorpayConfigured, verifySignature } from "@/lib/razorpay";
 
 const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-/**
- * Never throws: the payment has already succeeded by the time we send these, so a
- * mail failure must not turn into an error screen for someone who has just paid.
- * Failures are logged and reconciled against the Razorpay dashboard.
- */
-async function sendEmail(payload: Record<string, unknown>) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    console.info("[checkout] RESEND_API_KEY not set; email skipped:", payload.subject);
-    return;
-  }
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) console.error("[checkout] email failed:", res.status, await res.text());
-  } catch (error) {
-    console.error("[checkout] email threw:", payload.subject, error);
-  }
-}
 
 /** Confirms a completed payment, then emails the learner and the team. */
 export async function POST(request: Request) {
