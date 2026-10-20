@@ -61,3 +61,20 @@ export async function fetchPayment(paymentId: string) {
   if (!res.ok) throw new Error(`Razorpay payment lookup failed: ${res.status}`);
   return (await res.json()) as { status: string; amount: number; order_id: string; email?: string; contact?: string };
 }
+
+export type RazorpayPayment = Awaited<ReturnType<typeof fetchPayment>>;
+
+/**
+ * Webhooks are signed with the webhook secret set in the Razorpay dashboard, not the key
+ * secret: X-Razorpay-Signature is the hex HMAC-SHA256 of the raw request body.
+ */
+export function verifyWebhookSignature(
+  rawBody: string,
+  signature: string | null,
+  secret = process.env.RAZORPAY_WEBHOOK_SECRET,
+) {
+  if (!secret || !signature) return false;
+  const expected = Buffer.from(createHmac("sha256", secret).update(rawBody).digest("hex"));
+  const given = Buffer.from(signature);
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
