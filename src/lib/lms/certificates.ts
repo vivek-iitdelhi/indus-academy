@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import { certificates, courses, user, type Certificate } from "../../db/schema.ts";
 
@@ -26,14 +26,52 @@ export function verifyCertificateHash(cert: HashFields & Pick<Certificate, "hash
 const yearInIndia = (date: Date) =>
   Number(date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata", year: "numeric" }));
 
+/** "20 October 2026": the calendar date in India. */
+export const formatIssueDate = (date: Date) =>
+  date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
+
+/**
+ * LinkedIn's "Add to profile" link, prefilled. Uses the company page id when we have one,
+ * else the organisation name (LinkedIn then shows it without a logo).
+ */
+export function linkedInAddUrl(p: {
+  courseTitle: string;
+  serial: string;
+  issuedAt: Date;
+  certUrl: string;
+  organizationId?: string;
+  organizationName: string;
+}): string {
+  const [year, month] = p.issuedAt.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }).split("-");
+  const params = {
+    startTask: "CERTIFICATION_NAME",
+    name: p.courseTitle,
+    ...(p.organizationId ? { organizationId: p.organizationId } : { organizationName: p.organizationName }),
+    issueYear: year,
+    issueMonth: String(Number(month)),
+    certUrl: p.certUrl,
+    certId: p.serial,
+  };
+  const query = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`);
+  return `https://www.linkedin.com/profile/add?${query.join("&")}`;
+}
+
 /**
  * Issues the learner's certificate for a course, or returns the one they already have
  * (revoked or not). Safe to call repeatedly and concurrently. Does not check completion;
  * call it through onLessonCompleted (completion.ts) or an admin action.
  */
 export async function issueCertificate(userId: string, courseId: string): Promise<Certificate> {
+  return (await issueOrGetCertificate(userId, courseId)).certificate;
+}
+
+/** issueCertificate, also saying whether this call minted it (`issued`) or it already existed. */
+export async function issueOrGetCertificate(
+  userId: string,
+  courseId: string,
+): Promise<{ certificate: Certificate; issued: boolean }> {
   const existing = await findCertificate(userId, courseId);
-  if (existing) return existing;
+  if (existing) return { certificate: existing, issued: false };
 
   const [holder] = await db.select({ name: user.name }).from(user).where(eq(user.id, userId));
   if (!holder) throw new Error(`No user ${userId}`);
@@ -47,8 +85,9 @@ export async function issueCertificate(userId: string, courseId: string): Promis
     .values({ ...fields, holderName: holder.name, hash: certificateHash(fields) })
     .onConflictDoNothing({ target: [certificates.userId, certificates.courseId] })
     .returning();
+  if (inserted) return { certificate: inserted, issued: true };
   // Lost a race: another request issued it first (the sequence number is skipped).
-  return inserted ?? (await findCertificate(userId, courseId))!;
+  return { certificate: (await findCertificate(userId, courseId))!, issued: false };
 }
 
 async function findCertificate(userId: string, courseId: string) {
@@ -67,4 +106,32 @@ export async function getCertificate(serial: string) {
     .innerJoin(courses, eq(certificates.courseId, courses.id))
     .where(eq(certificates.serial, serial));
   return row ?? null;
+}
+
+/** The learner's certificates, newest first, revoked included. */
+export async function listCertificates(userId: string) {
+  return db
+    .select({ certificate: certificates, courseTitle: courses.title, courseSlug: courses.slug })
+    .from(certificates)
+    .innerJoin(courses, eq(certificates.courseId, courses.id))
+    .where(eq(certificates.userId, userId))
+    .orderBy(desc(certificates.issuedAt));
+}
+
+/**
+ * Sets the printed name on the learner's own certificate, only while it is still empty
+ * (the name is not part of the hash). Also fills an empty account name so later
+ * certificates get it. Returns false if there was nothing to set.
+ */
+export async function setEmptyHolderName(userId: string, serial: string, name: string): Promise<boolean> {
+  const set = await db
+    .update(certificates)
+    .set({ holderName: name })
+    .where(
+      and(eq(certificates.serial, serial), eq(certificates.userId, userId), sql`trim(${certificates.holderName}) = ''`),
+    )
+    .returning({ serial: certificates.serial });
+  if (set.length === 0) return false;
+  await db.update(user).set({ name }).where(and(eq(user.id, userId), sql`trim(${user.name}) = ''`));
+  return true;
 }

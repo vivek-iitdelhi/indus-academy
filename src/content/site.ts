@@ -96,6 +96,7 @@ export const nav: NavItem[] = [
     children: programs.map((p) => ({ href: `/programs/${p.slug}`, label: p.name, description: p.duration })),
     cta: { href: "/contact?interest=programs", label: "Enquire about the next cohort" },
   },
+  { href: "/courses", label: "Courses" },
   {
     href: "/enterprise",
     label: "For Enterprise",

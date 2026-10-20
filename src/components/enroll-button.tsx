@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { CheckIcon } from "./ui";
 
-type RazorpayResponse = {
+export type RazorpayResponse = {
   razorpay_order_id: string;
   razorpay_payment_id: string;
   razorpay_signature: string;
@@ -30,7 +30,7 @@ declare global {
 
 const CHECKOUT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
 
-function loadCheckout() {
+export function loadCheckout() {
   return new Promise<void>((resolve, reject) => {
     if (window.Razorpay) return resolve();
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${CHECKOUT_SRC}"]`);

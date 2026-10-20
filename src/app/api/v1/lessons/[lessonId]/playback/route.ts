@@ -1,0 +1,33 @@
+import { licensedLesson } from "@/lib/distributors";
+import { hlsManifestUrl, iframeUrl, signPlaybackToken, thumbnailUrl, videoConfigured } from "@/lib/video";
+import { apiError, json, notFound, withDistributor } from "../../../_shared";
+
+const MIN_TTL = 5 * 60;
+const MAX_TTL = 24 * 60 * 60;
+const DEFAULT_TTL = 6 * 60 * 60;
+
+export const GET = withDistributor(
+  async (distributor, request, { params }: RouteContext<"/api/v1/lessons/[lessonId]/playback">) => {
+    const raw = new URL(request.url).searchParams.get("ttl");
+    const ttl = raw === null ? DEFAULT_TTL : Number(raw);
+    if (!Number.isInteger(ttl) || ttl < MIN_TTL || ttl > MAX_TTL) {
+      return apiError(400, "invalid_ttl", `ttl must be a whole number of seconds from ${MIN_TTL} to ${MAX_TTL}.`);
+    }
+
+    const lesson = await licensedLesson(distributor.id, (await params).lessonId);
+    if (!lesson) return notFound();
+    if (lesson.kind !== "video" || !lesson.videoUid || lesson.durationSeconds <= 0) {
+      return apiError(409, "video_not_ready", "This lesson has no playable video yet.");
+    }
+    if (!videoConfigured()) return apiError(503, "video_unavailable", "Video playback is temporarily unavailable.");
+
+    const expiresAt = new Date((Math.floor(Date.now() / 1000) + ttl) * 1000);
+    const token = signPlaybackToken(lesson.videoUid, ttl);
+    return json({
+      hls: hlsManifestUrl(token),
+      iframe: iframeUrl(token),
+      thumbnail: thumbnailUrl(token),
+      expires_at: expiresAt.toISOString(),
+    });
+  },
+);
