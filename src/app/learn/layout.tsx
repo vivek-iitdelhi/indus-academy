@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Container } from "@/components/ui";
-import { requireUser } from "@/lib/session";
+import { getUser } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "My learning",
   robots: { index: false, follow: false },
 };
 
-// Layouts do not re-run on client navigation, and cannot see the nested path for the
-// sign-in redirect: every /learn page must call requireUser("/learn/...") itself too.
+// No redirect here: a layout cannot see the nested path, so redirecting would send a
+// signed-out deep link (e.g. a lesson from an email) to /learn after sign-in. Every
+// /learn page calls requireUser("/learn/...") with its own path instead.
 export default async function LearnLayout({ children }: LayoutProps<"/learn">) {
-  const user = await requireUser("/learn");
+  const user = await getUser();
+  if (!user) return children;
   return (
     <>
       <div className="border-b border-line bg-paper-2/60">
