@@ -156,7 +156,7 @@ export const lessons = pgTable(
     kind: text("kind", { enum: lessonKinds }).notNull(),
     position: integer("position").notNull(),
     summary: text("summary"),
-    videoUid: text("video_uid"), // Stream UID; video lessons only
+    videoUid: text("video_uid"), // see src/lib/video.ts; video lessons only
     // A replacement still uploading/processing; promoted to video_uid once ready.
     pendingVideoUid: text("pending_video_uid"),
     durationSeconds: integer("duration_seconds").notNull().default(0),

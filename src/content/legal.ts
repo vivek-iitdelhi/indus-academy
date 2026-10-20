@@ -179,7 +179,7 @@ export const privacy: LegalDocument = {
       list: [
         "A website hosting provider, for running this website and keeping server logs.",
         "A cloud database provider, for storing accounts, enrolments, learning progress, payment records and certificates.",
-        "A video hosting and streaming provider, for storing and playing course videos. It receives the technical data your device sends when a video plays, such as your IP address.",
+        "A cloud storage provider, for storing course videos and delivering them to your device. It receives the technical data your device sends when a video plays, such as your IP address.",
         "An email delivery provider, for sending sign-in links and enquiry, enrolment, purchase and newsletter emails.",
         "An email inbox provider, for the mail you send us.",
         "Razorpay, for processing payments.",

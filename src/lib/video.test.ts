@@ -1,45 +1,54 @@
 import assert from "node:assert/strict";
-import { createPublicKey, generateKeyPairSync, verify } from "node:crypto";
 import { test } from "node:test";
-import { hlsManifestUrl, signPlaybackToken } from "./video.ts";
+import { hlsManifestUrl, rewritePlaylist, signPlaybackToken, signS3, verifyPlaybackToken } from "./video.ts";
 
-const decode = (part: string) => JSON.parse(Buffer.from(part, "base64url").toString("utf8"));
-
-function check(token: string, publicKey: ReturnType<typeof createPublicKey>) {
-  const [h, p, s] = token.split(".");
-  assert.ok(verify("sha256", Buffer.from(`${h}.${p}`), publicKey, Buffer.from(s, "base64url")), "RS256 signature");
-  return { header: decode(h), payload: decode(p) };
-}
-
-test("signs an RS256 token Stream accepts, from a base64 PEM", () => {
-  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  process.env.CLOUDFLARE_STREAM_SIGNING_KEY_ID = "key123";
-  process.env.CLOUDFLARE_STREAM_SIGNING_KEY_PEM = Buffer.from(
-    privateKey.export({ type: "pkcs1", format: "pem" }),
-  ).toString("base64");
-
-  const now = Math.floor(Date.now() / 1000);
-  const { header, payload } = check(signPlaybackToken("video-uid", 3600), publicKey);
-  assert.deepEqual(header, { alg: "RS256", kid: "key123" });
-  assert.equal(payload.sub, "video-uid");
-  assert.equal(payload.kid, "key123");
-  assert.ok(Math.abs(payload.exp - (now + 3600)) <= 2);
-  assert.ok(payload.nbf <= now);
-
-  // TTL is capped at Stream's 24 h maximum.
-  const long = check(signPlaybackToken("video-uid", 7 * 24 * 3600), publicKey).payload;
-  assert.ok(long.exp - now <= 24 * 3600 + 2);
+test("presigns a URL matching AWS's published SigV4 example", () => {
+  // docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+  const { url } = signS3(
+    {
+      endpoint: "https://examplebucket.s3.amazonaws.com",
+      region: "us-east-1",
+      accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+      secretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    },
+    "GET",
+    "test.txt",
+    { expiresIn: 86400, now: new Date("2013-05-24T00:00:00Z") },
+  );
+  assert.equal(
+    new URL(url).searchParams.get("X-Amz-Signature"),
+    "aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404",
+  );
 });
 
-test("also accepts the base64 JWK form", () => {
-  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  process.env.CLOUDFLARE_STREAM_SIGNING_KEY_PEM = Buffer.from(
-    JSON.stringify(privateKey.export({ format: "jwk" })),
-  ).toString("base64");
-  check(signPlaybackToken("other-uid"), publicKey);
+test("playback tokens are bound to one video and expire", () => {
+  process.env.VIDEO_TOKEN_SECRET = "test-secret";
+  const token = signPlaybackToken("video-a", 3600);
+  const exp = verifyPlaybackToken("video-a", token);
+  assert.ok(exp && Math.abs(exp - (Date.now() / 1000 + 3600)) < 5);
+  assert.equal(verifyPlaybackToken("video-b", token), null, "other video");
+  assert.equal(verifyPlaybackToken("video-a", `${exp! + 1}.${token.split(".")[1]}`), null, "edited expiry");
+  assert.equal(verifyPlaybackToken("video-a", "garbage"), null);
+  // TTL is capped at 24 h; an expired token is refused.
+  const long = verifyPlaybackToken("video-a", signPlaybackToken("video-a", 7 * 86400))!;
+  assert.ok(long <= Date.now() / 1000 + 86400 + 1);
+  const past = Math.floor(Date.now() / 1000) - 10;
+  assert.equal(verifyPlaybackToken("video-a", `${past}.${token.split(".")[1]}`), null);
+  assert.equal(hlsManifestUrl("video-a", "1.x"), "/api/video/video-a/master.m3u8?t=1.x");
 });
 
-test("delivery URLs put the token where the UID would be", () => {
-  process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE = "abc";
-  assert.equal(hlsManifestUrl("TOKEN"), "https://customer-abc.cloudflarestream.com/TOKEN/manifest/video.m3u8");
+test("rewrites playlists: playlists keep the token, segments get signed URLs", () => {
+  const sign = (key: string) => `https://r2/${key}?sig`;
+  const master = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=300000\n0/index.m3u8\n#EXT-X-MEDIA:TYPE=AUDIO,URI=\"2/index.m3u8\"\n";
+  assert.equal(
+    rewritePlaylist(master, { uid: "u", file: "master.m3u8", token: "T", sign }),
+    "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=300000\n0/index.m3u8?t=T\n#EXT-X-MEDIA:TYPE=AUDIO,URI=\"2/index.m3u8?t=T\"\n",
+  );
+  const media = "#EXTM3U\n#EXTINF:6.0,\nseg_0000.ts\n#EXT-X-ENDLIST";
+  assert.equal(
+    rewritePlaylist(media, { uid: "u", file: "0/index.m3u8", token: "T", sign }),
+    "#EXTM3U\n#EXTINF:6.0,\nhttps://r2/videos/u/0/seg_0000.ts?sig\n#EXT-X-ENDLIST",
+  );
+  assert.throws(() => rewritePlaylist("../../secret.ts", { uid: "u", file: "master.m3u8", token: "T", sign }));
+  assert.throws(() => rewritePlaylist("https://evil/x.ts", { uid: "u", file: "master.m3u8", token: "T", sign }));
 });

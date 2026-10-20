@@ -1,10 +1,21 @@
-import { createPrivateKey, sign, type KeyObject } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
-// The ONLY file that knows the video provider is Cloudflare Stream. Everything else
-// deals in opaque video UIDs and the URLs these functions return.
+// The ONLY file that knows where videos live: a private Cloudflare R2 bucket, spoken to
+// over the S3 API. Everything else deals in opaque video UIDs and the URLs returned here.
+// Encoding runs on our own machine (scripts/encoder.ts). Bucket layout, shared with it:
+//   uploads/<uid>                 the admin's upload, waiting for the encoder
+//   videos/<uid>/master.m3u8      HLS master; <rung>/index.m3u8 and <rung>/seg_NNNN.ts per quality
+//   videos/<uid>/thumb.jpg
+//   videos/<uid>/meta.json        written last: {"durationSeconds": n}; its presence = ready
+//   videos/<uid>/error.txt        the encoder could not process the upload
+//   trash/<uid>                   asks the encoder to delete everything for <uid>
+// Playlists are served by /api/video/<uid>/… (token-checked, segment URLs presigned);
+// segments come straight from R2, whose egress is free.
 
-const API = "https://api.cloudflare.com/client/v4";
-const MAX_TOKEN_TTL_SECONDS = 24 * 60 * 60; // Stream rejects tokens valid for longer
+const MAX_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+const UPLOAD_URL_TTL_SECONDS = 24 * 60 * 60;
+const MIN_PART_BYTES = 16 * 1024 * 1024; // R2: parts ≥ 5 MiB, all but the last the same size
+const MAX_PARTS = 10_000;
 
 function env(name: string) {
   const value = process.env[name];
@@ -12,160 +23,234 @@ function env(name: string) {
   return value;
 }
 
-export const videoConfigured = () =>
-  [
-    "CLOUDFLARE_ACCOUNT_ID",
-    "CLOUDFLARE_STREAM_API_TOKEN",
-    "CLOUDFLARE_STREAM_CUSTOMER_CODE",
-    "CLOUDFLARE_STREAM_SIGNING_KEY_ID",
-    "CLOUDFLARE_STREAM_SIGNING_KEY_PEM",
-  ].every((name) => Boolean(process.env[name]));
+const ENV = ["R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "VIDEO_TOKEN_SECRET"];
+export const videoConfigured = () => ENV.every((name) => Boolean(process.env[name]));
 
-const accountUrl = (path: string) => `${API}/accounts/${env("CLOUDFLARE_ACCOUNT_ID")}/stream${path}`;
-const authHeader = () => ({ authorization: `Bearer ${env("CLOUDFLARE_STREAM_API_TOKEN")}` });
+// --- S3 signing (AWS Signature V4) -----------------------------------------
 
-async function stream<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(accountUrl(path), {
-    ...init,
-    headers: { ...authHeader(), "content-type": "application/json", ...init.headers },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) throw new Error(`Stream ${path} responded ${res.status}: ${await res.text()}`);
-  return ((await res.json()) as { result: T }).result;
-}
+export type S3Target = { endpoint: string; region: string; accessKeyId: string; secretAccessKey: string; bucket?: string };
 
-export type UploadTicket = { uploadUrl: string; uid: string };
+const r2 = (): S3Target => ({
+  endpoint: env("R2_ENDPOINT"), // https://<account id>.r2.cloudflarestorage.com
+  region: "auto",
+  accessKeyId: env("R2_ACCESS_KEY_ID"),
+  secretAccessKey: env("R2_SECRET_ACCESS_KEY"),
+  bucket: env("R2_BUCKET"),
+});
+
+const ALGORITHM = "AWS4-HMAC-SHA256";
+const UNSIGNED = "UNSIGNED-PAYLOAD";
+// RFC 3986: encodeURIComponent leaves !'()* alone; SigV4 wants them encoded.
+const enc = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+const hmac = (key: string | Buffer, data: string) => createHmac("sha256", key).update(data).digest();
 
 /**
- * One-time URL the browser POSTs the file to (multipart/form-data, field "file").
- * Basic uploads are capped at 200 MB; use createTusUpload for anything larger.
+ * Signs one S3 request. With `expiresIn` the signature goes in the query string (a
+ * presigned URL anyone can use until it expires); otherwise in headers to send along.
+ * `headers` (lower-case names) are signed too; x-amz-* headers must be.
  */
-export async function createDirectUpload({
-  maxDurationSeconds,
-  name,
-}: {
-  maxDurationSeconds: number;
-  name: string;
-}): Promise<UploadTicket> {
-  const result = await stream<{ uploadURL: string; uid: string }>("/direct_upload", {
-    method: "POST",
-    body: JSON.stringify({ maxDurationSeconds, requireSignedURLs: true, meta: { name } }),
-  });
-  return { uploadUrl: result.uploadURL, uid: result.uid };
-}
+export function signS3(
+  target: S3Target,
+  method: string,
+  key: string,
+  {
+    query = {},
+    headers = {},
+    expiresIn,
+    now = new Date(),
+  }: { query?: Record<string, string>; headers?: Record<string, string>; expiresIn?: number; now?: Date } = {},
+): { url: string; headers: Record<string, string> } {
+  const { host, origin } = new URL(target.endpoint);
+  const amzDate = now.toISOString().replace(/[-:]|\.\d{3}/g, ""); // 20130524T000000Z
+  const scope = `${amzDate.slice(0, 8)}/${target.region}/s3/aws4_request`;
+  const path = `${target.bucket ? `/${target.bucket}` : ""}/${key.split("/").map(enc).join("/")}`;
 
-const b64 = (value: string) => Buffer.from(value).toString("base64");
-
-/**
- * Resumable (tus) upload for large files. Intended to back an admin route that is the
- * `endpoint` of tus-js-client: that route receives the client's creation POST, calls
- * this with its Upload-Length, and answers 201 with `Location: uploadUrl` (expose the
- * Location header). tus-js-client then sends the chunks straight to Cloudflare
- * (chunkSize: a multiple of 256 KiB, at least 5 MiB, ideally 50 MiB).
- */
-export async function createTusUpload({
-  uploadLength,
-  maxDurationSeconds,
-  name,
-  creator,
-}: {
-  uploadLength: number;
-  maxDurationSeconds: number;
-  name: string;
-  creator?: string;
-}): Promise<UploadTicket> {
-  const res = await fetch(accountUrl("?direct_user=true"), {
-    method: "POST",
-    headers: {
-      ...authHeader(),
-      "Tus-Resumable": "1.0.0",
-      "Upload-Length": String(uploadLength),
-      // key base64(value) pairs; a bare key is a boolean flag.
-      "Upload-Metadata": `maxDurationSeconds ${b64(String(maxDurationSeconds))},requiresignedurls,name ${b64(name)}`,
-      ...(creator && { "Upload-Creator": creator.slice(0, 64) }),
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  const uploadUrl = res.headers.get("location");
-  const uid = res.headers.get("stream-media-id");
-  if (!res.ok || !uploadUrl || !uid) {
-    throw new Error(`Stream tus upload responded ${res.status}: ${await res.text()}`);
+  const q = { ...query };
+  const h: Record<string, string> = { host, ...headers };
+  if (expiresIn) {
+    Object.assign(q, {
+      "X-Amz-Algorithm": ALGORITHM,
+      "X-Amz-Credential": `${target.accessKeyId}/${scope}`,
+      "X-Amz-Date": amzDate,
+      "X-Amz-Expires": String(Math.round(expiresIn)),
+      "X-Amz-SignedHeaders": Object.keys(h).sort().join(";"),
+    });
+  } else {
+    Object.assign(h, { "x-amz-content-sha256": UNSIGNED, "x-amz-date": amzDate });
   }
-  return { uploadUrl, uid };
+  const names = Object.keys(h).sort();
+  const canonicalQuery = Object.keys(q)
+    .sort()
+    .map((k) => `${enc(k)}=${enc(q[k])}`)
+    .join("&");
+  const canonicalRequest = [
+    method,
+    path,
+    canonicalQuery,
+    names.map((n) => `${n}:${h[n].trim()}\n`).join(""),
+    names.join(";"),
+    UNSIGNED,
+  ].join("\n");
+  const stringToSign = [ALGORITHM, amzDate, scope, createHash("sha256").update(canonicalRequest).digest("hex")].join("\n");
+  let signingKey = hmac(`AWS4${target.secretAccessKey}`, amzDate.slice(0, 8));
+  for (const part of [target.region, "s3", "aws4_request"]) signingKey = hmac(signingKey, part);
+  const signature = hmac(signingKey, stringToSign).toString("hex");
+
+  const url = `${origin}${path}`;
+  if (expiresIn) return { url: `${url}?${canonicalQuery}&X-Amz-Signature=${signature}`, headers: {} };
+  const send = { ...h };
+  delete send.host; // fetch sets it
+  send.authorization = `${ALGORITHM} Credential=${target.accessKeyId}/${scope}, SignedHeaders=${names.join(";")}, Signature=${signature}`;
+  return { url: canonicalQuery ? `${url}?${canonicalQuery}` : url, headers: send };
+}
+
+/** One authenticated request to the bucket. Non-2xx responses are returned, not thrown. */
+export function r2Fetch(
+  method: string,
+  key: string,
+  { query, headers, body, timeoutMs = 15_000 }: { query?: Record<string, string>; headers?: Record<string, string>; body?: BodyInit; timeoutMs?: number } = {},
+) {
+  const signed = signS3(r2(), method, key, { query, headers });
+  return fetch(signed.url, { method, body, headers: signed.headers, signal: AbortSignal.timeout(timeoutMs) });
+}
+
+/** A presigned URL for `key`, valid for `expiresIn` seconds (R2 allows up to 7 days). */
+const presign = (method: string, key: string, expiresIn: number, query?: Record<string, string>) =>
+  signS3(r2(), method, key, { query, expiresIn }).url;
+
+async function check(res: Response, what: string) {
+  const text = await res.text();
+  // S3 can answer 200 with an <Error> body (e.g. CompleteMultipartUpload).
+  if (!res.ok || text.includes("<Error>")) throw new Error(`R2 ${what} responded ${res.status}: ${text.slice(0, 500)}`);
+  return text;
+}
+
+/** True if the object exists; throws on anything but 200/404 (e.g. bad credentials). */
+async function exists(key: string) {
+  const res = await r2Fetch("HEAD", key);
+  if (res.status === 404) return false;
+  if (!res.ok) throw new Error(`R2 HEAD ${key} responded ${res.status}`);
+  return true;
+}
+
+// --- Uploads ----------------------------------------------------------------
+
+export type UploadTicket = { uid: string; uploadId: string; partSize: number; partUrls: string[] };
+
+/**
+ * Starts a multipart upload of `size` bytes. The browser PUTs each part to its URL
+ * (reading the ETag response header), then the server calls completeUpload.
+ */
+export async function createUpload(size: number): Promise<UploadTicket> {
+  const uid = randomUUID();
+  const key = `uploads/${uid}`;
+  const xml = await check(await r2Fetch("POST", key, { query: { uploads: "" } }), "CreateMultipartUpload");
+  const uploadId = xml.match(/<UploadId>([^<]+)<\/UploadId>/)?.[1];
+  if (!uploadId) throw new Error(`R2 CreateMultipartUpload returned no UploadId: ${xml.slice(0, 500)}`);
+  const partSize = Math.max(MIN_PART_BYTES, Math.ceil(size / MAX_PARTS));
+  const partUrls = Array.from({ length: Math.ceil(size / partSize) }, (_, i) =>
+    presign("PUT", key, UPLOAD_URL_TTL_SECONDS, { partNumber: String(i + 1), uploadId }),
+  );
+  return { uid, uploadId, partSize, partUrls };
+}
+
+const xmlEscape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Joins the uploaded parts into uploads/<uid>, which queues it for the encoder. */
+export async function completeUpload(uid: string, uploadId: string, etags: string[]) {
+  const parts = etags.map((etag, i) => `<Part><PartNumber>${i + 1}</PartNumber><ETag>${xmlEscape(etag)}</ETag></Part>`);
+  const body = `<CompleteMultipartUpload>${parts.join("")}</CompleteMultipartUpload>`;
+  await check(
+    await r2Fetch("POST", `uploads/${uid}`, { query: { uploadId }, body, headers: { "content-type": "application/xml" }, timeoutMs: 60_000 }),
+    "CompleteMultipartUpload",
+  );
 }
 
 export type VideoStatus = {
   ready: boolean;
-  durationSeconds: number; // 0 until known
-  /** Unsigned; for display use thumbnailUrl(signPlaybackToken(uid)). */
-  thumbnailUrl: string | null;
-  state: string; // e.g. pendingupload, queued, inprogress, ready, error
+  durationSeconds: number; // 0 until ready
+  state: "pendingupload" | "processing" | "ready" | "error";
 };
 
 export async function getVideoStatus(uid: string): Promise<VideoStatus> {
-  const video = await stream<{
-    readyToStream: boolean;
-    duration: number;
-    thumbnail?: string;
-    status?: { state?: string };
-  }>(`/${encodeURIComponent(uid)}`);
-  return {
-    ready: video.readyToStream,
-    durationSeconds: video.duration > 0 ? Math.round(video.duration) : 0,
-    thumbnailUrl: video.thumbnail ?? null,
-    state: video.status?.state ?? "unknown",
-  };
+  const meta = await r2Fetch("GET", `videos/${uid}/meta.json`);
+  if (meta.ok) {
+    const { durationSeconds } = (await meta.json()) as { durationSeconds: number };
+    return { ready: true, durationSeconds: Math.round(durationSeconds), state: "ready" };
+  }
+  if (meta.status !== 404) throw new Error(`R2 GET meta.json responded ${meta.status}`);
+  if (await exists(`videos/${uid}/error.txt`)) return { ready: false, durationSeconds: 0, state: "error" };
+  return { ready: false, durationSeconds: 0, state: (await exists(`uploads/${uid}`)) ? "processing" : "pendingupload" };
 }
 
+/** Queues the video (and any upload of it) for deletion; the encoder removes the files. */
 export async function deleteVideo(uid: string): Promise<void> {
-  const res = await fetch(accountUrl(`/${encodeURIComponent(uid)}`), {
-    method: "DELETE",
-    headers: authHeader(),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok && res.status !== 404) throw new Error(`Stream delete responded ${res.status}`);
+  await check(await r2Fetch("PUT", `trash/${uid}`, { body: "" }), "PUT trash");
 }
 
-let signingKey: { raw: string; key: KeyObject } | undefined;
+// --- Playback ---------------------------------------------------------------
 
-/** The env var holds the base64 `pem` (or `jwk`) exactly as Stream's /stream/keys returns it. */
-function privateKey(): KeyObject {
-  const raw = env("CLOUDFLARE_STREAM_SIGNING_KEY_PEM");
-  if (signingKey?.raw === raw) return signingKey.key;
-  const decoded = Buffer.from(raw, "base64").toString("utf8").trim();
-  const key = decoded.startsWith("{")
-    ? createPrivateKey({ key: JSON.parse(decoded), format: "jwk" })
-    : createPrivateKey(decoded);
-  signingKey = { raw, key };
-  return key;
-}
-
-const base64url = (value: string | Buffer) => Buffer.from(value).toString("base64url");
+const tokenSignature = (uid: string, exp: number) =>
+  createHmac("sha256", env("VIDEO_TOKEN_SECRET")).update(`${uid}.${exp}`).digest("base64url");
 
 /**
- * Self-signed RS256 playback token for a video that requires signed URLs. Mint it only
- * after hasAccess/canViewLesson. The TTL must outlast the viewing session, because HLS
- * segments are fetched with the same token; Stream caps it at 24 h.
+ * Playback token for one video: `<exp>.<hmac>`. Mint it only after canViewLesson (+ the
+ * unlock check). Segment URLs expire with it, so the TTL must outlast the viewing session.
  */
 export function signPlaybackToken(uid: string, ttlSeconds = 6 * 60 * 60): string {
-  const kid = env("CLOUDFLARE_STREAM_SIGNING_KEY_ID");
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: "RS256", kid };
-  const payload = {
-    sub: uid,
-    kid,
-    nbf: now - 60, // tolerate clock skew
-    exp: now + Math.min(Math.max(ttlSeconds, 60), MAX_TOKEN_TTL_SECONDS),
-  };
-  const input = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
-  return `${input}.${base64url(sign("sha256", Buffer.from(input), privateKey()))}`;
+  const exp = Math.floor(Date.now() / 1000) + Math.min(Math.max(ttlSeconds, 60), MAX_TOKEN_TTL_SECONDS);
+  return `${exp}.${tokenSignature(uid, exp)}`;
 }
 
-const deliveryUrl = (token: string, path: string) =>
-  `https://customer-${env("CLOUDFLARE_STREAM_CUSTOMER_CODE")}.cloudflarestream.com/${token}${path}`;
+/** The token's expiry (unix seconds) if it is valid for `uid` and unexpired, else null. */
+export function verifyPlaybackToken(uid: string, token: string): number | null {
+  const [expText, signature = ""] = token.split(".");
+  const exp = Number(expText);
+  if (!Number.isSafeInteger(exp) || exp <= Date.now() / 1000) return null;
+  const expected = Buffer.from(tokenSignature(uid, exp));
+  const given = Buffer.from(signature);
+  return given.length === expected.length && timingSafeEqual(given, expected) ? exp : null;
+}
 
-/** HLS with adaptive bitrate, for hls.js / native Safari playback. */
-export const hlsManifestUrl = (token: string) => deliveryUrl(token, "/manifest/video.m3u8");
-/** Stream's hosted player, for an <iframe>. */
-export const iframeUrl = (token: string) => deliveryUrl(token, "/iframe");
-export const thumbnailUrl = (token: string) => deliveryUrl(token, "/thumbnails/thumbnail.jpg");
+/** HLS master playlist (same-origin path; prefix an origin for other sites). */
+export const hlsManifestUrl = (uid: string, token: string) => `/api/video/${uid}/master.m3u8?t=${encodeURIComponent(token)}`;
+
+export const thumbnailUrl = (uid: string, ttlSeconds: number) => presign("GET", `videos/${uid}/thumb.jpg`, ttlSeconds);
+
+const PLAYLIST = /^(master|\d+\/index)\.m3u8$/;
+const SAFE_REF = /^[\w.-]+(\/[\w.-]+)?$/;
+
+/**
+ * Rewrites one of our playlists for a viewer: playlist references keep the token,
+ * segment references become presigned R2 URLs that expire with it.
+ */
+export function rewritePlaylist(
+  text: string,
+  { uid, file, token, sign }: { uid: string; file: string; token: string; sign: (key: string) => string },
+) {
+  const dir = file.includes("/") ? file.slice(0, file.lastIndexOf("/") + 1) : "";
+  const ref = (name: string) => {
+    if (!SAFE_REF.test(name) || name.includes("..")) throw new Error(`Unexpected playlist entry: ${name}`);
+    return name.endsWith(".m3u8") ? `${name}?t=${encodeURIComponent(token)}` : sign(`videos/${uid}/${dir}${name}`);
+  };
+  return text
+    .split("\n")
+    .map((raw) => {
+      const line = raw.trim();
+      if (!line) return line;
+      if (line.startsWith("#")) return line.replace(/URI="([^"]+)"/, (_, name: string) => `URI="${ref(name)}"`);
+      return ref(line);
+    })
+    .join("\n");
+}
+
+/** The playlist `file` of video `uid` for the holder of `token`; null if refused or missing. */
+export async function playlistFor(uid: string, file: string, token: string): Promise<string | null> {
+  const exp = verifyPlaybackToken(uid, token);
+  if (!exp || !PLAYLIST.test(file)) return null;
+  const res = await r2Fetch("GET", `videos/${uid}/${file}`);
+  if (res.status === 404) return null;
+  const text = await check(res, `GET ${file}`);
+  const expiresIn = Math.max(exp - Math.floor(Date.now() / 1000), 1);
+  return rewritePlaylist(text, { uid, file, token, sign: (key) => presign("GET", key, expiresIn) });
+}

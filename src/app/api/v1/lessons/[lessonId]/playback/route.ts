@@ -1,5 +1,5 @@
 import { licensedLesson } from "@/lib/distributors";
-import { hlsManifestUrl, iframeUrl, signPlaybackToken, thumbnailUrl, videoConfigured } from "@/lib/video";
+import { hlsManifestUrl, signPlaybackToken, thumbnailUrl, videoConfigured } from "@/lib/video";
 import { apiError, json, notFound, withDistributor } from "../../../_shared";
 
 const MIN_TTL = 5 * 60;
@@ -24,9 +24,8 @@ export const GET = withDistributor(
     const expiresAt = new Date((Math.floor(Date.now() / 1000) + ttl) * 1000);
     const token = signPlaybackToken(lesson.videoUid, ttl);
     return json({
-      hls: hlsManifestUrl(token),
-      iframe: iframeUrl(token),
-      thumbnail: thumbnailUrl(token),
+      hls: new URL(hlsManifestUrl(lesson.videoUid, token), request.url).href,
+      thumbnail: thumbnailUrl(lesson.videoUid, ttl),
       expires_at: expiresAt.toISOString(),
     });
   },

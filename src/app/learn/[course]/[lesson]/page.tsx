@@ -18,7 +18,7 @@ import { hlsManifestUrl, signPlaybackToken, videoConfigured } from "@/lib/video"
 const DEV_SAMPLE_HLS = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
 
 function playbackSource(videoUid: string | null) {
-  if (videoConfigured()) return videoUid ? { src: hlsManifestUrl(signPlaybackToken(videoUid)), devSample: false } : null;
+  if (videoConfigured()) return videoUid ? { src: hlsManifestUrl(videoUid, signPlaybackToken(videoUid)), devSample: false } : null;
   return process.env.NODE_ENV !== "production" ? { src: DEV_SAMPLE_HLS, devSample: true } : null;
 }
 

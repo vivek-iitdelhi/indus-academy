@@ -5,7 +5,8 @@ import { db } from "@/db";
 import { courses, lessonProgress, lessons, quizQuestions, type QuizQuestion } from "@/db/schema";
 import { formatDuration, isUuid } from "@/lib/admin/courses";
 import { requireAdmin } from "@/lib/session";
-import { iframeUrl, signPlaybackToken, videoConfigured } from "@/lib/video";
+import { VideoPlayer } from "@/components/video-player";
+import { hlsManifestUrl, signPlaybackToken, videoConfigured } from "@/lib/video";
 import {
   deleteLesson,
   deleteQuestion,
@@ -164,15 +165,17 @@ export default async function LessonEditorPage({ params }: PageProps<"/admin/cou
                 </div>
               )}
               {ready && lesson.videoUid && (
-                <div className="aspect-video overflow-hidden rounded-xl bg-ink">
-                  <iframe
-                    src={iframeUrl(signPlaybackToken(lesson.videoUid, 3600))}
-                    title={`Preview: ${lesson.title}`}
-                    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
-                    allowFullScreen
-                    className="size-full border-0"
-                  />
-                </div>
+                <VideoPlayer
+                  key={lesson.videoUid} // a promoted replacement remounts the player
+                  src={hlsManifestUrl(lesson.videoUid, signPlaybackToken(lesson.videoUid, 3600))}
+                  lessonId={lesson.id}
+                  title={`Preview: ${lesson.title}`}
+                  durationSeconds={lesson.durationSeconds}
+                  furthestSeconds={0}
+                  completed={false}
+                  track={false}
+                  nextHref={null}
+                />
               )}
               <VideoUploader
                 lessonId={lesson.id}

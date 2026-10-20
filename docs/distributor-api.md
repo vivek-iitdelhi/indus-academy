@@ -145,9 +145,8 @@ curl -H "Authorization: Bearer $IAA_KEY" \
 
 ```json
 {
-  "hls": "https://…/eyJhbGciOi…/manifest/video.m3u8",
-  "iframe": "https://…/eyJhbGciOi…/iframe",
-  "thumbnail": "https://…/eyJhbGciOi…/thumbnails/thumbnail.jpg",
+  "hls": "https://indusai.academy/api/video/9b1c…/master.m3u8?t=1792504327.Kz8M…",
+  "thumbnail": "https://…/thumb.jpg?X-Amz-Signature=…",
   "expires_at": "2026-10-20T08:26:01.000Z"
 }
 ```
@@ -162,7 +161,7 @@ curl -H "Authorization: Bearer $IAA_KEY" \
 - Playing it:
   - **hls.js** (Chrome, Firefox, Edge): `const hls = new Hls(); hls.loadSource(hls_url); hls.attachMedia(videoElement);`
   - **Safari / iOS**: plays HLS natively: `videoElement.src = hls_url`.
-  - **Simplest**: embed the hosted player: `<iframe src="{iframe}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`.
+  - Playlists and segments allow any origin (CORS), so this works from your own domain.
   - Use `thumbnail` as the poster image.
 
 ## Errors

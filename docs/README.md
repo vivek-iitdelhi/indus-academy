@@ -9,7 +9,7 @@ Built in this repository alongside the marketing site: `/courses` (catalogue),
 Current:
 
 1. **[lms-foundation.md](lms-foundation.md)** — the contract: stack (Supabase Postgres +
-   Drizzle, Better Auth, Cloudflare Stream), schema, module APIs and the rules every
+   Drizzle, Better Auth, Cloudflare R2 video), schema, module APIs and the rules every
    change follows. Start here before touching LMS code.
 2. **[lms-go-live.md](lms-go-live.md)** — accounts, keys and environment variables to
    set, and the checks to run before the first real sale.

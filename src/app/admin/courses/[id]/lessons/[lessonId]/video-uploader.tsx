@@ -2,22 +2,44 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Upload, type DetailedError } from "tus-js-client";
 import { buttonClass, secondaryButtonClass } from "../../../form-ui";
 
-// stopped = cancelled or failed mid-upload; Retry resumes from the last uploaded chunk.
+// stopped = cancelled or failed mid-upload; Retry resumes from the parts already sent.
 type Phase = "idle" | "uploading" | "stopped" | "processing" | "ready";
 type Note = { text: string; error?: boolean } | null;
+/** One upload: the file, and the server's presigned part URLs with the ETags collected so far. */
+type Session = { file: File; uid: string; uploadId: string; partSize: number; partUrls: string[]; etags: (string | null)[] };
 
-const CHUNK_SIZE = 50 * 1024 * 1024; // the provider wants a multiple of 256 KiB, at least 5 MiB
 const POLL_MS = 5000;
+const PARALLEL_PARTS = 3;
+const RETRY_DELAYS_MS = [1000, 3000, 10_000, 30_000];
 
-/** Why the upload failed: our endpoint's JSON error when there is one, else tus's message. */
-function reason(err: Error) {
-  try {
-    return (JSON.parse((err as DetailedError).originalResponse?.getBody() ?? "") as { error?: string }).error ?? err.message;
-  } catch {
-    return err.message;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function errorOf(res: Response) {
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  return new Error(body?.error ?? `The server responded ${res.status}.`);
+}
+
+/** PUTs one part to storage, retrying network errors and 5xx; returns its ETag. */
+async function putPart(url: string, blob: Blob, signal: AbortSignal) {
+  for (let attempt = 0; ; attempt++) {
+    let failure: unknown;
+    try {
+      const res = await fetch(url, { method: "PUT", body: blob, signal });
+      if (res.ok) {
+        const etag = res.headers.get("etag");
+        if (!etag) throw new Error("Storage did not return an ETag (check the bucket's CORS ExposeHeaders).");
+        return etag;
+      }
+      if (res.status < 500) throw new Error(`Storage refused the upload (${res.status}). Choose the file again.`);
+      failure = new Error(`Storage responded ${res.status}.`);
+    } catch (e) {
+      if (!(e instanceof TypeError) || signal.aborted) throw e; // TypeError: the network failed
+      failure = e;
+    }
+    if (attempt >= RETRY_DELAYS_MS.length) throw failure;
+    await sleep(RETRY_DELAYS_MS[attempt]);
   }
 }
 
@@ -36,7 +58,9 @@ export function VideoUploader({
   ready: boolean;
 }) {
   const router = useRouter();
-  const upload = useRef<Upload | null>(null);
+  // Kept after a stop so Retry can resume it; send() fills its etags in place.
+  const [session, setSession] = useState<Session | null>(null);
+  const abort = useRef<AbortController | null>(null);
   const [phase, setPhase] = useState<Phase>(
     pending || (hasVideo && !ready) ? "processing" : hasVideo ? "ready" : "idle",
   );
@@ -64,7 +88,7 @@ export function VideoUploader({
         setPhase("idle");
         setNote({ text: "The video could not be processed. Upload it again, or another file.", error: true });
       } else {
-        setNote({ text: `Processing (${status.state})… this can take a while for long videos.` });
+        setNote({ text: "Processing… this can take a while for long videos." });
       }
     }, POLL_MS);
     return () => clearInterval(timer);
@@ -78,40 +102,65 @@ export function VideoUploader({
     return () => window.removeEventListener("beforeunload", warn);
   }, [phase]);
 
-  function resume() {
-    upload.current?.start();
+  async function send(current: Session) {
+    const controller = new AbortController();
+    abort.current = controller;
     setPhase("uploading");
     setNote(null);
+    const { file, partSize, partUrls, etags } = current;
+    const sentBytes = () => etags.reduce((n, etag, i) => n + (etag ? Math.min(partSize, file.size - i * partSize) : 0), 0);
+    setPercent(Math.floor((sentBytes() / file.size) * 100));
+    try {
+      let next = 0;
+      const worker = async () => {
+        for (let i = next++; i < partUrls.length; i = next++) {
+          if (etags[i]) continue;
+          etags[i] = await putPart(partUrls[i], file.slice(i * partSize, (i + 1) * partSize), controller.signal);
+          setPercent(Math.floor((sentBytes() / file.size) * 100));
+        }
+      };
+      await Promise.all(Array.from({ length: PARALLEL_PARTS }, worker));
+      const res = await fetch("/api/admin/uploads", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lessonId, uid: current.uid, uploadId: current.uploadId, etags }),
+      });
+      if (!res.ok) throw await errorOf(res);
+      setSession(null);
+      setPhase("processing");
+      setNote({ text: "Upload complete. Processing…" });
+      router.refresh();
+    } catch (e) {
+      controller.abort(); // stop the other parts
+      setPhase("stopped");
+      if (abort.current === controller) {
+        const text = e instanceof TypeError ? "The connection dropped. Retry to continue where it stopped." : e instanceof Error ? e.message : String(e);
+        setNote({ text, error: true });
+      }
+    }
   }
 
-  function start(file: File) {
-    upload.current?.abort();
+  async function start(file: File) {
+    abort.current?.abort();
+    abort.current = null;
     setPercent(0);
-    upload.current = new Upload(file, {
-      endpoint: `/api/admin/uploads?lessonId=${lessonId}`,
-      chunkSize: CHUNK_SIZE,
-      retryDelays: [0, 3000, 10000, 30000, 60000],
-      metadata: { filename: file.name, filetype: file.type },
-      // Each chosen file is a new upload (and video) on the lesson; Retry on this page resumes it.
-      storeFingerprintForResuming: false,
-      // Retry chunk transfers on network/server errors, but not our creation POST (e.g. 503).
-      onShouldRetry: (err: DetailedError) => {
-        const status = err.originalResponse?.getStatus() ?? 0;
-        const clientError = status >= 400 && status < 500 && status !== 409 && status !== 423;
-        return err.originalRequest?.getMethod() !== "POST" && !clientError;
-      },
-      onProgress: (sent, total) => setPercent(Math.floor((sent / total) * 100)),
-      onError: (err) => {
-        setPhase("stopped");
-        setNote({ text: reason(err), error: true });
-      },
-      onSuccess: () => {
-        setPhase("processing");
-        setNote({ text: "Upload complete. Processing…" });
-        router.refresh();
-      },
-    });
-    resume();
+    setPhase("uploading");
+    setNote(null);
+    const res = await fetch("/api/admin/uploads", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lessonId, size: file.size }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setPhase("idle");
+      setNote({ text: res ? (await errorOf(res)).message : "Could not reach the server.", error: true });
+      return;
+    }
+    const ticket = (await res.json()) as Omit<Session, "file" | "etags">;
+    const current = { ...ticket, file, etags: ticket.partUrls.map(() => null) };
+    setSession(current);
+    router.refresh(); // shows the pending replacement
+    void send(current);
   }
 
   const busy = phase === "uploading" || phase === "stopped";
@@ -135,7 +184,9 @@ export function VideoUploader({
             type="button"
             className={secondaryButtonClass}
             onClick={() => {
-              upload.current?.abort();
+              const controller = abort.current;
+              abort.current = null;
+              controller?.abort();
               setPhase("stopped");
               setNote({ text: "Upload cancelled. Retry to continue where it stopped." });
             }}
@@ -144,8 +195,8 @@ export function VideoUploader({
           </button>
         ) : (
           <>
-            {phase === "stopped" && (
-              <button type="button" className={buttonClass} onClick={resume}>
+            {phase === "stopped" && session && (
+              <button type="button" className={buttonClass} onClick={() => void send(session)}>
                 Retry
               </button>
             )}
@@ -158,7 +209,7 @@ export function VideoUploader({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   e.target.value = "";
-                  if (file) start(file);
+                  if (file) void start(file);
                 }}
               />
             </label>

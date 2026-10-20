@@ -1,62 +1,68 @@
 import type { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { courses, lessons } from "@/db/schema";
+import { lessons } from "@/db/schema";
 import { isUuid } from "@/lib/admin/courses";
 import { requireAdminApi } from "@/lib/session";
-import { createTusUpload, deleteVideo, videoConfigured } from "@/lib/video";
-
-// The provider's ceiling for a single video; it reserves this much quota until processed.
-const MAX_DURATION_SECONDS = 6 * 60 * 60;
+import { completeUpload, createUpload, deleteVideo, videoConfigured } from "@/lib/video";
 
 const fail = (status: number, error: string) => Response.json({ error }, { status });
 
+async function videoLesson(lessonId: unknown) {
+  if (!isUuid(lessonId)) return null;
+  const [lesson] = await db.select().from(lessons).where(eq(lessons.id, lessonId));
+  return lesson?.kind === "video" ? lesson : null;
+}
+
 /**
- * tus-js-client's `endpoint` for lesson videos (`?lessonId=`). Answers the creation POST
- * by opening a resumable upload with the video provider and pointing the client at it;
- * the file bytes then go straight to the provider, never through this server.
+ * Starts a lesson video upload. Body `{lessonId, size}`; answers with presigned part URLs
+ * the browser PUTs the file to (straight to storage, never through this server), then
+ * it calls PUT below to finish.
  */
 export async function POST(request: NextRequest) {
-  const admin = await requireAdminApi();
+  await requireAdminApi();
   if (!videoConfigured()) return fail(503, "Video uploads are not configured on this server.");
-
-  const lessonId = request.nextUrl.searchParams.get("lessonId");
-  const uploadLength = Number(request.headers.get("upload-length"));
-  if (!isUuid(lessonId)) return fail(400, "Missing or invalid lessonId.");
-  if (!Number.isSafeInteger(uploadLength) || uploadLength <= 0) return fail(400, "Missing or invalid Upload-Length.");
-
-  const [row] = await db
-    .select({ lesson: lessons, courseSlug: courses.slug })
-    .from(lessons)
-    .innerJoin(courses, eq(lessons.courseId, courses.id))
-    .where(eq(lessons.id, lessonId));
-  if (!row || row.lesson.kind !== "video") return fail(404, "No such video lesson.");
+  const { lessonId, size } = (await request.json().catch(() => ({}))) as { lessonId?: unknown; size?: unknown };
+  if (typeof size !== "number" || !Number.isSafeInteger(size) || size <= 0) return fail(400, "Missing or invalid size.");
+  const lesson = await videoLesson(lessonId);
+  if (!lesson) return fail(404, "No such video lesson.");
 
   let ticket;
   try {
-    ticket = await createTusUpload({
-      uploadLength,
-      maxDurationSeconds: MAX_DURATION_SECONDS,
-      name: `${row.courseSlug}/${row.lesson.slug}`,
-      creator: admin.id,
-    });
+    ticket = await createUpload(size);
   } catch (e) {
-    console.error("createTusUpload failed", e);
-    return fail(502, "The video provider refused the upload. Try again; if it keeps failing, check the server logs.");
+    console.error("createUpload failed", e);
+    return fail(502, "Video storage refused the upload. Try again; if it keeps failing, check the server logs.");
   }
-  const { uploadUrl, uid } = ticket;
   // Saved before any bytes move, so a half-finished upload is never orphaned. Learners keep
   // the live video_uid until the status check promotes this one once it is ready.
-  await db.update(lessons).set({ pendingVideoUid: uid }).where(eq(lessons.id, row.lesson.id));
+  await db.update(lessons).set({ pendingVideoUid: ticket.uid }).where(eq(lessons.id, lesson.id));
 
   // An earlier replacement that never got promoted is abandoned now.
-  const abandoned = row.lesson.pendingVideoUid;
-  if (abandoned && abandoned !== uid) {
-    await deleteVideo(abandoned).catch((e) => console.error(`deleteVideo ${abandoned} failed`, e));
-  }
+  const abandoned = lesson.pendingVideoUid;
+  if (abandoned) await deleteVideo(abandoned).catch((e) => console.error(`deleteVideo ${abandoned} failed`, e));
 
-  return new Response(null, {
-    status: 201,
-    headers: { Location: uploadUrl, "Access-Control-Expose-Headers": "Location", "Tus-Resumable": "1.0.0" },
-  });
+  return Response.json(ticket);
+}
+
+/** Finishes an upload. Body `{lessonId, uid, uploadId, etags}` (one ETag per part, in order). */
+export async function PUT(request: NextRequest) {
+  await requireAdminApi();
+  if (!videoConfigured()) return fail(503, "Video uploads are not configured on this server.");
+  const body = (await request.json().catch(() => ({}))) as { lessonId?: unknown; uid?: unknown; uploadId?: unknown; etags?: unknown };
+  const { uid, uploadId, etags } = body;
+  if (typeof uid !== "string" || typeof uploadId !== "string" || !Array.isArray(etags) || !etags.every((e) => typeof e === "string")) {
+    return fail(400, "Missing uid, uploadId or etags.");
+  }
+  const lesson = await videoLesson(body.lessonId);
+  if (!lesson) return fail(404, "No such video lesson.");
+  if (lesson.pendingVideoUid !== uid) return fail(409, "A newer upload replaced this one.");
+
+  try {
+    await completeUpload(uid, uploadId, etags);
+  } catch (e) {
+    console.error("completeUpload failed", e);
+    return fail(502, "Video storage could not finish the upload. Upload the file again.");
+  }
+  return new Response(null, { status: 204 });
 }

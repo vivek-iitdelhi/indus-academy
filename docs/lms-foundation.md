@@ -2,13 +2,15 @@
 
 Read this first. It overrides `lms-plan.md`, `lms-schema.md` and `lms-phase-1.md` where
 they disagree: Postgres is **Supabase** (Drizzle + postgres.js), auth is **Better Auth**,
-course structure lives **in the database**, video is **Cloudflare Stream**.
+course structure lives **in the database**, video is a **Cloudflare R2** bucket encoded by
+**our own machine** (`scripts/encoder.ts`).
 
 ## Rules every agent follows
 
 1. **Always call `hasAccess`** (or `canViewLesson` for previews) before serving a lesson,
    a playback token, progress or a quiz. Never re-derive the enrolment rule.
-2. **Only `src/lib/video.ts` names Cloudflare.** Elsewhere a video is an opaque `videoUid`.
+2. **Only `src/lib/video.ts` (and the encoder script) knows video storage.** Elsewhere a
+   video is an opaque `videoUid`.
 3. **Marketing stays static.** Never read cookies/headers/session in the root layout,
    `SiteHeader` or marketing pages. After any change, `npm run build` must still show
    `/`, `/programs`, `/blog/...`, `/enterprise` as ○ or ●.
@@ -24,7 +26,7 @@ course structure lives **in the database**, video is **Cloudflare Stream**.
    `@/lib/newsletter` for the visual frame.
 9. **Catalogue cache:** after any admin change to a course call `revalidateCourse(slug)` from
    `@/lib/catalog-cache` (keep that signature; the catalogue owner may change its body).
-8. `hls.js` (player) and `tus-js-client` (admin uploads) are already installed. Do not add
+8. `hls.js` (player) is already installed. Do not add
    other dependencies without a reason you state in your report.
 6. Inside `src/db` and `src/lib/lms`, import with **relative paths and `.ts` extensions**
    and use `import type` for types, so `node --test` can load them. Elsewhere use `@/`.
@@ -138,22 +140,21 @@ video → quiz → video; first video is a preview) and `chatgpt-for-professiona
   `serial|user_id|course_id|issued_at ISO`. Revoke by setting `revoked_at`; never delete.
 - Pure helpers: `formatSerial(year, n)`, `certificateHash(cert, secret?)`.
 
-## Video: `src/lib/video.ts` (the only Cloudflare file)
+## Video: `src/lib/video.ts` (the only storage file)
 
-- `videoConfigured(): boolean` — all five `CLOUDFLARE_*` vars set.
-- `createDirectUpload({maxDurationSeconds, name}): Promise<{uploadUrl, uid}>` — one-time
-  URL; the browser POSTs multipart field `file`. Up to 200 MB.
-- `createTusUpload({uploadLength, maxDurationSeconds, name, creator?}): Promise<{uploadUrl, uid}>`
-  — for large files. Back an admin route used as tus-js-client's `endpoint`: on its POST,
-  read `Upload-Length`, call this, reply `201` with `Location: uploadUrl` and
-  `Access-Control-Expose-Headers: Location`. Chunk size: multiple of 256 KiB, ≥ 5 MiB.
-- Every upload sets `requireSignedURLs`. Save `uid` on the lesson right away.
-- `getVideoStatus(uid): Promise<{ready, durationSeconds, thumbnailUrl, state}>` — poll
-  after upload; copy `durationSeconds` into `lessons.duration_seconds` (completion needs it).
-- `deleteVideo(uid): Promise<void>` (404 tolerated).
-- `signPlaybackToken(uid, ttlSeconds = 6 h): string` — RS256 JWT (`kid`, `sub`, `nbf`,
-  `exp`, max 24 h), signed locally. Mint only after `canViewLesson` (+ unlock check).
-- `hlsManifestUrl(token)`, `iframeUrl(token)`, `thumbnailUrl(token)`.
+Bucket layout and the encoder's contract are in the file's header comment.
+
+- `videoConfigured(): boolean` — the four `R2_*` vars and `VIDEO_TOKEN_SECRET` set.
+- `createUpload(size): Promise<{uid, uploadId, partSize, partUrls}>` — multipart upload;
+  the browser PUTs each part and keeps its `ETag`. Save `uid` on the lesson right away.
+- `completeUpload(uid, uploadId, etags)` — queues `uploads/<uid>` for the encoder.
+- `getVideoStatus(uid): Promise<{ready, durationSeconds, state}>` — poll after upload;
+  copy `durationSeconds` into `lessons.duration_seconds` (completion needs it).
+- `deleteVideo(uid)` — queues deletion; the encoder removes the files.
+- `signPlaybackToken(uid, ttlSeconds = 6 h): string` — HMAC, bound to the video, max
+  24 h. Mint only after `canViewLesson` (+ unlock check).
+- `hlsManifestUrl(uid, token)` — same-origin path to `/api/video/<uid>/master.m3u8`,
+  which serves playlists with presigned segment URLs. `thumbnailUrl(uid, ttl)`.
 
 ## Route shells
 
