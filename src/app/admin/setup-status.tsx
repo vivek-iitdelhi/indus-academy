@@ -1,6 +1,6 @@
 import { ENCODER_OFFLINE_MS, encoderLastSeen, videoConfigured } from "@/lib/video";
 import { formatDateTime } from "@/lib/admin/ops";
-import { Badge, SectionTitle } from "./learners/admin-ui";
+import { Badge } from "./learners/admin-ui";
 
 // What each integration needs; see docs/lms-go-live.md. Only names are shown, never values.
 const INTEGRATIONS = [
