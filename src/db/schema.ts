@@ -157,6 +157,8 @@ export const lessons = pgTable(
     position: integer("position").notNull(),
     summary: text("summary"),
     videoUid: text("video_uid"), // Stream UID; video lessons only
+    // A replacement still uploading/processing; promoted to video_uid once ready.
+    pendingVideoUid: text("pending_video_uid"),
     durationSeconds: integer("duration_seconds").notNull().default(0),
     // Watchable without an enrolment.
     isPreview: boolean("is_preview").notNull().default(false),

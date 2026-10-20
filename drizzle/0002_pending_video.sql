@@ -1,0 +1,1 @@
+ALTER TABLE "lessons" ADD COLUMN "pending_video_uid" text;
