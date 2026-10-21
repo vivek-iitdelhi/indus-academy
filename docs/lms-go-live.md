@@ -12,7 +12,11 @@ them. The full list with one-line comments is in `.env.example`.
 3. From a machine with the repo: `DATABASE_URL=<that url> npm run db:migrate`.
    Do not run `db:seed` against production; it creates sample courses.
 4. Supabase is used only as Postgres. Leave Supabase Auth, Storage and the Data API
-   unused; nothing in the app talks to them.
+   unused; nothing in the app talks to them. Migration 0006 turns on row-level security
+   with no policies and revokes the API roles, so the public anon key reads nothing.
+5. Keep server code next to the database: `regions` in `vercel.json` must be the Vercel
+   region nearest the Supabase one (`syd1` for the current Sydney project, `bom1` for
+   Mumbai). Every page makes several database round trips.
 
 ## 2. Sign-in
 
