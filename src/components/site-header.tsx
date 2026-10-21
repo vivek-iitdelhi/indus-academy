@@ -180,7 +180,11 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="hidden lg:block">
+        <div className="hidden items-center gap-2 lg:flex">
+          {/* /learn sends signed-out visitors to /signin and back. */}
+          <Link href="/learn" onClick={closeAll} className="rounded-full px-4 py-2 text-sm text-muted transition-colors hover:text-ink">
+            Sign in
+          </Link>
           <ButtonLink href="/contact?interest=enterprise" variant="dark" className="h-10 px-5 text-sm">
             Talk to us
           </ButtonLink>
@@ -259,6 +263,9 @@ export function SiteHeader() {
               </div>
             );
           })}
+          <Link href="/learn" onClick={closeAll} className="rounded-xl px-3 py-3 text-lg font-medium hover:bg-ink/[0.04]">
+            Sign in
+          </Link>
           <div className="mt-3" onClick={closeAll}>
             <ButtonLink href="/contact?interest=enterprise" variant="dark" className="w-full">
               Talk to us

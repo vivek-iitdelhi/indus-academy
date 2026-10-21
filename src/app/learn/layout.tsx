@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Container } from "@/components/ui";
-import { getUser } from "@/lib/session";
+import { getUser, isAdminEmail } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "My learning",
@@ -22,6 +22,11 @@ export default async function LearnLayout({ children }: LayoutProps<"/learn">) {
             My learning
           </Link>
           <nav aria-label="Learner" className="flex min-w-0 items-center gap-5 text-muted">
+            {(await isAdminEmail(user.email)) && (
+              <Link href="/admin" className="hover:text-ink">
+                Admin
+              </Link>
+            )}
             <Link href="/learn/certificates" className="hover:text-ink">
               Certificates
             </Link>
