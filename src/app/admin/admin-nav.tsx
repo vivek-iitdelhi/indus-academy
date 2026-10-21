@@ -10,6 +10,7 @@ const links = [
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/certificates", label: "Certificates" },
   { href: "/admin/distributors", label: "Distributors" },
+  { href: "/admin/admins", label: "Admins" },
 ];
 
 export function AdminNav() {

@@ -1,6 +1,9 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { admins } from "@/db/schema";
 import { auth, type SessionUser } from "@/lib/auth";
 
 /** The signed-in user, or null. Memoised per request. */
@@ -16,11 +19,20 @@ export async function requireUser(nextPath: string): Promise<SessionUser> {
   return user;
 }
 
-/** Admins are the comma-separated, case-insensitive ADMIN_EMAILS. */
-export function isAdminEmail(email: string | null | undefined) {
+/** ADMIN_EMAILS: optional, and always admins; the way back in if every admin was removed. */
+export const envAdmins = () =>
+  (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+/** Admins are the emails in the admins table (managed at /admin/admins) plus ADMIN_EMAILS. */
+export async function isAdminEmail(email: string | null | undefined) {
   if (!email) return false;
-  const admins = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase());
-  return admins.includes(email.trim().toLowerCase());
+  const normal = email.trim().toLowerCase();
+  if (envAdmins().includes(normal)) return true;
+  const [row] = await db.select({ email: admins.email }).from(admins).where(eq(admins.email, normal)).limit(1);
+  return Boolean(row);
 }
 
 /**
@@ -29,7 +41,7 @@ export function isAdminEmail(email: string | null | undefined) {
  */
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await getUser();
-  if (!user || !isAdminEmail(user.email)) notFound();
+  if (!user || !(await isAdminEmail(user.email))) notFound();
   return user;
 }
 

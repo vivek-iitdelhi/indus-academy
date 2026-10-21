@@ -226,6 +226,13 @@ export const lessonProgress = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.lessonId] })],
 );
 
+/** Who can open /admin, by sign-in email (stored lower-case). Managed at /admin/admins. */
+export const admins = pgTable("admins", {
+  email: text("email").primaryKey(),
+  addedBy: text("added_by"),
+  createdAt: createdAt(),
+});
+
 export const distributors = pgTable("distributors", {
   id: id(),
   name: text("name").notNull(),

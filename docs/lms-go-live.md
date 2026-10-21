@@ -28,7 +28,9 @@ them. The full list with one-line comments is in `.env.example`.
 - Google (optional): Google Cloud → APIs & Services → Credentials → OAuth client
   (Web). Authorised redirect URI `https://indusai.academy/api/auth/callback/google`.
   Gives `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`. The button appears only when both are set.
-- `ADMIN_EMAILS`: comma-separated; these accounts can open `/admin`.
+- Admins are managed at `/admin/admins`. The first one is added straight into the
+  database: `insert into admins (email) values ('you@example.com');`. `ADMIN_EMAILS`
+  (optional, comma-separated) are always admins too: the way back in if all are removed.
 
 ## 3. Video: Cloudflare R2 + our encoder machine
 
