@@ -33,8 +33,7 @@ export const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[
 export const toDateInput = (date: Date | null) =>
   date ? date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) : "";
 
-export const formatRupees = (paise: number) =>
-  `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+export { formatRupees } from "../rupees.ts";
 
 export const formatDate = (date: Date | null) =>
   date ? date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }) : "—";

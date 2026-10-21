@@ -2,10 +2,10 @@ import { company, companyAddress, site } from "@/content/site";
 import { sendEmail } from "@/lib/email";
 import { fulfilCoursePayment, type FulfilResult } from "@/lib/lms/purchase";
 import { escapeHtml } from "@/lib/newsletter";
+import { formatRupees as rupees } from "@/lib/rupees";
 
 const from = () => process.env.ENQUIRY_FROM_EMAIL ?? `${site.name} <enquiries@indusai.academy>`;
 const team = () => (process.env.ENQUIRY_TO_EMAIL ?? site.email).split(",").map((address) => address.trim());
-const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 /** What the learner sees when the money moved but we could not enrol them. */
 export const paymentProblemMessage = (paymentId: string) =>

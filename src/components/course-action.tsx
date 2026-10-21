@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { openCheckout, takeReturnedOrder } from "./enroll-button";
+import { formatRupees } from "@/lib/rupees";
 import { ButtonLink } from "./ui";
 
 type Ownership = { signedIn: boolean; owned: boolean; needsPhone: boolean; paymentsEnabled: boolean };
@@ -28,7 +29,7 @@ export function CourseAction({ slug, pricePaise }: { slug: string; pricePaise: n
   const [askPhone, setAskPhone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const rupees = `₹${(pricePaise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  const rupees = formatRupees(pricePaise);
   const label = free ? "Start free" : `Buy ${rupees}`;
 
   async function enrolFree() {

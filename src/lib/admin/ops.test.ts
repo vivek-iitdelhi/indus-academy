@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { payments } from "../../db/schema.ts";
-import { completionPercent, completionSql, parseExpiryDate, refundBlocker, toDateInput } from "./ops.ts";
+import { completionPercent, completionSql, formatRupees, parseExpiryDate, refundBlocker, toDateInput } from "./ops.ts";
 
 test("completion percent floors and handles empty courses", () => {
   assert.equal(completionPercent(0, 6), 0);
@@ -44,4 +44,10 @@ test("completion subqueries always qualify the outer columns", () => {
   const dialect = new PgDialect();
   assert.match(dialect.sqlToQuery(done).sql, /lp\.user_id = "payments"\."user_id" and l\.course_id = "payments"\."course_id"/);
   assert.match(dialect.sqlToQuery(total).sql, /l\.course_id = "payments"\."course_id"/);
+});
+
+test("rupees show paise only when there are some", () => {
+  assert.equal(formatRupees(9900), "₹99");
+  assert.equal(formatRupees(990), "₹9.90");
+  assert.equal(formatRupees(149_950), "₹1,499.50");
 });

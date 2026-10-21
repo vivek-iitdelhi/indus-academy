@@ -3,6 +3,7 @@ import { cache } from "react";
 import { db } from "@/db";
 import { courses, lessons, type Course, type CourseFormat } from "@/db/schema";
 import { getCourseBySlug, getCourseOutline } from "@/lib/lms/courses";
+import { formatRupees } from "@/lib/rupees";
 
 // The catalogue is prerendered from the database at build time. A build without
 // DATABASE_URL (CI, a fresh preview) renders no courses and fills in on demand / on revalidate.
@@ -39,8 +40,7 @@ export const formatLabels: Record<CourseFormat, string> = {
   standard: "Standard: full-length course",
 };
 
-export const formatRupees = (paise: number) =>
-  `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: paise % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+export { formatRupees } from "@/lib/rupees";
 
 /** "₹1,499 (incl. 18% GST)" or "Free". Prices are stored GST-inclusive. */
 export const priceLabel = (paise: number) => (paise > 0 ? `${formatRupees(paise)} (incl. 18% GST)` : "Free");
