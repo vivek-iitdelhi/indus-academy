@@ -48,7 +48,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
-  // Better Auth additionalField (see src/lib/auth.ts); Razorpay needs it at checkout.
+  // Better Auth additionalField (see src/lib/auth.ts); the payment gateway needs it at checkout.
   phone: text("phone"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -276,8 +276,9 @@ export const enrollments = pgTable(
 
 export const payments = pgTable("payments", {
   id: id(),
-  razorpayOrderId: text("razorpay_order_id").notNull().unique(),
-  razorpayPaymentId: text("razorpay_payment_id").unique(),
+  // Ids at the payment gateway (Cashfree): our order id, and its payment id once paid.
+  orderId: text("order_id").notNull().unique(),
+  paymentId: text("payment_id").unique(),
   // Financial records outlive the account, so no cascade.
   userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   courseId: uuid("course_id")
@@ -285,7 +286,7 @@ export const payments = pgTable("payments", {
     .references(() => courses.id),
   amountPaise: integer("amount_paise").notNull(),
   status: text("status", { enum: paymentStatuses }).notNull().default("created"),
-  razorpayRefundId: text("razorpay_refund_id"),
+  refundId: text("refund_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

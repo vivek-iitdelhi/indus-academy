@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { loadCheckout, type RazorpayResponse } from "./enroll-button";
+import { openCheckout, takeReturnedOrder } from "./enroll-button";
 import { ButtonLink } from "./ui";
 
 type Ownership = { signedIn: boolean; owned: boolean; needsPhone: boolean; paymentsEnabled: boolean };
@@ -21,7 +21,7 @@ async function postJson(url: string, body: unknown) {
  * visitor is comes from /api/learn/ownership after load. Until then (and without JS) it
  * is the signed-out link, which comes back here with ?buy=1 and carries on.
  */
-export function CourseAction({ slug, title, pricePaise }: { slug: string; title: string; pricePaise: number }) {
+export function CourseAction({ slug, pricePaise }: { slug: string; pricePaise: number }) {
   const phoneId = useId();
   const free = pricePaise <= 0;
   const [me, setMe] = useState<Ownership | null>(null);
@@ -43,6 +43,23 @@ export function CourseAction({ slug, title, pricePaise }: { slug: string; title:
     setBusy(false);
   }
 
+  /** Asks the server how the order went. `closed`: the buyer shut the popup, so "no payment" is no error. */
+  async function confirm(orderId: string, closed: boolean) {
+    setBusy(true);
+    const { res, data } = await postJson("/api/checkout/verify", { courseSlug: slug, orderId }).catch(() => ({
+      res: null,
+      data: {} as Record<string, string>,
+    }));
+    if (res?.status === 200 && data.redirect) return window.location.assign(data.redirect);
+    if (!(res?.status === 409 && closed)) {
+      setError(
+        data.error ??
+          `We couldn't confirm your payment just now. If money left your account, our team will sort it out within a working day. Order: ${orderId}`,
+      );
+    }
+    setBusy(false);
+  }
+
   async function pay(phone?: string) {
     setBusy(true);
     setError(null);
@@ -54,34 +71,9 @@ export function CourseAction({ slug, title, pricePaise }: { slug: string; title:
       }
       setAskPhone(false);
 
-      await loadCheckout();
-      if (!window.Razorpay) throw new Error("Payment window could not load");
-      new window.Razorpay({
-        key: order.keyId,
-        order_id: order.orderId,
-        amount: order.amount,
-        currency: order.currency,
-        name: "Indus AI Academy",
-        description: title,
-        prefill: order.prefill,
-        theme: { color: "#0b1916" },
-        // Closing the window leaves an unpaid order and no enrolment; the button works again.
-        modal: { ondismiss: () => setBusy(false) },
-        handler: async (response: RazorpayResponse) => {
-          const { res: verifyRes, data } = await postJson("/api/checkout/verify", {
-            courseSlug: slug,
-            orderId: response.razorpay_order_id,
-            paymentId: response.razorpay_payment_id,
-            signature: response.razorpay_signature,
-          }).catch(() => ({ res: null, data: {} as Record<string, string> }));
-          if (verifyRes?.ok && data.redirect) return window.location.assign(data.redirect);
-          setError(
-            data.error ??
-              `We couldn't confirm your payment just now. If money left your account, our team will sort it out within a working day. Payment ID: ${response.razorpay_payment_id}`,
-          );
-          setBusy(false);
-        },
-      }).open();
+      const result = await openCheckout(order);
+      if (result.redirect) return;
+      await confirm(order.orderId, Boolean(result.error));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setBusy(false);
@@ -102,6 +94,9 @@ export function CourseAction({ slug, title, pricePaise }: { slug: string; title:
       .then((state) => {
         if (cancelled || !state) return;
         setMe(state);
+        // Back from a redirect checkout (?order=…): confirm it.
+        const orderId = takeReturnedOrder();
+        if (orderId && state.signedIn && !state.owned) return void confirm(orderId, false);
         // Back from sign-in with ?buy=1: carry on. Drop the flag so a refresh doesn't repeat it.
         if (new URLSearchParams(window.location.search).get("buy") !== "1") return;
         window.history.replaceState(null, "", window.location.pathname + window.location.hash);
@@ -183,7 +178,7 @@ export function CourseAction({ slug, title, pricePaise }: { slug: string; title:
       <button type="button" disabled={busy} onClick={() => start(me)} className={buttonClass}>
         {busy ? (free ? "Enrolling…" : "Opening payment…") : label}
       </button>
-      {!free && <p className="mt-3 text-center text-xs text-muted">Secure payment by Razorpay. Price includes 18% GST.</p>}
+      {!free && <p className="mt-3 text-center text-xs text-muted">Secure payment. Price includes 18% GST.</p>}
       {errorNote}
     </>
   );

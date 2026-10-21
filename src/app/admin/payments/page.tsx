@@ -23,9 +23,9 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps<"/ad
       createdAt: payments.createdAt,
       amountPaise: payments.amountPaise,
       status: payments.status,
-      orderId: payments.razorpayOrderId,
-      paymentId: payments.razorpayPaymentId,
-      refundId: payments.razorpayRefundId,
+      orderId: payments.orderId,
+      paymentId: payments.paymentId,
+      refundId: payments.refundId,
       userId: payments.userId,
       email: user.email,
       name: user.name,
@@ -68,7 +68,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps<"/ad
         )}
       </nav>
 
-      <Table head={["Date", "Learner", "Course", "Amount", "Status", "Razorpay", "Refund"]} empty="No payments.">
+      <Table head={["Date", "Learner", "Course", "Amount", "Status", "Cashfree", "Refund"]} empty="No payments.">
         {rows.slice(0, PAGE_SIZE).map((p) => {
           const percent = completionPercent(p.done, p.total);
           const blocker = refundBlocker(p.done, p.total, p.createdAt);

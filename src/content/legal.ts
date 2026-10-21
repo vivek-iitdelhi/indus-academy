@@ -160,7 +160,7 @@ export const privacy: LegalDocument = {
     {
       heading: "Card details",
       paragraphs: [
-        "We never see or store your card, UPI or bank details, whether you pay for a program seat or an online course. Payments are processed by Razorpay, which is certified to handle them. We receive only a payment identifier, the amount and whether the payment succeeded.",
+        "We never see or store your card, UPI or bank details, whether you pay for a program seat or an online course. Payments are processed by our payment gateway partner, which is certified to handle them. We receive only a payment identifier, the amount and whether the payment succeeded.",
       ],
     },
     {
@@ -182,7 +182,7 @@ export const privacy: LegalDocument = {
         "A cloud storage provider, for storing course videos and delivering them to your device. It receives the technical data your device sends when a video plays, such as your IP address.",
         "An email delivery provider, for sending sign-in links and enquiry, enrolment, purchase and newsletter emails.",
         "An email inbox provider, for the mail you send us.",
-        "Razorpay, for processing payments.",
+        "A payment gateway, for processing payments.",
         "Google, if you choose to sign in with Google.",
       ],
       paragraphs: [
@@ -297,7 +297,7 @@ export const refunds: LegalDocument = {
     {
       heading: "How refunds are paid",
       paragraphs: [
-        "Refunds go back to the original payment method through Razorpay, normally within 5 to 7 working days of approval, and we absorb the payment gateway charge. Your bank may take a few days more to show it.",
+        "Refunds go back to the original payment method through our payment gateway, normally within 5 to 7 working days of approval, and we absorb the payment gateway charge. Your bank may take a few days more to show it.",
       ],
     },
     {

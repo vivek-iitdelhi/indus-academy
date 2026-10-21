@@ -121,11 +121,11 @@ The early-bird price applies while **both** conditions hold, and the site shows 
 
 ## Payments
 
-- Seats are paid online through **Razorpay**, using the same gateway as IndusLabs.
+- Seats are paid online through **Cashfree**.
 - The price is calculated on our server at the moment of payment, so an edited page cannot change what is charged.
-- Every payment is verified against Razorpay's signature and then re-checked with Razorpay directly before a seat is confirmed.
+- Every payment is checked with Cashfree directly before a seat is confirmed; the buyer's details are stored on the Cashfree order, not taken from the browser.
 - On success, the learner gets a confirmation email with cohort dates and payment ID; the team gets an enrolment notification at the enquiries inbox.
-- **There is no database.** The enrolment emails and the Razorpay dashboard are the record. Keep a register per cohort from those.
+- **There is no database.** The enrolment emails and the Cashfree dashboard are the record. Keep a register per cohort from those.
 
 ## Refunds (confirmed, published)
 
@@ -141,7 +141,7 @@ Published at `/refunds` and confirmed on 21 Sep 2026. Handle requests against th
 | Workshop, within 7 days | Transfer only, no refund |
 | Corporate | Per the signed proposal; deposit refundable up to 14 days before delivery |
 
-Process: acknowledge within 2 working days, decide within 7, refund through Razorpay to the original method within 5–7 working days. We absorb the gateway fee. Log every refund against the cohort register.
+Process: acknowledge within 2 working days, decide within 7, refund through Cashfree to the original method within 5–7 working days. We absorb the gateway fee. Log every refund against the cohort register.
 
 ## Pricing (live)
 

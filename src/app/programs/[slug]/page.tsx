@@ -12,7 +12,7 @@ import { Accent, ArrowIcon, ButtonLink, CheckList, Container, Section, SectionHe
 import { formatPrice, programBySlug, programs, SHOW_PRICES, totalHours } from "@/content/programs";
 import { pageMetadata } from "@/lib/metadata";
 import { activePrice, cohortIsOpen, formatDate } from "@/lib/pricing";
-import { razorpayConfigured } from "@/lib/razorpay";
+import { cashfreeConfigured } from "@/lib/cashfree";
 import { breadcrumbSchema, courseSchema, faqSchema } from "@/lib/schema";
 
 export const dynamicParams = false;
@@ -38,7 +38,7 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
 
   const hours = totalHours(program);
   const price = activePrice(program);
-  const canPayOnline = SHOW_PRICES && razorpayConfigured() && cohortIsOpen(program) && Boolean(price);
+  const canPayOnline = SHOW_PRICES && cashfreeConfigured() && cohortIsOpen(program) && Boolean(price);
   const others = programs.filter((p) => p.slug !== program.slug);
   const crumbs = [
     { name: "Home", path: "/" },
@@ -133,7 +133,7 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
 
               <div className="mt-5">
                 {canPayOnline ? (
-                  <EnrollButton slug={program.slug} programName={program.name} />
+                  <EnrollButton slug={program.slug} />
                 ) : (
                   <ButtonLink href="/contact?interest=programs" variant="dark" className="w-full">
                     Enquire now

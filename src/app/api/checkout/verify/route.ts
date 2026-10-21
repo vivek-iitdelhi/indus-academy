@@ -2,66 +2,56 @@ import { programBySlug } from "@/content/programs";
 import { company, companyAddress, site } from "@/content/site";
 import { formatDate } from "@/lib/pricing";
 import { sendEmail } from "@/lib/email";
-import { fetchPayment, razorpayConfigured, verifySignature } from "@/lib/razorpay";
+import { cashfreeConfigured, decisivePayment, fetchOrder, fetchPayments, type CashfreePayment } from "@/lib/cashfree";
 import { fulfilAndNotify, paymentProblemMessage } from "@/app/api/checkout/course-fulfilment";
 
 const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** Confirms a completed payment, then emails the learner and the team. */
-export async function POST(request: Request) {
-  const peek = (await request
-    .clone()
-    .json()
-    .catch(() => null)) as CourseVerifyBody | null;
-  if (peek?.courseSlug !== undefined) return verifyCourse(peek);
+/** What the browser gets when the order has no successful payment yet. */
+function unsettled(payment: CashfreePayment | undefined) {
+  if (payment?.status === "PENDING") {
+    return Response.json(
+      { pending: true, error: "Your payment is still processing. We'll email you as soon as it's confirmed; there's no need to pay again." },
+      { status: 202 },
+    );
+  }
+  return Response.json({ error: payment ? `Payment ${payment.status.toLowerCase().replace("_", " ")}` : "No payment was made" }, { status: 409 });
+}
 
-  if (!razorpayConfigured()) {
+/**
+ * Called by the browser when checkout closes (or on the return URL): asks Cashfree whether
+ * the order was paid and, if so, confirms it. Nothing from the browser but the order id
+ * is trusted.
+ */
+export async function POST(request: Request) {
+  if (!cashfreeConfigured()) {
     return Response.json({ error: "Online payment is not available" }, { status: 503 });
   }
-
-  let body: {
-    orderId?: string;
-    paymentId?: string;
-    signature?: string;
-    slug?: string;
-    name?: string;
-    email?: string;
-    phone?: string;
-  };
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid request" }, { status: 400 });
-  }
-
-  const { orderId, paymentId, signature, slug } = body;
-  if (!orderId || !paymentId || !signature || !slug) {
+  const body = (await request.json().catch(() => null)) as { courseSlug?: unknown; orderId?: unknown } | null;
+  if (typeof body?.orderId !== "string" || !body.orderId) {
     return Response.json({ error: "Missing payment details" }, { status: 400 });
   }
-  if (!verifySignature({ orderId, paymentId, signature })) {
-    console.error("[checkout] signature mismatch for order", orderId);
-    return Response.json({ error: "Payment could not be verified" }, { status: 400 });
-  }
+  if (body.courseSlug !== undefined) return verifyCourse(body.orderId);
+  const orderId = body.orderId;
 
-  const program = programBySlug(slug);
-  if (!program) return Response.json({ error: "Unknown program" }, { status: 400 });
-
-  // Ask Razorpay what really happened, rather than trusting the browser.
-  let paid: Awaited<ReturnType<typeof fetchPayment>>;
+  // Ask Cashfree what really happened, rather than trusting the browser.
+  let order: Awaited<ReturnType<typeof fetchOrder>>;
+  let paid: CashfreePayment | undefined;
   try {
-    paid = await fetchPayment(paymentId);
+    [order, paid] = await Promise.all([fetchOrder(orderId), fetchPayments(orderId).then(decisivePayment)]);
   } catch (error) {
     console.error("[checkout] payment lookup failed:", error);
     return Response.json({ error: "We could not confirm the payment. Our team will check." }, { status: 502 });
   }
-  if (paid.status !== "captured" && paid.status !== "authorized") {
-    return Response.json({ error: `Payment status is ${paid.status}` }, { status: 409 });
-  }
+  const program = order.tags.kind === "program" ? programBySlug(order.tags.slug ?? "") : undefined;
+  if (!program) return Response.json({ error: "Unknown program" }, { status: 400 });
+  if (paid?.status !== "SUCCESS") return unsettled(paid);
+  const paymentId = paid.id;
 
-  const name = (body.name ?? "").trim() || "there";
-  const email = (body.email ?? "").trim().toLowerCase();
-  const phone = (body.phone ?? "").trim();
+  const name = order.tags.name || "there";
+  const email = order.tags.email ?? "";
+  const phone = order.tags.phone ?? "";
   const rupees = (paid.amount / 100).toLocaleString("en-IN");
   const starts = program.cohort ? formatDate(program.cohort.startDate) : "the next cohort";
 
@@ -91,37 +81,29 @@ export async function POST(request: Request) {
     from: process.env.ENQUIRY_FROM_EMAIL ?? `${site.name} <enquiries@indusai.academy>`,
     to: (process.env.ENQUIRY_TO_EMAIL ?? site.email).split(",").map((address) => address.trim()),
     reply_to: email || site.email,
-    subject:
-      paid.status === "captured"
-        ? `New enrolment: ${program.name} — ${name}`
-        : `ACTION NEEDED (${paid.status}): ${program.name} — ${name}`,
-    text: `Program: ${program.name}\nName: ${name}\nEmail: ${email}\nPhone: ${phone}\nAmount: ₹${rupees}\nPayment ID: ${paymentId}\nOrder ID: ${orderId}\nStatus: ${paid.status}`,
+    subject: `New enrolment: ${program.name} — ${name}`,
+    text: `Program: ${program.name}\nName: ${name}\nEmail: ${email}\nPhone: ${phone}\nAmount: ₹${rupees}\nPayment ID: ${paymentId}\nOrder ID: ${orderId}`,
   });
 
   return Response.json({ ok: true, program: program.name, paymentId });
 }
 
-type CourseVerifyBody = { courseSlug?: unknown; orderId?: unknown; paymentId?: unknown; signature?: unknown };
-
 /** A course payment: enrol (via the same fulfilment as the webhook) and send the learner into it. */
-async function verifyCourse(body: CourseVerifyBody) {
-  if (!razorpayConfigured()) {
-    return Response.json({ error: "Online payment is not available" }, { status: 503 });
+async function verifyCourse(orderId: string) {
+  let paid: CashfreePayment | undefined;
+  try {
+    paid = decisivePayment(await fetchPayments(orderId));
+  } catch (error) {
+    console.error("[checkout] payment lookup failed:", error);
+    return Response.json({ error: "We couldn't confirm your payment just now. If money left your account, our team will sort it out within a working day." }, { status: 502 });
   }
-  const { orderId, paymentId, signature } = body;
-  if (typeof orderId !== "string" || typeof paymentId !== "string" || typeof signature !== "string") {
-    return Response.json({ error: "Missing payment details" }, { status: 400 });
-  }
-  if (!verifySignature({ orderId, paymentId, signature })) {
-    console.error("[checkout] signature mismatch for course order", orderId);
-    return Response.json({ error: "Payment could not be verified" }, { status: 400 });
-  }
+  if (paid?.status !== "SUCCESS") return unsettled(paid);
 
   let result: Awaited<ReturnType<typeof fulfilAndNotify>>;
   try {
-    result = await fulfilAndNotify(orderId, paymentId, "verify");
+    result = await fulfilAndNotify(orderId, paid.id, "verify");
   } catch {
-    return Response.json({ error: paymentProblemMessage(paymentId), paymentId }, { status: 502 });
+    return Response.json({ error: paymentProblemMessage(paid.id), paymentId: paid.id }, { status: 502 });
   }
   switch (result.outcome) {
     case "fulfilled":
@@ -130,6 +112,6 @@ async function verifyCourse(body: CourseVerifyBody) {
     case "not-paid":
       return Response.json({ error: `Payment status is ${result.status}` }, { status: 409 });
     default:
-      return Response.json({ error: paymentProblemMessage(paymentId), paymentId }, { status: 502 });
+      return Response.json({ error: paymentProblemMessage(paid.id), paymentId: paid.id }, { status: 502 });
   }
 }

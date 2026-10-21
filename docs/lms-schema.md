@@ -33,7 +33,7 @@ Do not hand-roll them. Extend `users` with:
 
 ```
 name          text        -- as it will appear on the certificate
-phone         text        -- collected at checkout, Razorpay needs it
+phone         text        -- collected at checkout, the payment gateway needs it
 created_at    timestamptz not null default now()
 ```
 
@@ -110,8 +110,8 @@ every valid certificate.
 
 ```
 id                   uuid pk default gen_random_uuid()
-razorpay_order_id    text not null unique
-razorpay_payment_id  text unique
+order_id             text not null unique   -- ours, sent to Cashfree
+payment_id           text unique            -- Cashfree cf_payment_id once paid
 user_id              uuid references users(id)
 course_slug          text not null
 amount_paise         integer not null
@@ -120,8 +120,8 @@ created_at           timestamptz not null default now()
 updated_at           timestamptz not null default now()
 ```
 
-A row is written at order creation, before the learner sees Razorpay, so an abandoned
-payment leaves a trace that can be reconciled against the Razorpay dashboard.
+A row is written at order creation, before the learner sees the Cashfree checkout, so an abandoned
+payment leaves a trace that can be reconciled against the Cashfree dashboard.
 
 **The amount is computed server-side from the course content and written here**, never
 taken from the client. The existing `/api/checkout` route already works this way;
@@ -130,8 +130,8 @@ follow it rather than writing a second payment path.
 ## Ordering of writes at purchase
 
 1. `payments` row at `status = 'created'` when the order is made.
-2. Razorpay returns; `/api/checkout/verify` checks the signature **and re-fetches the
-   payment from Razorpay** rather than trusting the browser.
+2. Checkout closes; `/api/checkout/verify` (and the webhook) **fetch the order's payments
+   from Cashfree** rather than trusting the browser.
 3. On a captured payment, in one transaction: update `payments.status = 'paid'` and
    insert the `enrollments` row.
 4. Email the learner and the team. **Email failures must not fail the request** — the
@@ -144,7 +144,7 @@ follow it rather than writing a second payment path.
 enrollments      (user_id)
 lesson_progress  (user_id)                -- the dashboard reads every row for a user
 certificates     (user_id)
-payments         (razorpay_order_id)      -- unique already
+payments         (order_id)               -- unique already
 ```
 
 ## Migrations

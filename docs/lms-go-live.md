@@ -82,14 +82,18 @@ $0.36 per million; an hour of viewing is about 600. Segments come straight from 
 bucket, without a CDN cache; if Indian viewers see slow starts, a Cloudflare Worker cache
 in front is the next step.
 
-## 4. Payments: Razorpay
+## 4. Payments: Cashfree
 
-- `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` (live keys). Set them **before** the build:
-  program pages read them at build time.
-- Webhook: Razorpay dashboard → Webhooks → add `https://indusai.academy/api/razorpay/webhook`,
-  events `payment.captured`, `order.paid` and `refund.processed`, and a secret you choose →
-  `RAZORPAY_WEBHOOK_SECRET`. This enrols a learner who paid and closed the tab, and removes
-  access when a payment is fully refunded from the Razorpay dashboard.
+- `CASHFREE_APP_ID`, `CASHFREE_SECRET_KEY` (Cashfree dashboard → Developers → API Keys,
+  production). Set them **before** the build: program pages read them at build time. App
+  ids starting with `TEST` are sandbox keys and are sent to the sandbox automatically.
+- Whitelist the site: Cashfree dashboard → Developers → Whitelisting → add
+  `indusai.academy`. Until it is approved, the payment window shows "Broken Link! … is not
+  enabled or approved". Live keys never work from localhost; use sandbox keys locally.
+- Payment webhooks need no setup: each order carries its own notify URL
+  (`<site>/api/cashfree/webhook`). For refunds made in the Cashfree dashboard to remove
+  access, add that URL under Developers → Webhooks, version **2023-08-01**, refund events.
+  Webhooks are signed with the secret key; there is no separate webhook secret.
 - Test: buy a course at ₹1 (set a test course's price to ₹1 in `/admin/courses`), check
   you land in the course, then refund it from `/admin/payments`.
 

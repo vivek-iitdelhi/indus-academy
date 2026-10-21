@@ -1,46 +1,31 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { CheckIcon } from "./ui";
 
-export type RazorpayResponse = {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-};
-
-type RazorpayOptions = {
-  key: string;
-  order_id: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  prefill: { name: string; email: string; contact: string };
-  theme: { color: string };
-  handler: (response: RazorpayResponse) => void;
-  modal: { ondismiss: () => void };
-};
+type CheckoutResult = { error?: { message?: string }; redirect?: boolean; paymentDetails?: unknown };
 
 declare global {
   interface Window {
-    Razorpay?: new (options: RazorpayOptions) => { open: () => void };
+    Cashfree?: (options: { mode: "sandbox" | "production" }) => {
+      checkout: (options: { paymentSessionId: string; redirectTarget: "_modal" }) => Promise<CheckoutResult>;
+    };
   }
 }
 
-const CHECKOUT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
+const SDK_SRC = "https://sdk.cashfree.com/js/v3/cashfree.js";
 
-export function loadCheckout() {
+function loadSdk() {
   return new Promise<void>((resolve, reject) => {
-    if (window.Razorpay) return resolve();
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${CHECKOUT_SRC}"]`);
+    if (window.Cashfree) return resolve();
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${SDK_SRC}"]`);
     if (existing) {
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener("error", () => reject(new Error("load failed")), { once: true });
       return;
     }
     const script = document.createElement("script");
-    script.src = CHECKOUT_SRC;
+    script.src = SDK_SRC;
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error("load failed"));
@@ -48,15 +33,60 @@ export function loadCheckout() {
   });
 }
 
+/**
+ * Opens Cashfree's checkout over the page and resolves when it closes, whatever happened:
+ * the caller asks the server how it went. `redirect` means the browser could not show the
+ * popup (some in-app browsers) and is going to Cashfree's page; it comes back with ?order=.
+ */
+export async function openCheckout(order: { paymentSessionId: string; mode: "sandbox" | "production" }) {
+  await loadSdk().catch(() => {});
+  if (!window.Cashfree) throw new Error("Payment window could not load. Check your connection and try again.");
+  return window.Cashfree({ mode: order.mode }).checkout({ paymentSessionId: order.paymentSessionId, redirectTarget: "_modal" });
+}
+
+/** The order id a redirect checkout came back with, removed from the address bar so a refresh doesn't repeat it. */
+export function takeReturnedOrder() {
+  const orderId = new URLSearchParams(window.location.search).get("order");
+  if (orderId) window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+  return orderId;
+}
+
 const inputClass =
   "mt-2 block w-full rounded-xl border border-line bg-paper px-4 py-3 text-ink placeholder:text-muted/60 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20";
 
-export function EnrollButton({ slug, programName }: { slug: string; programName: string }) {
+export function EnrollButton({ slug }: { slug: string }) {
   const fieldId = useId();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  /** `closed`: the buyer shut the popup, so "no payment" is expected and not worth an error. */
+  async function confirm(orderId: string, closed: boolean) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/checkout/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+      const verified = await res.json();
+      if (res.status === 200) return setDone(true);
+      if (!(res.status === 409 && closed)) setError(verified.error ?? "Payment could not be verified");
+    } catch {
+      setError("We couldn't confirm your payment just now. If money left your account, our team will sort it out within a working day.");
+    }
+    setBusy(false);
+  }
+
+  useEffect(() => {
+    const orderId = takeReturnedOrder();
+    // Back from a redirect checkout; verify reads everything else from the order.
+    if (!orderId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpen(true);
+    void confirm(orderId, false);
+  }, []);
 
   async function pay(form: HTMLFormElement) {
     const data = new FormData(form);
@@ -78,42 +108,9 @@ export function EnrollButton({ slug, programName }: { slug: string; programName:
       const order = await orderRes.json();
       if (!orderRes.ok) throw new Error(order.error ?? "Could not start the payment");
 
-      await loadCheckout();
-      if (!window.Razorpay) throw new Error("Payment window could not load");
-
-      const checkout = new window.Razorpay({
-        key: order.keyId,
-        order_id: order.orderId,
-        amount: order.amount,
-        currency: order.currency,
-        name: "Indus AI Academy",
-        description: programName,
-        prefill: { name: details.name, email: details.email, contact: details.phone },
-        theme: { color: "#0b1916" },
-        modal: { ondismiss: () => setBusy(false) },
-        handler: async (response) => {
-          try {
-            const verifyRes = await fetch("/api/checkout/verify", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                ...details,
-                orderId: response.razorpay_order_id,
-                paymentId: response.razorpay_payment_id,
-                signature: response.razorpay_signature,
-              }),
-            });
-            const verified = await verifyRes.json();
-            if (!verifyRes.ok) throw new Error(verified.error ?? "Payment could not be verified");
-            setDone(true);
-          } catch (err) {
-            setError(err instanceof Error ? err.message : "Payment could not be verified");
-          } finally {
-            setBusy(false);
-          }
-        },
-      });
-      checkout.open();
+      const result = await openCheckout(order);
+      if (result.redirect) return;
+      await confirm(order.orderId, Boolean(result.error));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setBusy(false);
@@ -204,7 +201,7 @@ export function EnrollButton({ slug, programName }: { slug: string; programName:
       >
         {busy ? "Opening payment…" : "Continue to payment"}
       </button>
-      <p className="text-center text-xs text-muted">Payments handled by Razorpay. GST invoice sent by email.</p>
+      <p className="text-center text-xs text-muted">Secure payment. GST invoice sent by email.</p>
     </form>
   );
 }

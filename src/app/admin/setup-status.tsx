@@ -6,8 +6,7 @@ import { Badge } from "./learners/admin-ui";
 const INTEGRATIONS = [
   { name: "Sign-in emails", vars: ["RESEND_API_KEY", "ENQUIRY_FROM_EMAIL"] },
   { name: "Google sign-in", vars: ["AUTH_GOOGLE_ID", "AUTH_GOOGLE_SECRET"], optional: true },
-  { name: "Payments", vars: ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] },
-  { name: "Payment webhook", vars: ["RAZORPAY_WEBHOOK_SECRET"] },
+  { name: "Payments", vars: ["CASHFREE_APP_ID", "CASHFREE_SECRET_KEY"] },
   { name: "Video storage", vars: ["R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "VIDEO_TOKEN_SECRET"] },
   { name: "Certificates", vars: ["CERTIFICATE_SECRET"] },
   { name: "Daily reminders", vars: ["CRON_SECRET"] },

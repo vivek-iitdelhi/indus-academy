@@ -7,7 +7,7 @@ const from = () => process.env.ENQUIRY_FROM_EMAIL ?? `${site.name} <enquiries@in
 const team = () => (process.env.ENQUIRY_TO_EMAIL ?? site.email).split(",").map((address) => address.trim());
 const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
-/** What the learner sees when Razorpay took the money but we could not enrol them. */
+/** What the learner sees when the money moved but we could not enrol them. */
 export const paymentProblemMessage = (paymentId: string) =>
   `Your payment went through, but we couldn't finish setting up your course. Our team has been alerted and will sort it out within a working day; there's no need to pay again. Your payment ID is ${paymentId}.`;
 
@@ -36,6 +36,13 @@ export async function fulfilAndNotify(orderId: string, paymentId: string, via: "
     await alertTeam({ orderId, paymentId, problem: "no course order with this id in the database", via });
   }
   if (result.outcome !== "fulfilled") return result;
+  if (result.paidTwice) {
+    await alertTeam({
+      ...result,
+      via,
+      problem: `paid twice: this learner already has a paid order for this course (${result.paidTwice}). They are enrolled; refund one of the two payments unless the earlier one was meant to stay.`,
+    });
+  }
 
   const name = result.buyerName?.trim() || "there";
   const learnUrl = `${site.url}/learn/${result.courseSlug}`;
@@ -65,11 +72,8 @@ export async function fulfilAndNotify(orderId: string, paymentId: string, via: "
     from: from(),
     to: team(),
     reply_to: result.buyerEmail || site.email,
-    subject:
-      result.status === "captured"
-        ? `New course purchase: ${result.courseTitle} — ${result.buyerEmail ?? "unknown"}`
-        : `ACTION NEEDED (${result.status}): ${result.courseTitle} — ${result.buyerEmail ?? "unknown"}`,
-    text: `Course: ${result.courseTitle}\nName: ${result.buyerName || "(not set)"}\nEmail: ${result.buyerEmail ?? ""}\nAmount: ${rupees(result.amountPaise)}\nPayment ID: ${paymentId}\nOrder ID: ${orderId}\nStatus: ${result.status}\nConfirmed by: ${via}`,
+    subject: `New course purchase: ${result.courseTitle} — ${result.buyerEmail ?? "unknown"}`,
+    text: `Course: ${result.courseTitle}\nName: ${result.buyerName || "(not set)"}\nEmail: ${result.buyerEmail ?? ""}\nAmount: ${rupees(result.amountPaise)}\nPayment ID: ${paymentId}\nOrder ID: ${orderId}\nConfirmed by: ${via}`,
   });
   return result;
 }
@@ -88,6 +92,6 @@ async function alertTeam(details: {
     to: team(),
     reply_to: details.buyerEmail || site.email,
     subject: `PAYMENT NEEDS ATTENTION: ${details.courseTitle ?? "course order"} — ${details.paymentId}`,
-    text: `A Razorpay payment for a course could not be turned into an enrolment. Someone may have paid without getting access: check the payment in the Razorpay dashboard, then enrol them by hand or refund.\n\nProblem: ${details.problem}\nCourse: ${details.courseTitle ?? "unknown"}\nBuyer: ${details.buyerEmail ?? "unknown"}\nExpected amount: ${details.amountPaise === undefined ? "unknown" : rupees(details.amountPaise)}\nPayment ID: ${details.paymentId}\nOrder ID: ${details.orderId}\nSeen by: ${details.via}`,
+    text: `A Cashfree payment for a course could not be turned into an enrolment. Someone may have paid without getting access: check the order in the Cashfree dashboard, then enrol them by hand or refund.\n\nProblem: ${details.problem}\nCourse: ${details.courseTitle ?? "unknown"}\nBuyer: ${details.buyerEmail ?? "unknown"}\nExpected amount: ${details.amountPaise === undefined ? "unknown" : rupees(details.amountPaise)}\nPayment ID: ${details.paymentId}\nOrder ID: ${details.orderId}\nSeen by: ${details.via}`,
   });
 }

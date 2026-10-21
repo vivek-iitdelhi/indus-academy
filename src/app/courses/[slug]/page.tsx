@@ -106,7 +106,7 @@ export default async function CoursePage({ params }: PageProps<"/courses/[slug]"
               <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Price</p>
               <p className="mt-2 text-3xl font-semibold tracking-tight">{priceLabel(course.pricePaise)}</p>
               <div className="mt-5">
-                <CourseAction slug={course.slug} title={course.title} pricePaise={course.pricePaise} />
+                <CourseAction slug={course.slug} pricePaise={course.pricePaise} />
               </div>
             </div>
             <div>

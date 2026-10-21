@@ -131,7 +131,7 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
   if (!Number.isFinite(rupees) || pricePaise < 0 || pricePaise > MAX_PRICE_PAISE) {
     return { error: "Price must be a positive amount in rupees (0 for free)." };
   }
-  if (pricePaise > 0 && pricePaise < 100) return { error: "Razorpay's minimum is ₹1: use 0 for free, or at least 1." };
+  if (pricePaise > 0 && pricePaise < 100) return { error: "The payment gateway's minimum is ₹1: use 0 for free, or at least 1." };
   if (coverImageUrl && !/^https?:\/\/\S+$/.test(coverImageUrl)) {
     return { error: "Cover image must be a full http(s) URL." };
   }

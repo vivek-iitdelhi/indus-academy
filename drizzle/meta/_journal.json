@@ -36,6 +36,13 @@
       "when": 1792502589635,
       "tag": "0004_certificate_counters",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792568861177,
+      "tag": "0005_cashfree",
+      "breakpoints": true
     }
   ]
 }

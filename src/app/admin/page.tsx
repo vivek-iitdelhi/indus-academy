@@ -59,8 +59,8 @@ const paymentColumns = {
   id: payments.id,
   createdAt: payments.createdAt,
   amountPaise: payments.amountPaise,
-  orderId: payments.razorpayOrderId,
-  paymentId: payments.razorpayPaymentId,
+  orderId: payments.orderId,
+  paymentId: payments.paymentId,
   userId: payments.userId,
   email: user.email,
   course: courses.title,
@@ -147,7 +147,7 @@ export default async function AdminOverviewPage() {
       <p className="mt-1 text-sm text-muted">
         These learners paid but cannot open the course. Grant access from their learner page, or refund.
       </p>
-      <Table head={["Paid", "Learner", "Course", "Amount", "Razorpay"]} empty="None. Every paid order has access.">
+      <Table head={["Paid", "Learner", "Course", "Amount", "Cashfree"]} empty="None. Every paid order has access.">
         {unenrolled.map((p) => (
           <tr key={p.id} className="bg-red-50/60">
             <td className="whitespace-nowrap">{formatDateTime(p.createdAt)}</td>
