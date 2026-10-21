@@ -132,6 +132,11 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
     return { error: "Price must be a positive amount in rupees (0 for free)." };
   }
   if (pricePaise > 0 && pricePaise < 100) return { error: "The payment gateway's minimum is ₹1: use 0 for free, or at least 1." };
+  const listRupees = text(form, "listPrice");
+  const listPricePaise = listRupees ? Math.round(Number(listRupees) * 100) : null;
+  if (listPricePaise !== null && !(listPricePaise > pricePaise && listPricePaise <= MAX_PRICE_PAISE)) {
+    return { error: "The price before discount must be higher than the price, or left empty." };
+  }
   if (coverImageUrl && !/^https?:\/\/\S+$/.test(coverImageUrl)) {
     return { error: "Cover image must be a full http(s) URL." };
   }
@@ -146,6 +151,7 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
         subtitle: text(form, "subtitle") || null,
         description: text(form, "description") || null,
         pricePaise,
+        listPricePaise,
         sequential: checked(form, "sequential"),
         certificateEnabled: checked(form, "certificateEnabled"),
         coverImageUrl: coverImageUrl || null,

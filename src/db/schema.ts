@@ -119,6 +119,8 @@ export const courses = pgTable("courses", {
   status: text("status", { enum: courseStatuses }).notNull().default("draft"),
   // 0 = free. GST-inclusive.
   pricePaise: integer("price_paise").notNull().default(0),
+  // Shown struck through next to pricePaise when higher (a discount). Never charged.
+  listPricePaise: integer("list_price_paise"),
   // If true, a lesson unlocks only after the previous one is complete.
   sequential: boolean("sequential").notNull().default(false),
   certificateEnabled: boolean("certificate_enabled").notNull().default(true),

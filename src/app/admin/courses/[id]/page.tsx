@@ -204,6 +204,16 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
                 className={`${inputClass} tabular-nums`}
               />
             </Field>
+            <Field label="Price before discount (₹)" hint="Optional. Shown struck through next to the price, with the % off.">
+              <input
+                name="listPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue={course.listPricePaise ? course.listPricePaise / 100 : ""}
+                className={`${inputClass} tabular-nums`}
+              />
+            </Field>
             <Field label="Cover image URL">
               <input name="coverImageUrl" type="url" defaultValue={course.coverImageUrl ?? ""} placeholder="https://…" className={inputClass} />
             </Field>

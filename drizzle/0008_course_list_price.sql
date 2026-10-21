@@ -1,0 +1,1 @@
+ALTER TABLE "courses" ADD COLUMN "list_price_paise" integer;

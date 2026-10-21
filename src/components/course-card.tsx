@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatDuration, formatLabels, priceLabel, type CatalogCourse } from "@/app/courses/catalog";
+import { formatDuration, formatLabels, formatRupees, percentOff, priceLabel, type CatalogCourse } from "@/app/courses/catalog";
+import type { Course } from "@/db/schema";
 import { ButtonLink } from "./ui";
 
 export function CourseCard({ course }: { course: CatalogCourse }) {
@@ -24,12 +25,30 @@ export function CourseCard({ course }: { course: CatalogCourse }) {
           </div>
         ))}
       </dl>
-      <p className="mt-6 text-lg font-semibold tracking-tight">{priceLabel(course.pricePaise)}</p>
+      <p className="mt-6 text-lg font-semibold tracking-tight">
+        <CoursePrice course={course} />
+      </p>
       <div className="mt-auto pt-8">
         <ButtonLink href={href} variant="dark">
           View course
         </ButtonLink>
       </div>
     </article>
+  );
+}
+
+/** The price, with the list price struck through and the saving when discounted. */
+export function CoursePrice({ course }: { course: Pick<Course, "pricePaise" | "listPricePaise"> }) {
+  const off = percentOff(course);
+  return (
+    <>
+      {priceLabel(course.pricePaise)}
+      {off > 0 && (
+        <>
+          <span className="ml-2 font-normal text-muted line-through">{formatRupees(course.listPricePaise!)}</span>
+          <span className="ml-2 rounded-full bg-saffron/20 px-2 py-0.5 align-middle text-[0.6em] font-medium text-ink">{off}% off</span>
+        </>
+      )}
+    </>
   );
 }

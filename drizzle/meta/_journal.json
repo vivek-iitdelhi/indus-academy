@@ -57,6 +57,13 @@
       "when": 1792570187742,
       "tag": "0007_admins",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792589828144,
+      "tag": "0008_course_list_price",
+      "breakpoints": true
     }
   ]
 }

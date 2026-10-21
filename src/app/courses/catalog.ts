@@ -40,10 +40,14 @@ export const formatLabels: Record<CourseFormat, string> = {
 };
 
 export const formatRupees = (paise: number) =>
-  `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: paise % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
 /** "₹1,499 (incl. 18% GST)" or "Free". Prices are stored GST-inclusive. */
 export const priceLabel = (paise: number) => (paise > 0 ? `${formatRupees(paise)} (incl. 18% GST)` : "Free");
+
+/** Percent off the list price, or 0 when there is no discount. */
+export const percentOff = ({ pricePaise, listPricePaise }: Pick<Course, "pricePaise" | "listPricePaise">) =>
+  listPricePaise && listPricePaise > pricePaise ? Math.round((1 - pricePaise / listPricePaise) * 100) : 0;
 
 /** 3 h, 1 h 20 min, 24 min. */
 export function formatDuration(seconds: number) {

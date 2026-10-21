@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { marked } from "marked";
 import { CourseAction } from "@/components/course-action";
+import { CoursePrice } from "@/components/course-card";
 import { JsonLd } from "@/components/json-ld";
 import { PageHero } from "@/components/page-hero";
 import { CheckList, Container, Section, SectionHeading } from "@/components/ui";
@@ -10,7 +11,7 @@ import { company, site } from "@/content/site";
 import { flattenOutline, totalDurationSeconds } from "@/lib/lms/courses";
 import { pageMetadata } from "@/lib/metadata";
 import { breadcrumbSchema, ORGANIZATION_ID } from "@/lib/schema";
-import { formatDuration, formatLabels, getCatalogCourse, listPublishedCourses, priceLabel } from "../catalog";
+import { formatDuration, formatLabels, getCatalogCourse, listPublishedCourses } from "../catalog";
 
 // Static per course, built from the database. Courses published after the build render on
 // first request and are cached; revalidateCourse() refreshes them, hourly as a safety net.
@@ -104,7 +105,9 @@ export default async function CoursePage({ params }: PageProps<"/courses/[slug]"
           <div className="space-y-8">
             <div className="rounded-2xl border border-line bg-white/60 p-6">
               <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Price</p>
-              <p className="mt-2 text-3xl font-semibold tracking-tight">{priceLabel(course.pricePaise)}</p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight">
+                <CoursePrice course={course} />
+              </p>
               <div className="mt-5">
                 <CourseAction slug={course.slug} pricePaise={course.pricePaise} />
               </div>
