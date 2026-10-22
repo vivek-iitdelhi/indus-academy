@@ -36,3 +36,11 @@ test("the invite is a valid-looking iCalendar request", () => {
   assert.match(ics, /DESCRIPTION:Line one\\nwith\\, commas\\; and semis/);
   assert.match(ics, /ATTENDEE;CN="A B";/);
 });
+
+test("Zoho start times are India time in Zoho's format; Jitsi rooms are unique", async () => {
+  const { jitsiRoom, zohoStartTime } = await import("./meeting.ts");
+  assert.equal(zohoStartTime(new Date("2026-10-23T13:30:00Z")), "Oct 23, 2026 07:00 PM");
+  assert.equal(zohoStartTime(new Date("2026-01-05T05:30:00Z")), "Jan 05, 2026 11:00 AM");
+  assert.notEqual(jitsiRoom(), jitsiRoom());
+  assert.match(jitsiRoom(), /^https:\/\/meet\.jit\.si\/IndusAI-[A-Za-z0-9_-]{12}$/);
+});

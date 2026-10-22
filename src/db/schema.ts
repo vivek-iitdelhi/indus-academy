@@ -388,6 +388,8 @@ export const bookings = pgTable(
     gstin: text("gstin"),
     billingAddress: text("billing_address"),
     amountPaise: integer("amount_paise").notNull(),
+    // This call's own video link, made when the booking is confirmed.
+    meetingUrl: text("meeting_url"),
     createdAt: createdAt(),
   },
   // At most one confirmed booking per slot, whatever races the app loses.
