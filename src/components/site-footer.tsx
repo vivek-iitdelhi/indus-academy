@@ -34,7 +34,7 @@ const columns = [
 
 export function SiteFooter() {
   return (
-    <footer className="bg-ink text-paper">
+    <footer className="bg-ink text-paper print:hidden">
       <Container className="grid gap-12 py-16 lg:grid-cols-[1.4fr_2fr]">
         <div className="max-w-sm">
           <Logo tone="dark" />

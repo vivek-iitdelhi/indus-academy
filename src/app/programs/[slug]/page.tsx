@@ -53,7 +53,7 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
       <JsonLd data={faqSchema(program.faqs)} />
 
       <PageHero eyebrow={program.duration} title={program.name} intro={program.summary} breadcrumbs={crumbs}>
-        <ButtonLink href="/contact?interest=programs">Enquire about the next cohort</ButtonLink>
+        <ButtonLink href="#book">Book your seat</ButtonLink>
         <ButtonLink href="#curriculum" variant="outline-dark">
           See the full curriculum
         </ButtonLink>
@@ -82,7 +82,7 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
           <div className="space-y-8">
             <ProgramFacts program={program} />
 
-            <div className="rounded-2xl border border-line bg-white/60 p-6">
+            <div id="book" className="scroll-mt-24 rounded-2xl border border-line bg-white/60 p-6">
               {program.cohort && (
                 <>
                   <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">Next cohort</p>
@@ -124,7 +124,7 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
                 </div>
               ) : (
                 <p className="mt-2 text-lg font-medium">
-                  Enquire for cohort dates and fees
+                  Cohort dates and fees coming soon
                   <span className="mt-1 block text-sm font-normal text-muted">
                     Individual seats and private company cohorts available.
                   </span>
@@ -132,11 +132,11 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
               )}
 
               <div className="mt-5">
-                {canPayOnline ? (
-                  <EnrollButton slug={program.slug} />
+                {canPayOnline && price ? (
+                  <EnrollButton slug={program.slug} price={price.amount} />
                 ) : (
                   <ButtonLink href="/contact?interest=programs" variant="dark" className="w-full">
-                    Enquire now
+                    Book your seat
                   </ButtonLink>
                 )}
               </div>
@@ -239,8 +239,8 @@ export default async function ProgramPage({ params }: PageProps<"/programs/[slug
             Ready to join <Accent>{program.name}</Accent>?
           </>
         }
-        body="Tell us a little about yourself or your team and we'll share upcoming cohort dates, or set up a private batch for your company."
-        primary={{ href: "/contact?interest=programs", label: "Enquire now" }}
+        body="Book your seat in the next cohort, or set up a private batch for your company."
+        primary={{ href: "#book", label: "Book your seat" }}
         secondary={{ href: "/contact?interest=enterprise", label: "Request a private cohort" }}
       />
     </>

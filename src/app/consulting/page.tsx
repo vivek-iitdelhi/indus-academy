@@ -37,7 +37,7 @@ export default function ConsultingPage() {
         }
         intro="We help leadership teams decide where AI will pay off, build the first solutions with them, and put the governance and skills in place to scale."
       >
-        <ButtonLink href="/contact?interest=consulting">Book a discovery call</ButtonLink>
+        <ButtonLink href="/consulting/book">Book a discovery call</ButtonLink>
         <ButtonLink href="#engagement" variant="outline-dark">
           How we engage
         </ButtonLink>
@@ -130,7 +130,7 @@ export default function ConsultingPage() {
           </>
         }
         body="Tell us what you want to improve. We'll help you judge whether AI is the right answer, and what it would take."
-        primary={{ href: "/contact?interest=consulting", label: "Book a discovery call" }}
+        primary={{ href: "/consulting/book", label: "Book a discovery call" }}
         secondary={{ href: "/enterprise", label: "Pair it with training" }}
       />
     </>

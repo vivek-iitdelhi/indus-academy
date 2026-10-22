@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { fulfilAndNotify } from "@/app/api/checkout/course-fulfilment";
 import { db } from "@/db";
 import { payments } from "@/db/schema";
-import { fetchRefunds, refundedPaise, verifyWebhookSignature } from "@/lib/cashfree";
+import { confirmBooking } from "@/lib/bookings";
+import { fetchPayment, fetchRefunds, refundedPaise, verifyWebhookSignature } from "@/lib/cashfree";
 import { recordRefund } from "@/lib/lms/purchase";
 
 type Event = {
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
   const orderId = event.data?.order?.order_id;
   const paymentId = event.data?.payment?.cf_payment_id;
   if (event.type !== "PAYMENT_SUCCESS_WEBHOOK" || !orderId || paymentId === undefined) return Response.json({ ignored: true });
+  if (orderId.startsWith("call_")) return callPaid(orderId, String(paymentId));
   try {
     const result = await fulfilAndNotify(orderId, String(paymentId), "webhook");
     if (result.outcome === "problem" && result.retry) return Response.json({ retry: true }, { status: 500 });
@@ -60,6 +62,16 @@ async function refunded(event: Event) {
     if (refundedPaise(await fetchRefunds(refund.order_id)) < row.amountPaise) return Response.json({ ignored: "partial refund" });
     const recorded = await recordRefund({ orderId: refund.order_id }, refund.refund_id);
     return Response.json({ outcome: recorded ? "refunded" : "nothing to do" });
+  } catch {
+    return Response.json({ retry: true }, { status: 500 });
+  }
+}
+
+/** A discovery call paid without the browser coming back to verify it. Checked at Cashfree first. */
+async function callPaid(orderId: string, paymentId: string) {
+  try {
+    if ((await fetchPayment(orderId, paymentId)).status !== "SUCCESS") return Response.json({ ignored: "not paid" });
+    return Response.json({ outcome: (await confirmBooking(orderId, paymentId)).outcome });
   } catch {
     return Response.json({ retry: true }, { status: 500 });
   }

@@ -36,13 +36,13 @@ export default function ProgramsPage() {
         }
         intro="Live, cohort-based AI courses for individuals and teams. Every one is hands-on, taught by practitioners, and finishes with work you can show."
       >
-        <ButtonLink href="/contact?interest=programs">Enquire about the next cohort</ButtonLink>
+        <ButtonLink href="#programs">Book your seat</ButtonLink>
         <ButtonLink href="/enterprise" variant="outline-dark">
           Training a whole team?
         </ButtonLink>
       </PageHero>
 
-      <Section>
+      <Section id="programs">
         <Container className="grid gap-5 lg:grid-cols-2">
           {programs.map((p) => (
             <article key={p.slug} className="reveal flex flex-col rounded-3xl border border-line bg-white/50 p-8 sm:p-10">
@@ -86,8 +86,8 @@ export default function ProgramsPage() {
                 <ButtonLink href={`/programs/${p.slug}`} variant="dark">
                   View program
                 </ButtonLink>
-                <ButtonLink href="/contact?interest=programs" variant="outline">
-                  Enquire
+                <ButtonLink href={`/programs/${p.slug}#book`} variant="outline">
+                  Book your seat
                 </ButtonLink>
               </div>
             </article>

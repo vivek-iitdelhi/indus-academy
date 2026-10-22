@@ -54,6 +54,8 @@ export async function createOrder(input: {
   /** Back here after a redirect checkout (in-app browsers that cannot show the popup). */
   returnUrl: string;
   tags?: Record<string, string>;
+  /** After this, Cashfree refuses payment on the order (default: Cashfree's 30 days). */
+  expiresAt?: Date;
 }) {
   // Payment webhooks for this order. Live Cashfree accepts only https URLs, so a local
   // build (http://localhost) sends neither and relies on the popup closing.
@@ -70,6 +72,7 @@ export async function createOrder(input: {
     },
     order_meta: https ? { return_url: input.returnUrl, notify_url: new URL("/api/cashfree/webhook", input.returnUrl).toString() } : undefined,
     order_tags: input.tags,
+    order_expiry_time: input.expiresAt?.toISOString(),
   });
   return { orderId: order.order_id, paymentSessionId: order.payment_session_id };
 }

@@ -95,7 +95,7 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line/70 bg-paper/85 backdrop-blur-md">
+    <header className="print:hidden sticky top-0 z-50 border-b border-line/70 bg-paper/85 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between gap-6">
         <Link href="/" onClick={closeAll} aria-label="Indus AI Academy home" className="rounded-md">
           <Logo />

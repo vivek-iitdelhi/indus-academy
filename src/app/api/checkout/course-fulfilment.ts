@@ -2,6 +2,7 @@ import { company, companyAddress, site } from "@/content/site";
 import { sendEmail } from "@/lib/email";
 import { fulfilCoursePayment, type FulfilResult } from "@/lib/lms/purchase";
 import { escapeHtml } from "@/lib/newsletter";
+import { invoiceUrl, issueInvoice } from "@/lib/invoices";
 import { formatRupees as rupees } from "@/lib/rupees";
 
 const from = () => process.env.ENQUIRY_FROM_EMAIL ?? `${site.name} <enquiries@indusai.academy>`;
@@ -46,13 +47,21 @@ export async function fulfilAndNotify(orderId: string, paymentId: string, via: "
 
   const name = result.buyerName?.trim() || "there";
   const learnUrl = `${site.url}/learn/${result.courseSlug}`;
+  const invoice = await issueInvoice({
+    orderId,
+    paymentId,
+    description: `Online course: ${result.courseTitle}`,
+    totalPaise: result.amountPaise,
+    buyer: { name: result.buyerName?.trim() || result.buyerEmail || "", email: result.buyerEmail ?? "" },
+  });
+  const billUrl = invoice ? invoiceUrl(invoice) : null;
   if (result.buyerEmail) {
     await sendEmail({
       from: from(),
       to: [result.buyerEmail],
       reply_to: site.email,
       subject: `You're enrolled: ${result.courseTitle}`,
-      text: `Hi ${name},\n\nYou now have access to ${result.courseTitle}.\n\nPaid: ${rupees(result.amountPaise)} (incl. GST)\nPayment ID: ${paymentId}\n\nStart learning: ${learnUrl}\n\nReply to this email with any questions.\n\n${company.legalName}`,
+      text: `Hi ${name},\n\nYou now have access to ${result.courseTitle}.\n\nPaid: ${rupees(result.amountPaise)} (incl. GST)\nPayment ID: ${paymentId}\n${billUrl ? `GST invoice: ${billUrl}\n` : ""}\nStart learning: ${learnUrl}\n\nReply to this email with any questions.\n\n${company.legalName}`,
       html: `<div style="font-family:system-ui,sans-serif;max-width:560px;color:#0b1916">
         <h1 style="font-size:22px;margin:0 0 16px">You're enrolled</h1>
         <p style="line-height:1.7;color:#56655f">Hi ${escapeHtml(name)}, you now have access to <strong style="color:#0b1916">${escapeHtml(result.courseTitle)}</strong>.</p>
@@ -60,6 +69,7 @@ export async function fulfilAndNotify(orderId: string, paymentId: string, via: "
           <tr><td style="padding:6px 16px 6px 0;color:#56655f">Course</td><td>${escapeHtml(result.courseTitle)}</td></tr>
           <tr><td style="padding:6px 16px 6px 0;color:#56655f">Paid</td><td>${rupees(result.amountPaise)} (incl. GST)</td></tr>
           <tr><td style="padding:6px 16px 6px 0;color:#56655f">Payment ID</td><td>${escapeHtml(paymentId)}</td></tr>
+          ${billUrl ? `<tr><td style="padding:6px 16px 6px 0;color:#56655f">GST invoice</td><td><a href="${escapeHtml(billUrl)}" style="color:#0b1916">${escapeHtml(invoice!.number)}</a></td></tr>` : ""}
         </table>
         <a href="${escapeHtml(learnUrl)}" style="display:inline-block;background:#0b1916;color:#f5f3ec;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Start learning</a>
         <p style="line-height:1.7;color:#56655f;margin-top:24px">Just reply to this email with any questions.</p>
@@ -73,7 +83,7 @@ export async function fulfilAndNotify(orderId: string, paymentId: string, via: "
     to: team(),
     reply_to: result.buyerEmail || site.email,
     subject: `New course purchase: ${result.courseTitle} — ${result.buyerEmail ?? "unknown"}`,
-    text: `Course: ${result.courseTitle}\nName: ${result.buyerName || "(not set)"}\nEmail: ${result.buyerEmail ?? ""}\nAmount: ${rupees(result.amountPaise)}\nPayment ID: ${paymentId}\nOrder ID: ${orderId}\nConfirmed by: ${via}`,
+    text: `Course: ${result.courseTitle}\nName: ${result.buyerName || "(not set)"}\nEmail: ${result.buyerEmail ?? ""}\nAmount: ${rupees(result.amountPaise)}\nPayment ID: ${paymentId}\nOrder ID: ${orderId}\nConfirmed by: ${via}\nInvoice: ${billUrl ?? "NOT ISSUED, check COMPANY_GSTIN and logs"}`,
   });
   return result;
 }

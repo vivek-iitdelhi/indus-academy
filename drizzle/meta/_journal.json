@@ -71,6 +71,20 @@
       "when": 1792649578345,
       "tag": "0009_forms",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792652500824,
+      "tag": "0010_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792652994948,
+      "tag": "0011_bookings",
+      "breakpoints": true
     }
   ]
 }

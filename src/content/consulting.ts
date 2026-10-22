@@ -47,3 +47,21 @@ export const buildExamples = [
   "Internal knowledge copilots",
   "Reporting and analytics assistants",
 ];
+
+/** The paid discovery call booked at /consulting/book. Times are India time. */
+export const discoveryCall = {
+  name: "AI discovery call",
+  minutes: 30,
+  /** Rupees, before GST. */
+  listPrice: 9999,
+  /** What we charge now (before GST): 50% launch discount. Set to listPrice to end it. */
+  price: 4999,
+  /** 0 = Sunday. */
+  weekdays: [1, 2, 3, 4, 5],
+  startTimes: ["11:00", "11:30", "12:00", "12:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"],
+  /** How far ahead slots are offered, and the least notice we accept. */
+  daysAhead: 14,
+  minNoticeHours: 24,
+  /** "YYYY-MM-DD" days off (holidays, travel). */
+  blockedDates: [] as string[],
+};

@@ -8,8 +8,10 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { Answers, FormItem, FormSettings } from "../lib/forms/types.ts";
 
 // Shared column helpers. Every timestamp is timestamptz.
@@ -30,6 +32,7 @@ export const enrollmentSources = ["purchase", "cohort", "free", "manual", "distr
 export const enrollmentStatuses = ["active", "revoked"] as const;
 export const paymentStatuses = ["created", "paid", "failed", "refunded"] as const;
 export const distributorStatuses = ["active", "revoked"] as const;
+export const bookingStatuses = ["held", "confirmed"] as const;
 
 export type CourseFormat = (typeof courseFormats)[number];
 export type CourseStatus = (typeof courseStatuses)[number];
@@ -330,6 +333,71 @@ export const certificates = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// GST invoices, one per paid order (program seat or course). Numbered IAA/<fy>/<n>.
+
+/** Last invoice number issued in each financial year ("26-27"). GST wants no gaps. */
+export const invoiceCounters = pgTable("invoice_counters", {
+  fy: text("fy").primaryKey(),
+  last: integer("last").notNull(),
+});
+
+// Rows are a legal record: a snapshot of what was billed, never edited. The id is the
+// unguessable part of the buyer's /invoice/<id> link.
+export const invoices = pgTable("invoices", {
+  id: id(),
+  number: text("number").notNull().unique(),
+  orderId: text("order_id").notNull().unique(),
+  paymentId: text("payment_id").notNull(),
+  description: text("description").notNull(),
+  buyerName: text("buyer_name").notNull(),
+  buyerEmail: text("buyer_email").notNull(),
+  buyerPhone: text("buyer_phone"),
+  // Set when the buyer asked for a GST (B2B) invoice.
+  buyerGstin: text("buyer_gstin"),
+  buyerCompany: text("buyer_company"),
+  buyerAddress: text("buyer_address"),
+  placeOfSupply: text("place_of_supply").notNull(), // state code, e.g. "09"
+  supplierGstin: text("supplier_gstin").notNull(),
+  taxablePaise: integer("taxable_paise").notNull(),
+  cgstPaise: integer("cgst_paise").notNull(),
+  sgstPaise: integer("sgst_paise").notNull(),
+  igstPaise: integer("igst_paise").notNull(),
+  totalPaise: integer("total_paise").notNull(),
+  issuedAt: ts("issued_at").notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Paid discovery calls (/consulting/book). A slot is held while the buyer pays, then
+// confirmed; an expired hold no longer blocks the slot but stays as a record.
+
+export const bookings = pgTable(
+  "bookings",
+  {
+    id: id(),
+    orderId: text("order_id").notNull().unique(), // Cashfree order
+    paymentId: text("payment_id"),
+    startsAt: ts("starts_at").notNull(),
+    status: text("status", { enum: bookingStatuses }).notNull().default("held"),
+    heldUntil: ts("held_until").notNull(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone").notNull(),
+    company: text("company"),
+    notes: text("notes").notNull().default(""),
+    // Set when the buyer asked for a GST invoice; `company` is then the registered name.
+    gstin: text("gstin"),
+    billingAddress: text("billing_address"),
+    amountPaise: integer("amount_paise").notNull(),
+    createdAt: createdAt(),
+  },
+  // At most one confirmed booking per slot, whatever races the app loses.
+  (t) => [
+    uniqueIndex("bookings_confirmed_slot_unique").on(t.startsAt).where(sql`${t.status} = 'confirmed'`),
+    index("bookings_starts_at_idx").on(t.startsAt),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Forms (Google Forms-style, built at /admin/forms, filled in at /forms/<slug>).
 
 export const forms = pgTable("forms", {
@@ -375,4 +443,6 @@ export type Payment = typeof payments.$inferSelect;
 export type Certificate = typeof certificates.$inferSelect;
 export type Distributor = typeof distributors.$inferSelect;
 export type Form = typeof forms.$inferSelect;
+export type Invoice = typeof invoices.$inferSelect;
+export type Booking = typeof bookings.$inferSelect;
 export type FormResponse = typeof formResponses.$inferSelect;

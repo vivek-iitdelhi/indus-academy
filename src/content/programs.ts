@@ -2,7 +2,7 @@
  * Every program Indus AI Academy runs, session by session.
  *
  * Prices are drafted but not published: `SHOW_PRICES` stays false until the
- * numbers are signed off, and pages fall back to "Enquire for pricing".
+ * numbers are signed off, and pages fall back to "fees coming soon".
  */
 export const SHOW_PRICES = true;
 

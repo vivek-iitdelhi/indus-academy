@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { GST_RATE, withGstPaise } from "@/lib/gst";
+import { formatRupees } from "@/lib/rupees";
+import { GstFields, gstDetails } from "./gst-fields";
 import { CheckIcon } from "./ui";
 
 type CheckoutResult = { error?: { message?: string }; redirect?: boolean; paymentDetails?: unknown };
@@ -54,7 +57,8 @@ export function takeReturnedOrder() {
 const inputClass =
   "mt-2 block w-full rounded-xl border border-line bg-paper px-4 py-3 text-ink placeholder:text-muted/60 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20";
 
-export function EnrollButton({ slug }: { slug: string }) {
+/** `price`: the seat price in rupees, before GST (the server recomputes it; this is for display). */
+export function EnrollButton({ slug, price }: { slug: string; price: number }) {
   const fieldId = useId();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -95,6 +99,7 @@ export function EnrollButton({ slug }: { slug: string }) {
       name: String(data.get("name") ?? ""),
       email: String(data.get("email") ?? ""),
       phone: String(data.get("phone") ?? ""),
+      ...gstDetails(data),
     };
 
     setBusy(true);
@@ -124,8 +129,8 @@ export function EnrollButton({ slug }: { slug: string }) {
           <CheckIcon className="size-4" /> Seat confirmed
         </span>
         <p className="mt-2 text-sm leading-relaxed">
-          Your payment went through and a confirmation email is on its way. We&apos;ll send joining details a week
-          before the first session.
+          Your payment went through and a confirmation email with your GST invoice is on its way. We&apos;ll send
+          joining details a week before the first session.
         </p>
       </div>
     );
@@ -138,7 +143,7 @@ export function EnrollButton({ slug }: { slug: string }) {
         onClick={() => setOpen(true)}
         className="inline-flex h-12 w-full items-center justify-center rounded-full bg-ink px-6 font-medium text-paper transition-colors hover:bg-pine"
       >
-        Reserve your seat
+        Book your seat
       </button>
     );
   }
@@ -188,6 +193,8 @@ export function EnrollButton({ slug }: { slug: string }) {
         />
       </div>
 
+      <GstFields />
+
       {error && (
         <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
@@ -199,9 +206,12 @@ export function EnrollButton({ slug }: { slug: string }) {
         disabled={busy}
         className="inline-flex h-12 w-full items-center justify-center rounded-full bg-ink px-6 font-medium text-paper transition-colors hover:bg-pine disabled:opacity-60"
       >
-        {busy ? "Opening payment…" : "Continue to payment"}
+        {busy ? "Opening payment…" : `Pay ${formatRupees(withGstPaise(price))}`}
       </button>
-      <p className="text-center text-xs text-muted">Secure payment. GST invoice sent by email.</p>
+      <p className="text-center text-xs text-muted">
+        {formatRupees(price * 100)} + {formatRupees(withGstPaise(price) - price * 100)} GST ({GST_RATE * 100}%). Secure
+        payment; GST invoice sent by email.
+      </p>
     </form>
   );
 }

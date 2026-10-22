@@ -13,6 +13,7 @@ const routes = [
   { path: "/courses", priority: 0.9 },
   { path: "/enterprise", priority: 0.9 },
   { path: "/consulting", priority: 0.8 },
+  { path: "/consulting/book", priority: 0.7 },
   { path: "/blog", priority: 0.7 },
   { path: "/contact", priority: 0.5 },
   ...programs.map((p) => ({ path: `/programs/${p.slug}`, priority: 0.8 })),

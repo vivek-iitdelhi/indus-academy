@@ -94,7 +94,7 @@ export const nav: NavItem[] = [
     label: "Programs",
     overviewLabel: "Compare all programs",
     children: programs.map((p) => ({ href: `/programs/${p.slug}`, label: p.name, description: p.duration })),
-    cta: { href: "/contact?interest=programs", label: "Enquire about the next cohort" },
+    cta: { href: "/programs", label: "Book your seat" },
   },
   { href: "/courses", label: "Courses" },
   {
@@ -124,7 +124,7 @@ export const nav: NavItem[] = [
         external: true,
       },
     ],
-    cta: { href: "/contact?interest=consulting", label: "Book a discovery call" },
+    cta: { href: "/consulting/book", label: "Book a discovery call" },
   },
   { href: "/blog", label: "Blog" },
   { href: "/contact", label: "Contact" },

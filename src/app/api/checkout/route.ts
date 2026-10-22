@@ -7,6 +7,7 @@ import { hasAccess } from "@/lib/lms/access";
 import { getCourseBySlug } from "@/lib/lms/courses";
 import { cashfreeConfigured, cashfreeMode, createOrder } from "@/lib/cashfree";
 import { site } from "@/content/site";
+import { isGstin, withGstPaise } from "@/lib/gst";
 import { activePrice, cohortIsOpen } from "@/lib/pricing";
 import { getUser } from "@/lib/session";
 
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Online payment is not available yet" }, { status: 503 });
   }
 
-  let body: { slug?: string; name?: string; email?: string; phone?: string };
+  let body: { slug?: string; name?: string; email?: string; phone?: string; gstin?: string; company?: string; address?: string };
   try {
     body = await request.json();
   } catch {
@@ -42,12 +43,20 @@ export async function POST(request: Request) {
   const name = (body.name ?? "").trim().slice(0, 120);
   const email = (body.email ?? "").trim().toLowerCase().slice(0, 200);
   const phone = (body.phone ?? "").trim().slice(0, 20);
+  // Optional: a business buyer's GST details, printed on their invoice.
+  const gstin = (body.gstin ?? "").trim().toUpperCase();
+  const company = (body.company ?? "").trim().slice(0, 150);
+  const address = (body.address ?? "").trim().slice(0, 250);
 
   if (!program) return Response.json({ error: "Unknown program" }, { status: 400 });
   if (!name) return Response.json({ error: "Please enter your name" }, { status: 400 });
   if (!EMAIL_PATTERN.test(email)) return Response.json({ error: "Please enter a valid email" }, { status: 400 });
   if (phone.replace(/\D/g, "").length < 10) {
     return Response.json({ error: "Please enter a valid phone number" }, { status: 400 });
+  }
+  if (gstin && !isGstin(gstin)) return Response.json({ error: "Please enter a valid 15-character GSTIN" }, { status: 400 });
+  if (gstin && (!company || !address)) {
+    return Response.json({ error: "Please enter your company name and billing address for the GST invoice" }, { status: 400 });
   }
   if (!cohortIsOpen(program)) {
     return Response.json({ error: "Enrolment for this cohort has closed" }, { status: 409 });
@@ -61,10 +70,19 @@ export async function POST(request: Request) {
     // The buyer's details ride on the order, so verify reads them from Cashfree, not the browser.
     const order = await createOrder({
       orderId,
-      amountPaise: Math.round(price.amount * 100),
+      // Seat prices are quoted "+ GST".
+      amountPaise: withGstPaise(price.amount),
       customer: { id: email, phone, email, name },
       returnUrl: `${site.url}/programs/${program.slug}?order=${orderId}`,
-      tags: { kind: "program", slug: program.slug, name, email, phone, earlyBird: String(price.isEarlyBird) },
+      tags: {
+        kind: "program",
+        slug: program.slug,
+        name,
+        email,
+        phone,
+        earlyBird: String(price.isEarlyBird),
+        ...(gstin && { gstin, company, address }),
+      },
     });
     return Response.json({ ...order, mode: cashfreeMode(), programName: program.name, isEarlyBird: price.isEarlyBird });
   } catch (error) {
