@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calendarInvite, formatSlot, openSlots } from "./slots.ts";
+import { calendarInvite, formatSlot, jitsiRoom, openSlots } from "./slots.ts";
 
 // Thursday 22 Oct 2026, 10:00 IST.
 const now = new Date("2026-10-22T04:30:00Z");
@@ -37,10 +37,15 @@ test("the invite is a valid-looking iCalendar request", () => {
   assert.match(ics, /ATTENDEE;CN="A B";/);
 });
 
-test("Zoho start times are India time in Zoho's format; Jitsi rooms are unique", async () => {
-  const { jitsiRoom, zohoStartTime } = await import("./meeting.ts");
-  assert.equal(zohoStartTime(new Date("2026-10-23T13:30:00Z")), "Oct 23, 2026 07:00 PM");
-  assert.equal(zohoStartTime(new Date("2026-01-05T05:30:00Z")), "Jan 05, 2026 11:00 AM");
+test("busy calendar periods hide overlapping slots; Jitsi rooms are unique", () => {
+  const first = openSlots(now)[0];
+  // A meeting from 10:45 to 11:15 IST blocks the 11:00 slot but not 11:30.
+  const busy = [{ start: new Date(first.getTime() - 15 * 60_000), end: new Date(first.getTime() + 15 * 60_000) }];
+  const slots = openSlots(now, new Set(), busy);
+  assert.ok(!slots.some((s) => s.getTime() === first.getTime()));
+  assert.equal(slots[0].getTime(), first.getTime() + 30 * 60_000);
+  // A meeting ending exactly when a slot starts does not block it.
+  assert.equal(openSlots(now, new Set(), [{ start: new Date(first.getTime() - 3_600_000), end: first }])[0].getTime(), first.getTime());
   assert.notEqual(jitsiRoom(), jitsiRoom());
   assert.match(jitsiRoom(), /^https:\/\/meet\.jit\.si\/IndusAI-[A-Za-z0-9_-]{12}$/);
 });

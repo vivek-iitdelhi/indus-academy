@@ -5,10 +5,11 @@ import { db } from "@/db";
 import { bookings, type Booking } from "@/db/schema";
 import { sendEmail } from "@/lib/email";
 import { invoiceUrl, issueInvoice } from "@/lib/invoices";
-import { createMeetingLink } from "@/lib/meeting";
+import { googleBusy } from "@/lib/google-calendar";
+import { createMeeting } from "@/lib/meeting";
 import { escapeHtml } from "@/lib/newsletter";
 import { formatRupees } from "@/lib/rupees";
-import { calendarInvite, formatSlot, googleCalendarUrl } from "@/lib/slots";
+import { calendarInvite, callEnd, formatSlot, googleCalendarUrl } from "@/lib/slots";
 
 /** How long a slot stays held while the buyer pays. Cashfree stops taking payment 5 minutes earlier. */
 export const HOLD_MINUTES = 25;
@@ -19,6 +20,14 @@ const team = () => (process.env.ENQUIRY_TO_EMAIL ?? site.email).split(",").map((
 
 /** A slot is taken while it is booked, or held by someone still paying. */
 const blocking = (now: Date) => or(eq(bookings.status, "confirmed"), gt(bookings.heldUntil, now));
+
+/** Busy periods on the connected Google Calendar over the booking window; none if it can't be read. */
+export async function calendarBusy(now = new Date()) {
+  return googleBusy(now, new Date(now.getTime() + (discoveryCall.daysAhead + 1) * 86_400_000)).catch((error) => {
+    console.error("[booking] could not read Google Calendar busy times; offering fixed hours:", error);
+    return [];
+  });
+}
 
 export async function takenSlots(now = new Date()) {
   const rows = await db
@@ -55,15 +64,19 @@ export async function holdSlot(
 
 const callTitle = () => `${discoveryCall.name} with ${site.name}`;
 
-function invite(booking: Booking) {
-  const description = [
-    `${discoveryCall.minutes}-minute ${discoveryCall.name.toLowerCase()}.`,
-    booking.meetingUrl ? `Join: ${booking.meetingUrl}` : "We will email the meeting link before the call.",
-    booking.notes && `Agenda from ${booking.name}: ${booking.notes}`,
+/** The event text; `join` adds the link (a Google event carries its Meet link itself). */
+const callDescription = (booking: Booking, join: boolean) =>
+  [
+    `${discoveryCall.minutes}-minute ${discoveryCall.name.toLowerCase()} with ${booking.name}${booking.company ? ` (${booking.company})` : ""}.`,
+    join && (booking.meetingUrl ? `Join: ${booking.meetingUrl}` : "We will email the meeting link before the call."),
+    booking.notes && `Agenda: ${booking.notes}`,
     `Questions or to reschedule: ${site.email}`,
   ]
     .filter(Boolean)
     .join("\n\n");
+
+function invite(booking: Booking) {
+  const description = callDescription(booking, true);
   const event = { start: booking.startsAt, title: callTitle(), description, location: booking.meetingUrl || "Online" };
   return {
     ...event,
@@ -78,7 +91,8 @@ function invite(booking: Booking) {
 }
 
 export type ConfirmResult =
-  | { outcome: "confirmed" | "already-confirmed"; booking: Booking; calendarUrl: string; invoiceUrl: string | null }
+  /** `calendarUrl`: an "Add to Google Calendar" link, null when Google already sent the invite. */
+  | { outcome: "confirmed" | "already-confirmed"; booking: Booking; calendarUrl: string | null; invoiceUrl: string | null }
   | { outcome: "unknown-order" }
   | { outcome: "clash"; booking: Booking };
 
@@ -114,20 +128,25 @@ export async function confirmBooking(orderId: string, paymentId: string): Promis
     const [existing] = await db.select().from(bookings).where(eq(bookings.orderId, orderId));
     if (!existing) return { outcome: "unknown-order" };
     const bill = await issueInvoice(billFor(existing, paymentId));
-    return { outcome: "already-confirmed", booking: existing, calendarUrl: invite(existing).googleUrl, invoiceUrl: bill && invoiceUrl(bill) };
+    return { outcome: "already-confirmed", booking: existing, calendarUrl: existing.googleEventId ? null : invite(existing).googleUrl, invoiceUrl: bill && invoiceUrl(bill) };
   }
 
   // Only the call that confirmed gets here, so each booking gets exactly one meeting.
-  booking.meetingUrl = await createMeetingLink({
-    topic: `${callTitle()}: ${booking.name}${booking.company ? `, ${booking.company}` : ""}`,
-    agenda: booking.notes,
+  const meeting = await createMeeting({
+    requestId: booking.id,
+    title: `${discoveryCall.name}: ${booking.name}${booking.company ? `, ${booking.company}` : ""}`,
+    description: callDescription(booking, false),
     start: booking.startsAt,
-    minutes: discoveryCall.minutes,
+    end: callEnd(booking.startsAt),
+    attendee: { email: booking.email, name: booking.name },
   });
-  const meetUrl = booking.meetingUrl;
+  Object.assign(booking, meeting);
+  const meetUrl = meeting.meetingUrl;
+  // On the connected Google Calendar, Google has emailed the buyer the invite: send no second one.
+  const onGoogle = Boolean(meeting.googleEventId);
   await db
     .update(bookings)
-    .set({ meetingUrl: meetUrl })
+    .set(meeting)
     .where(eq(bookings.id, booking.id))
     .catch((error) => console.error("[booking] could not save meeting link (emails still carry it):", booking!.id, meetUrl, error));
 
@@ -135,9 +154,12 @@ export async function confirmBooking(orderId: string, paymentId: string): Promis
   const billUrl = bill ? invoiceUrl(bill) : null;
   const event = invite(booking);
   const when = formatSlot(booking.startsAt);
-  const attachments = [
-    { filename: "discovery-call.ics", content: Buffer.from(event.ics).toString("base64"), content_type: "text/calendar; method=REQUEST" },
-  ];
+  const attachments = onGoogle
+    ? undefined
+    : [{ filename: "discovery-call.ics", content: Buffer.from(event.ics).toString("base64"), content_type: "text/calendar; method=REQUEST" }];
+  const calendarNote = onGoogle
+    ? "A Google Calendar invite with the same link is on its way separately."
+    : `The calendar invite is attached. Add to Google Calendar: ${event.googleUrl}`;
   const row = (label: string, value: string) =>
     `<tr><td style="padding:6px 16px 6px 0;color:#56655f">${label}</td><td>${value}</td></tr>`;
 
@@ -147,7 +169,7 @@ export async function confirmBooking(orderId: string, paymentId: string): Promis
     reply_to: site.email,
     subject: `Booked: ${discoveryCall.name}, ${when}`,
     attachments,
-    text: `Hi ${booking.name},\n\nYour ${discoveryCall.minutes}-minute ${discoveryCall.name.toLowerCase()} is booked.\n\nWhen: ${when}\nJoin: ${meetUrl}\nPaid: ${formatRupees(booking.amountPaise)} (incl. GST)\nPayment ID: ${paymentId}\n${billUrl ? `GST invoice: ${billUrl}\n` : ""}\nThe calendar invite is attached. Add to Google Calendar: ${event.googleUrl}\n\nNeed to reschedule? Reply to this email at least 24 hours before the call.\n\n${company.legalName}`,
+    text: `Hi ${booking.name},\n\nYour ${discoveryCall.minutes}-minute ${discoveryCall.name.toLowerCase()} is booked.\n\nWhen: ${when}\nJoin: ${meetUrl}\nPaid: ${formatRupees(booking.amountPaise)} (incl. GST)\nPayment ID: ${paymentId}\n${billUrl ? `GST invoice: ${billUrl}\n` : ""}\n${calendarNote}\n\nNeed to reschedule? Reply to this email at least 24 hours before the call.\n\n${company.legalName}`,
     html: `<div style="font-family:system-ui,sans-serif;max-width:560px;color:#0b1916">
       <h1 style="font-size:22px;margin:0 0 16px">Your call is booked</h1>
       <p style="line-height:1.7;color:#56655f">Hi ${escapeHtml(booking.name)}, your ${discoveryCall.minutes}-minute <strong style="color:#0b1916">${escapeHtml(discoveryCall.name.toLowerCase())}</strong> is confirmed.</p>
@@ -158,8 +180,12 @@ export async function confirmBooking(orderId: string, paymentId: string): Promis
         ${row("Payment ID", escapeHtml(paymentId))}
         ${billUrl ? row("GST invoice", `<a href="${escapeHtml(billUrl)}" style="color:#0b1916">${escapeHtml(bill!.number)}</a>`) : ""}
       </table>
-      <a href="${escapeHtml(event.googleUrl)}" style="display:inline-block;background:#0b1916;color:#f5f3ec;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Add to Google Calendar</a>
-      <p style="line-height:1.7;color:#56655f;margin-top:24px">The invite is also attached for Outlook and Apple Calendar. Need to reschedule? Reply at least 24 hours before the call.</p>
+      ${
+        onGoogle
+          ? `<p style="line-height:1.7;color:#56655f">A Google Calendar invite with the same link is on its way separately. Need to reschedule? Reply at least 24 hours before the call.</p>`
+          : `<a href="${escapeHtml(event.googleUrl)}" style="display:inline-block;background:#0b1916;color:#f5f3ec;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Add to Google Calendar</a>
+      <p style="line-height:1.7;color:#56655f;margin-top:24px">The invite is also attached for Outlook and Apple Calendar. Need to reschedule? Reply at least 24 hours before the call.</p>`
+      }
       <p style="font-size:12px;color:#56655f;margin-top:24px">${escapeHtml(company.legalName)}, ${escapeHtml(companyAddress)}</p>
     </div>`,
   });
@@ -170,10 +196,10 @@ export async function confirmBooking(orderId: string, paymentId: string): Promis
     reply_to: booking.email,
     subject: `New discovery call: ${when} — ${booking.name}${booking.company ? ` (${booking.company})` : ""}`,
     attachments,
-    text: `When: ${when}\nJoin: ${meetUrl}\nName: ${booking.name}\nEmail: ${booking.email}\nPhone: ${booking.phone}\nCompany: ${booking.company ?? ""}\nGSTIN: ${booking.gstin ?? "(none)"}\nAgenda: ${booking.notes || "(none)"}\nAmount: ${formatRupees(booking.amountPaise)}\nPayment ID: ${paymentId}\nOrder ID: ${orderId}\nInvoice: ${billUrl ?? "NOT ISSUED, check COMPANY_GSTIN and logs"}\n\nAdd to Google Calendar: ${event.googleUrl}`,
+    text: `When: ${when}\nJoin: ${meetUrl}\nName: ${booking.name}\nEmail: ${booking.email}\nPhone: ${booking.phone}\nCompany: ${booking.company ?? ""}\nGSTIN: ${booking.gstin ?? "(none)"}\nAgenda: ${booking.notes || "(none)"}\nAmount: ${formatRupees(booking.amountPaise)}\nPayment ID: ${paymentId}\nOrder ID: ${orderId}\nInvoice: ${billUrl ?? "NOT ISSUED, check COMPANY_GSTIN and logs"}\n\n${onGoogle ? "It is on the connected Google Calendar." : `Not on a connected calendar: add it: ${event.googleUrl}`}`,
   });
 
-  return { outcome: "confirmed", booking, calendarUrl: event.googleUrl, invoiceUrl: billUrl };
+  return { outcome: "confirmed", booking, calendarUrl: onGoogle ? null : event.googleUrl, invoiceUrl: billUrl };
 }
 
 const billFor = (booking: Booking, paymentId: string) => ({

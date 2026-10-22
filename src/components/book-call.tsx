@@ -18,7 +18,7 @@ const dayLabel = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { ..
 const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString("en-IN", { ...india, hour: "numeric", minute: "2-digit" });
 const whenLabel = (iso: string) => `${new Date(iso).toLocaleDateString("en-IN", { ...india, weekday: "long", day: "numeric", month: "long" })}, ${timeLabel(iso)} IST`;
 
-type Booked = { startsAt: string; calendarUrl: string; invoiceUrl: string | null };
+type Booked = { startsAt: string; calendarUrl: string | null; invoiceUrl: string | null };
 
 /** Pick a slot, give details, pay; the server holds the slot while the buyer pays. */
 export function BookCall({ price, holdMinutes }: { price: number; holdMinutes: number }) {
@@ -122,9 +122,11 @@ export function BookCall({ price, holdMinutes }: { price: number; holdMinutes: n
           A calendar invite, the meeting link and your GST invoice are on their way to your inbox.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <a href={booked.calendarUrl} target="_blank" rel="noreferrer" className={`${buttonClass} w-auto`}>
-            Add to Google Calendar
-          </a>
+          {booked.calendarUrl && (
+            <a href={booked.calendarUrl} target="_blank" rel="noreferrer" className={`${buttonClass} w-auto`}>
+              Add to Google Calendar
+            </a>
+          )}
           {booked.invoiceUrl && (
             <a
               href={booked.invoiceUrl}

@@ -5,6 +5,7 @@ import { courses, enrollments, payments, user } from "@/db/schema";
 import { formatDateTime, formatRupees } from "@/lib/admin/ops";
 import { requireAdmin } from "@/lib/session";
 import { Badge, SectionTitle, Table } from "./learners/admin-ui";
+import { CalendarCard } from "./calendar-card";
 import { SetupStatus } from "./setup-status";
 
 type Stats = {
@@ -66,8 +67,9 @@ const paymentColumns = {
   course: courses.title,
 };
 
-export default async function AdminOverviewPage() {
+export default async function AdminOverviewPage({ searchParams }: PageProps<"/admin">) {
   await requireAdmin();
+  const calendarError = (await searchParams).calendar_error;
   const [{ stats, bySource }, unenrolled, abandoned] = await Promise.all([
     loadStats(),
     // Paid, but the learner has no active enrolment for the course: someone's money.
@@ -127,6 +129,7 @@ export default async function AdminOverviewPage() {
     <div>
       <h1 className="text-3xl font-semibold tracking-[-0.03em]">Overview</h1>
       <SetupStatus />
+      <CalendarCard error={typeof calendarError === "string" ? calendarError : undefined} />
       <dl className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
           <div key={card.label} className="rounded-2xl border border-line bg-white p-5">

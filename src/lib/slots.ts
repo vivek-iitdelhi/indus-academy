@@ -1,11 +1,17 @@
 // Discovery-call slots and calendar invites. Pure functions, so they run in tests.
+import { randomBytes } from "node:crypto";
 import { discoveryCall as call } from "../content/consulting.ts";
 
 const IST = "+05:30";
 const istDay = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
-/** Every bookable start time from `now` on, minus `taken` (epoch ms of held or booked slots). */
-export function openSlots(now: Date, taken: Set<number> = new Set()) {
+export type Busy = { start: Date; end: Date };
+
+/**
+ * Every bookable start time from `now` on, minus `taken` (epoch ms of held or booked slots)
+ * and any slot overlapping a `busy` period on the connected calendar.
+ */
+export function openSlots(now: Date, taken: Set<number> = new Set(), busy: Busy[] = []) {
   const earliest = now.getTime() + call.minNoticeHours * 3_600_000;
   const slots: Date[] = [];
   for (let d = 0; d <= call.daysAhead; d++) {
@@ -15,13 +21,20 @@ export function openSlots(now: Date, taken: Set<number> = new Set()) {
     if (!call.weekdays.includes(weekday) || call.blockedDates.includes(day)) continue;
     for (const time of call.startTimes) {
       const start = new Date(`${day}T${time}:00${IST}`);
-      if (start.getTime() >= earliest && !taken.has(start.getTime())) slots.push(start);
+      const end = callEnd(start);
+      const clashes = busy.some((b) => b.start < end && start < b.end);
+      if (start.getTime() >= earliest && !taken.has(start.getTime()) && !clashes) slots.push(start);
     }
   }
   return slots;
 }
 
-export const callEnd = (start: Date) => new Date(start.getTime() + call.minutes * 60_000);
+export function callEnd(start: Date) {
+  return new Date(start.getTime() + call.minutes * 60_000);
+}
+
+/** A private video room of its own, for when the connected calendar can't make a Meet link. */
+export const jitsiRoom = () => `https://meet.jit.si/IndusAI-${randomBytes(9).toString("base64url")}`;
 
 /** "Mon, 3 Nov, 2026, 11:30 am IST" */
 export const formatSlot = (start: Date) =>

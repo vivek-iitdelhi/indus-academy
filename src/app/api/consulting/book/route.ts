@@ -4,7 +4,7 @@ import { discoveryCall } from "@/content/consulting";
 import { site } from "@/content/site";
 import { db } from "@/db";
 import { bookings } from "@/db/schema";
-import { holdSlot, PAY_MINUTES } from "@/lib/bookings";
+import { calendarBusy, holdSlot, PAY_MINUTES } from "@/lib/bookings";
 import { cashfreeConfigured, cashfreeMode, createOrder } from "@/lib/cashfree";
 import { isGstin, withGstPaise } from "@/lib/gst";
 import { openSlots } from "@/lib/slots";
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   const now = new Date();
-  const offered = openSlots(now).some((s) => s.getTime() === startsAt.getTime());
+  const offered = openSlots(now, new Set(), await calendarBusy(now)).some((s) => s.getTime() === startsAt.getTime());
   if (!offered) return Response.json({ error: "That time is not available. Please pick another." }, { status: 409 });
 
   const orderId = `call_${randomUUID().replaceAll("-", "")}`;

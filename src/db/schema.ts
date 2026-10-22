@@ -388,8 +388,10 @@ export const bookings = pgTable(
     gstin: text("gstin"),
     billingAddress: text("billing_address"),
     amountPaise: integer("amount_paise").notNull(),
-    // This call's own video link, made when the booking is confirmed.
+    // This call's own video link, made when the booking is confirmed, and its event on the
+    // connected Google Calendar (null when the link is a Jitsi fallback).
     meetingUrl: text("meeting_url"),
+    googleEventId: text("google_event_id"),
     createdAt: createdAt(),
   },
   // At most one confirmed booking per slot, whatever races the app loses.
@@ -398,6 +400,18 @@ export const bookings = pgTable(
     index("bookings_starts_at_idx").on(t.startsAt),
   ],
 );
+
+/**
+ * The Google account an admin connected at /admin (one row, id "google"): discovery calls
+ * go on its calendar with a Meet link, and its busy times are not offered as slots.
+ */
+export const calendarConnections = pgTable("calendar_connections", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  connectedBy: text("connected_by").notNull(), // admin email
+  connectedAt: ts("connected_at").notNull().defaultNow(),
+});
 
 // ---------------------------------------------------------------------------
 // Forms (Google Forms-style, built at /admin/forms, filled in at /forms/<slug>).

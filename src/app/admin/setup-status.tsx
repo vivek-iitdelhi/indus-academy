@@ -8,7 +8,6 @@ const INTEGRATIONS = [
   { name: "Google sign-in", vars: ["AUTH_GOOGLE_ID", "AUTH_GOOGLE_SECRET"], optional: true },
   { name: "Payments", vars: ["CASHFREE_APP_ID", "CASHFREE_SECRET_KEY"] },
   { name: "GST invoices", vars: ["COMPANY_GSTIN"] },
-  { name: "Zoho Meeting links for calls", vars: ["ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN"], optional: true },
   { name: "Video storage", vars: ["R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "VIDEO_TOKEN_SECRET"] },
   { name: "Certificates", vars: ["CERTIFICATE_SECRET"] },
   { name: "Daily reminders", vars: ["CRON_SECRET"] },
