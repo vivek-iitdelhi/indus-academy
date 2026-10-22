@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: PageProps<"/forms/[slug]">): 
 }
 
 // The site header and footer come from the root layout; an embedded form hides them.
-const embeddedCss = "body>header,body>footer,body>a[href='#main']{display:none!important}";
+const embeddedCss = "body>header,body>footer,body>a[href='#main']{display:none!important}:root{--fm-top:0px}";
 
 function Notice({ settings, title, children }: { settings: FormSettings; title: string; children: ReactNode }) {
   return (
@@ -124,7 +124,7 @@ export default async function FormPage({ params, searchParams }: PageProps<"/for
 
     const mode: Mode = prefill ? "prefill" : preview ? "preview" : "live";
     return (
-      <FormColumn settings={settings}>
+      <FormColumn settings={settings} wide>
         {banner}
         <FormView
           slug={slug}
@@ -144,7 +144,7 @@ export default async function FormPage({ params, searchParams }: PageProps<"/for
   })();
 
   return (
-    <div className={embedded ? "" : "bg-paper-2/40"}>
+    <div className={embedded ? "" : "bg-paper-2/50"}>
       {embedded && <style>{embeddedCss}</style>}
       {body}
     </div>

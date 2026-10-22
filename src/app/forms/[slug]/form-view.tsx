@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import {
   acceptAttribute,
   checkResponse,
   EMAIL_FIELD,
   fileAccepted,
+  formatAnswer,
   isEmail,
   nextPage,
   pages,
@@ -17,6 +19,8 @@ import {
 } from "@/lib/forms/logic";
 import { isQuestion, type Answer, type Answers, type FormFile, type FormItem, type FormSettings, type QuestionItem } from "@/lib/forms/types";
 import { submitForm } from "./actions";
+import { ResponseCard, Ring, type CardLine } from "./response-card";
+import "./form.css";
 
 export type Mode = "live" | "preview" | "prefill";
 
@@ -30,42 +34,65 @@ type FieldProps<T extends QuestionItem["type"]> = {
 
 // --- Look -----------------------------------------------------------------------
 
-const card = "rounded-xl border bg-white p-5 sm:p-6";
+// Motion lives in form.css (fm-* classes): see the comment at its top.
+const card = "fm-card rounded-2xl border bg-white p-5 sm:p-7";
 const lineInput =
-  "block w-full border-0 border-b border-line bg-transparent px-0 py-2 text-ink placeholder:text-muted/60 transition-colors focus:border-[var(--accent)] focus:shadow-[0_1px_0_var(--accent)] focus:outline-none aria-[invalid=true]:border-red-600";
+  "block w-full border-0 border-b border-line bg-transparent px-0 py-2.5 text-[1.05rem] text-ink placeholder:text-muted/60 focus:outline-none aria-[invalid=true]:border-red-600";
 const boxInput =
-  "rounded-lg border border-line bg-white px-3 py-2 text-ink focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20";
-const tick = "size-5 shrink-0 accent-[var(--accent)]";
+  "min-h-11 rounded-2xl border border-line bg-white px-3.5 py-2.5 text-ink focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20";
+const tick = "fm-tick size-5 shrink-0 accent-[var(--accent)]";
+/** A full-width tappable row for one option; tinted while chosen. */
+const optionRow =
+  "-mx-3 flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 py-2 hover:bg-paper has-[:checked]:bg-[color-mix(in_srgb,var(--accent)_8%,white)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-saffron";
 const primaryButton =
-  "inline-flex h-10 items-center justify-center rounded-lg bg-[var(--accent)] px-6 text-sm font-medium text-white transition hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-saffron disabled:opacity-60";
+  "inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-7 text-sm font-medium text-white transition-[filter] duration-150 hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-saffron disabled:opacity-60";
 const secondaryButton =
-  "inline-flex h-10 items-center justify-center rounded-lg border border-line bg-white px-6 text-sm font-medium text-[var(--accent)] transition hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-saffron";
-const textButton = "rounded px-2 py-1 text-sm font-medium text-[var(--accent)] hover:bg-paper focus-visible:outline-2 focus-visible:outline-saffron";
+  "inline-flex h-11 items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-6 text-sm font-medium text-ink hover:border-ink/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-saffron";
+const textButton = "rounded-full px-3 py-2 text-sm font-medium text-muted hover:bg-white hover:text-ink focus-visible:outline-2 focus-visible:outline-saffron";
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** The underline that draws in on focus wraps the field (inputs can't carry pseudo-elements). */
+function Line({ className = "", children }: { className?: string; children: ReactNode }) {
+  return <span className={`fm-line ${className}`}>{children}</span>;
+}
+
+const arrow = (
+  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
 
 const safeColor = (c: string | undefined) => (c && /^#[0-9a-f]{3,8}$/i.test(c) ? c : "#0f5d4a");
 
 /** The centred column, accent colour and optional header image. Used by every state of the page. */
-export function FormColumn({ settings, children }: { settings: FormSettings; children: ReactNode }) {
+export function FormColumn({ settings, wide = false, children }: { settings: FormSettings; wide?: boolean; children: ReactNode }) {
   const image = settings.theme?.headerImage;
   return (
-    <div className="mx-auto w-full max-w-[640px] px-3 py-6 sm:py-10" style={{ "--accent": safeColor(settings.theme?.color) } as CSSProperties}>
+    // `wide`: room on the right for the response card on xl screens, so form + card sit centred together.
+    <div className={`mx-auto w-full max-w-[680px] px-3 pt-6 pb-28 sm:pt-12 xl:pb-16 ${wide ? "xl:max-w-[1064px] xl:pr-[23.5rem]" : ""}`} style={{ "--accent": safeColor(settings.theme?.color) } as CSSProperties}>
       {image && (
         // eslint-disable-next-line @next/next/no-img-element -- admin-supplied URL on any host
-        <img src={image} alt="" className="mb-3 aspect-[4/1] w-full rounded-xl object-cover" />
+        <img src={image} alt="" className="mb-3 aspect-[4/1] w-full rounded-2xl object-cover" />
       )}
       <div className="space-y-3">{children}</div>
-      <p className="mt-6 text-center text-xs text-muted">Never submit passwords through this form.</p>
+      <p className="mt-8 text-center text-xs text-muted">Never submit passwords through this form.</p>
     </div>
   );
 }
 
-/** The title card: accent top border, title, and whatever goes under it. */
-export function TitleCard({ title, children }: { title: string; children?: ReactNode }) {
+/** The title card: accent bar that draws in, title, and whatever goes under it. */
+export function TitleCard({ title, eyebrow, children }: { title: string; eyebrow?: string; children?: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-white">
-      <div className="h-2.5 bg-[var(--accent)]" />
-      <div className="p-5 sm:p-6">
-        <h1 className="text-3xl font-semibold leading-tight tracking-[-0.02em] text-balance">{title}</h1>
+    <div className="overflow-hidden rounded-2xl border border-line bg-white">
+      <div className="fm-bar h-2 bg-[var(--accent)]" />
+      <div className="fm-rise p-5 sm:p-8">
+        <p className="inline-flex items-center gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-muted">
+          <span className="size-1.5 rounded-full bg-saffron" aria-hidden="true" />
+          <span className={eyebrow ? "hidden sm:inline" : ""}>Indus AI Academy{eyebrow ? " · " : ""}</span>
+          {eyebrow}
+        </p>
+        <h1 className="mt-4 overflow-visible pb-[0.1em] text-[2rem] font-semibold leading-[1.08] tracking-[-0.03em] text-balance sm:text-[2.6rem]">{title}</h1>
         {children}
       </div>
     </div>
@@ -126,6 +153,7 @@ export function FormView(props: {
   const { slug, title, description, items, settings, mode, userEmail } = props;
   const view = useMemo(() => displayPages(items, settings, props.seed), [items, settings, props.seed]);
   const raw = useMemo(() => pages(items), [items]);
+  const byId = useMemo(() => new Map(items.filter(isQuestion).map((item) => [item.id, item])), [items]);
 
   const [answers, setAnswers] = useState<Answers>(props.initialAnswers);
   const [history, setHistory] = useState<number[]>([0]);
@@ -134,18 +162,23 @@ export function FormView(props: {
   const [wantCopy, setWantCopy] = useState(false);
   const [editing, setEditing] = useState(props.editing);
   const [status, setStatus] = useState<"filling" | "sending" | "done">("filling");
+  const [reference, setReference] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [uploads, setUploads] = useState(0);
   const [link, setLink] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
+  // The question being typed into: its card keeps the answer it had until the field is left,
+  // then the new one is inked in. `typing` also tucks the bottom bar away for the keyboard.
+  const [focused, setFocused] = useState<{ id: string; before: string; typing: boolean } | null>(null);
   // Scroll/focus requests, handled after render. A new object each time, so repeats still fire.
   const [focus, setFocus] = useState<{ id: string } | null>(null);
   const top = useRef<HTMLDivElement>(null);
+  const [date] = useState(() => new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }));
 
   useEffect(() => {
     if (!focus) return;
     const el = focus.id === "top" ? top.current : document.getElementById(`item-${focus.id}`);
-    el?.scrollIntoView({ behavior: "smooth", block: focus.id === "top" ? "start" : "center" });
+    el?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: focus.id === "top" ? "start" : "center" });
     if (focus.id !== "top") el?.querySelector<HTMLElement>("input:not([type=hidden]):not([tabindex='-1']), textarea, select, button")?.focus({ preventScroll: true });
   }, [focus]);
 
@@ -153,6 +186,20 @@ export function FormView(props: {
   const next = nextPage(items, current, answers);
   const askEmail = settings.collectEmail === "input";
   const copyBox = settings.sendCopy === "request" && (askEmail || Boolean(userEmail));
+
+  // Questions on the path the answers so far lead along: what the progress and the card count.
+  const path = [...history.slice(0, -1), ...pathFrom(items, current, answers)];
+  const asked = path.flatMap((page) => raw[page].filter(isQuestion));
+  const answered = asked.filter((item) => answers[item.id] !== undefined).length;
+  const cardText = (item: QuestionItem) =>
+    focused?.id === item.id && (item.type === "short" || item.type === "paragraph") ? focused.before : formatAnswer(item, answers[item.id]);
+  const heroItem = asked.find((item) => item.type === "short");
+  const hero: CardLine | undefined = heroItem && { id: heroItem.id, label: heroItem.title, value: cardText(heroItem) };
+  const lines: CardLine[] = asked
+    .filter((item) => item !== heroItem && cardTypes.has(item.type))
+    .slice(0, 6)
+    .map((item) => ({ id: item.id, label: item.title, value: cardText(item) }));
+  const cardProps = { formTitle: title, hero, lines, done: answered, total: asked.length, date };
 
   const update = (id: string): Update => (value) => {
     setAnswers((prev) => {
@@ -167,6 +214,19 @@ export function FormView(props: {
       const out = { ...prev };
       delete out[id];
       return out;
+    });
+  };
+
+  /** A small sideways nudge on the cards that need attention. */
+  const nudge = (ids: string[]) => {
+    if (reducedMotion()) return;
+    requestAnimationFrame(() => {
+      for (const id of ids) {
+        document.getElementById(`item-${id}`)?.animate(
+          [{ transform: "none" }, { transform: "translateX(-6px)" }, { transform: "translateX(5px)" }, { transform: "translateX(-2px)" }, { transform: "none" }],
+          { duration: 340, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+        );
+      }
     });
   };
 
@@ -186,22 +246,43 @@ export function FormView(props: {
     }
     setErrors(found);
     const first = [EMAIL_FIELD, ...view[current].map((i) => i.id)].find((id) => id in found);
-    if (first) setFocus({ id: first });
+    if (first) {
+      setFocus({ id: first });
+      nudge(Object.keys(found));
+    }
     return !first;
+  };
+
+  /** Moves between sections; the questions slide forwards or back where the browser can. */
+  const turn = (dir: "forward" | "back", change: () => void) => {
+    if (!document.startViewTransition || reducedMotion()) {
+      change();
+      setFocus({ id: "top" });
+      return;
+    }
+    const root = document.documentElement;
+    root.dataset.fmDir = dir;
+    const transition = document.startViewTransition(() => {
+      flushSync(change);
+      top.current?.scrollIntoView({ block: "start" });
+    });
+    transition.finished.finally(() => delete root.dataset.fmDir);
   };
 
   const goNext = () => {
     if (next === "submit" || !checkPage()) return;
-    setMessage(null);
-    setHistory([...history, next]);
-    setFocus({ id: "top" });
+    turn("forward", () => {
+      setMessage(null);
+      setHistory([...history, next]);
+    });
   };
 
   const goBack = () => {
-    setErrors({});
-    setMessage(null);
-    setHistory(history.slice(0, -1));
-    setFocus({ id: "top" });
+    turn("back", () => {
+      setErrors({});
+      setMessage(null);
+      setHistory(history.slice(0, -1));
+    });
   };
 
   const submit = async () => {
@@ -222,6 +303,7 @@ export function FormView(props: {
       result = { ok: false, error: "We couldn't send your response. Check your connection and try again." };
     }
     if (result.ok) {
+      setReference(result.ref);
       setStatus("done");
       setFocus({ id: "top" });
       return;
@@ -236,6 +318,7 @@ export function FormView(props: {
       setHistory(history.slice(0, at + 1));
       const page = history[at];
       setFocus({ id: [EMAIL_FIELD, ...view[page].map((i) => i.id)].find((id) => id in fieldErrors)! });
+      nudge(Object.keys(fieldErrors));
     }
   };
 
@@ -262,16 +345,32 @@ export function FormView(props: {
   };
 
   if (status === "done") {
+    const stamp = mode === "preview" ? "PREVIEW" : `REF ${reference}`;
     return (
-      <div ref={top} className="scroll-mt-24">
-        <TitleCard title={title}>
-          <p className="mt-4 whitespace-pre-wrap leading-relaxed">{settings.confirmation || "Your response has been recorded."}</p>
-          {mode === "preview" && <p className="mt-3 text-sm text-muted">This was a preview, so the response was not saved.</p>}
-          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+      <div ref={top} className="relative scroll-mt-24 space-y-3 xl:min-h-[38rem]">
+        {/* The card stays where it filled in (beside the form on xl) and is stamped there. */}
+        <div className="fm-card-in pb-2 xl:hidden">
+          <ResponseCard {...cardProps} stamp={stamp} />
+        </div>
+        <aside className="absolute inset-y-0 left-full ml-10 hidden w-[19rem] xl:block">
+          <div className="sticky top-[calc(var(--fm-top)+2rem)]">
+            <ResponseCard {...cardProps} stamp={stamp} />
+          </div>
+        </aside>
+        <TitleCard title={mode === "preview" ? "Preview complete" : editing ? "Response updated" : "You're in the register"}>
+          <p className="mt-4 whitespace-pre-wrap leading-relaxed text-ink/85">{settings.confirmation || "Your response has been recorded."}</p>
+          {mode === "preview" ? (
+            <p className="mt-3 text-sm text-muted">This was a preview, so the response was not saved.</p>
+          ) : (
+            <p className="mt-3 text-sm text-muted">
+              Reference <span className="font-mono font-medium text-ink">{reference}</span> · {date}. A screenshot of this page is your proof of submission.
+            </p>
+          )}
+          <div className="mt-6 flex flex-wrap gap-3">
             {settings.showSubmitAnother && !settings.limitOne && (
               <button
                 type="button"
-                className="font-medium text-[var(--accent)] underline underline-offset-4"
+                className={secondaryButton}
                 onClick={() => {
                   setEditing(false);
                   setStatus("filling");
@@ -282,7 +381,7 @@ export function FormView(props: {
               </button>
             )}
             {settings.allowEdit && mode === "live" && (
-              <a href={`/forms/${slug}?edit=1`} className="font-medium text-[var(--accent)] underline underline-offset-4">
+              <a href={`/forms/${slug}?edit=1`} className={secondaryButton}>
                 Edit your response
               </a>
             )}
@@ -295,128 +394,179 @@ export function FormView(props: {
   const remaining = pathFrom(items, current, answers).length;
   const total = history.length - 1 + remaining;
   const hasRequired = items.some((i) => isQuestion(i) && i.required) || askEmail;
+  const questionCount = items.filter(isQuestion).length;
 
   return (
-    <div ref={top} className="scroll-mt-24 space-y-3">
-      <TitleCard title={title}>
-        {current === 0 && description && <p className="mt-3 whitespace-pre-wrap leading-relaxed text-ink/80">{description}</p>}
-        {(settings.collectEmail === "verified" && userEmail) || editing || hasRequired ? (
-          <div className="mt-4 space-y-1 border-t border-line pt-3 text-sm">
-            {settings.collectEmail === "verified" && userEmail && (
-              <p className="text-muted">
-                Recording <span className="font-medium text-ink">{userEmail}</span> with your response
-              </p>
-            )}
-            {editing && <p className="text-muted">You&apos;re editing the response you submitted earlier.</p>}
-            {hasRequired && <p className="text-red-700">* Indicates required question</p>}
-          </div>
-        ) : null}
-      </TitleCard>
+    <div
+      ref={top}
+      className="relative scroll-mt-24"
+      onFocus={(e) => {
+        const id = (e.target as HTMLElement).closest<HTMLElement>("[data-item]")?.dataset.item;
+        const item = id ? byId.get(id) : undefined;
+        const typing = (e.target as HTMLElement).matches("input:not([type=radio]):not([type=checkbox]):not([type=file]), textarea");
+        if (focused?.id === id && focused?.typing === typing) return;
+        setFocused(item ? { id: item.id, before: focused?.id === item.id ? focused.before : formatAnswer(item, answers[item.id]), typing } : typing ? { id: "", before: "", typing } : null);
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(null);
+      }}
+    >
+      {/* Answered so far, along the top under the site header. */}
+      <div className="pointer-events-none fixed inset-x-0 top-[var(--fm-top)] z-40 h-[3px] bg-transparent" aria-hidden="true">
+        <div className="fm-progress h-full bg-[var(--accent)]" style={{ transform: `scaleX(${asked.length ? answered / asked.length : 0})` }} />
+      </div>
 
-      {current === 0 && (askEmail || copyBox) && (
-        <div id={`item-${EMAIL_FIELD}`} className={`${card} ${errors[EMAIL_FIELD] ? "border-red-600" : "border-line"}`}>
-          {askEmail && (
-            <>
-              <label htmlFor="respondent-email" className="block font-medium">
-                Email<span className="text-red-700" aria-hidden="true"> *</span>
-              </label>
-              <input
-                id="respondent-email"
-                type="email"
-                autoComplete="email"
-                placeholder="Your email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setErrors((prev) => {
-                    const out = { ...prev };
-                    delete out[EMAIL_FIELD];
-                    return out;
-                  });
-                }}
-                aria-required
-                aria-invalid={Boolean(errors[EMAIL_FIELD]) || undefined}
-                aria-describedby={errors[EMAIL_FIELD] ? `${EMAIL_FIELD}-error` : undefined}
-                className={`mt-3 sm:max-w-sm ${lineInput}`}
-              />
-              <ErrorText id={EMAIL_FIELD} error={errors[EMAIL_FIELD]} />
-            </>
-          )}
-          {copyBox && (
-            <label className={`flex items-center gap-3 text-sm ${askEmail ? "mt-5" : ""}`}>
-              <input type="checkbox" className={tick} checked={wantCopy} onChange={(e) => setWantCopy(e.target.checked)} />
-              Send me a copy of my responses{!askEmail && userEmail ? ` (${userEmail})` : ""}
-            </label>
-          )}
-        </div>
-      )}
-
-      {view[current].map((item) => (
-        <Item key={`${item.id}-${resetKey}`} item={item} slug={slug} mode={mode} answers={answers} errors={errors} update={update} onUploads={setUploads} />
-      ))}
-
-      {message && (
-        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {message}
-        </p>
-      )}
-
-      {link && (
-        <div className={`${card} border-line`}>
-          <label htmlFor="prefill-link" className="block text-sm font-medium">
-            Pre-filled link
-          </label>
-          <div className="mt-2 flex gap-2">
-            <input id="prefill-link" readOnly value={link} onFocus={(e) => e.target.select()} className={`min-w-0 flex-1 text-sm ${boxInput}`} />
-            <CopyButton text={link} />
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 pt-2">
-        <div className="flex gap-3">
-          {history.length > 1 && (
-            <button type="button" className={secondaryButton} onClick={goBack}>
-              Back
-            </button>
-          )}
-          {next !== "submit" ? (
-            <button type="button" className={mode === "prefill" ? secondaryButton : primaryButton} onClick={goNext}>
-              Next
-            </button>
-          ) : mode !== "prefill" ? (
-            <button type="button" className={primaryButton} onClick={submit} disabled={status === "sending"}>
-              {status === "sending" ? "Submitting…" : "Submit"}
-            </button>
-          ) : null}
-          {mode === "prefill" && (
-            <button type="button" className={primaryButton} onClick={getLink}>
-              Get link
-            </button>
-          )}
-        </div>
-        {settings.showProgress && total > 1 && (
-          <div className="flex flex-1 items-center gap-3 text-xs text-muted sm:justify-center">
-            <div
-              className="h-2 w-28 overflow-hidden rounded-full bg-paper-2"
-              role="progressbar"
-              aria-valuemin={1}
-              aria-valuemax={total}
-              aria-valuenow={history.length}
-              aria-label="Form progress"
-            >
-              <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${(history.length / total) * 100}%` }} />
+      <div className="space-y-3">
+        <TitleCard title={title} eyebrow={`${questionCount} question${questionCount === 1 ? "" : "s"}${raw.length > 1 ? ` · ${raw.length} sections` : ""}`}>
+          {current === 0 && description && <p className="mt-4 max-w-[58ch] whitespace-pre-wrap text-[1.05rem] leading-relaxed text-ink/75">{description}</p>}
+          {(settings.collectEmail === "verified" && userEmail) || editing || hasRequired ? (
+            <div className="mt-6 space-y-1 border-t border-line pt-4 text-sm">
+              {settings.collectEmail === "verified" && userEmail && (
+                <p className="text-muted">
+                  Recording <span className="font-medium text-ink">{userEmail}</span> with your response
+                </p>
+              )}
+              {editing && <p className="text-muted">You&apos;re editing the response you submitted earlier.</p>}
+              {hasRequired && (
+                <p className="text-muted">
+                  <span className="text-red-700">*</span> Required
+                </p>
+              )}
             </div>
-            Page {history.length} of {total}
+          ) : null}
+        </TitleCard>
+
+        <div className="space-y-3" style={{ viewTransitionName: "fm-page" }}>
+          {current === 0 && (askEmail || copyBox) && (
+            <div id={`item-${EMAIL_FIELD}`} className={`${card} ${errors[EMAIL_FIELD] ? "border-red-600" : "border-line"}`} data-invalid={errors[EMAIL_FIELD] ? "" : undefined}>
+              {askEmail && (
+                <>
+                  <label htmlFor="respondent-email" className="block text-[1.05rem] font-medium">
+                    Email<span className="text-red-700" aria-hidden="true"> *</span>
+                  </label>
+                  <Line className="mt-3 sm:max-w-sm">
+                    <input
+                      id="respondent-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="Your email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setErrors((prev) => {
+                          const out = { ...prev };
+                          delete out[EMAIL_FIELD];
+                          return out;
+                        });
+                      }}
+                      aria-required
+                      aria-invalid={Boolean(errors[EMAIL_FIELD]) || undefined}
+                      aria-describedby={errors[EMAIL_FIELD] ? `${EMAIL_FIELD}-error` : undefined}
+                      className={lineInput}
+                    />
+                  </Line>
+                  <ErrorText id={EMAIL_FIELD} error={errors[EMAIL_FIELD]} />
+                </>
+              )}
+              {copyBox && (
+                <label className={`${optionRow} text-sm ${askEmail ? "mt-4" : ""}`}>
+                  <input type="checkbox" className={tick} checked={wantCopy} onChange={(e) => setWantCopy(e.target.checked)} />
+                  Send me a copy of my responses{!askEmail && userEmail ? ` (${userEmail})` : ""}
+                </label>
+              )}
+            </div>
+          )}
+
+          {view[current].map((item) => (
+            <Item key={`${item.id}-${resetKey}`} item={item} slug={slug} mode={mode} answers={answers} errors={errors} update={update} onUploads={setUploads} />
+          ))}
+        </div>
+
+        {message && (
+          <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {message}
+          </p>
+        )}
+
+        {link && (
+          <div className={`${card} border-line`}>
+            <label htmlFor="prefill-link" className="block text-sm font-medium">
+              Pre-filled link
+            </label>
+            <div className="mt-2 flex gap-2">
+              <input id="prefill-link" readOnly value={link} onFocus={(e) => e.target.select()} className={`min-w-0 flex-1 text-sm ${boxInput}`} />
+              <CopyButton text={link} />
+            </div>
           </div>
         )}
-        <button type="button" className={`ml-auto ${textButton}`} onClick={clearForm}>
-          Clear form
-        </button>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 pt-3">
+          <div className="flex gap-3">
+            {history.length > 1 && (
+              <button type="button" className={secondaryButton} onClick={goBack}>
+                Back
+              </button>
+            )}
+            {next !== "submit" ? (
+              <button type="button" className={mode === "prefill" ? secondaryButton : primaryButton} onClick={goNext}>
+                Next {arrow}
+              </button>
+            ) : mode !== "prefill" ? (
+              <button type="button" className={primaryButton} onClick={submit} disabled={status === "sending"}>
+                {status === "sending" ? "Submitting…" : <>Submit {arrow}</>}
+              </button>
+            ) : null}
+            {mode === "prefill" && (
+              <button type="button" className={primaryButton} onClick={getLink}>
+                Get link
+              </button>
+            )}
+          </div>
+          {settings.showProgress && total > 1 && (
+            <p className="flex-1 text-xs text-muted sm:text-center" role="status">
+              Section {history.length} of {total}
+            </p>
+          )}
+          <button type="button" className={`ml-auto ${textButton}`} onClick={clearForm}>
+            Clear form
+          </button>
+        </div>
+      </div>
+
+      {/* Wide screens: the card rides beside the form. */}
+      <aside className="absolute inset-y-0 left-full ml-10 hidden w-[19rem] xl:block" aria-label="Your answers so far">
+        <div className="sticky top-[calc(var(--fm-top)+2rem)]">
+          <ResponseCard {...cardProps} />
+          <p className="mt-3 px-1 text-xs leading-relaxed text-muted">Your answers are written onto this card as you go. Check them before you submit.</p>
+        </div>
+      </aside>
+
+      {/* Narrower screens: a slim bar with the count, out of the way while typing. */}
+      <div
+        className="fm-dock fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 backdrop-blur xl:hidden"
+        data-hidden={focused?.typing ? "" : undefined}
+      >
+        <div className="mx-auto flex max-w-[680px] items-center gap-3 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <Ring done={answered} total={asked.length} size={30} />
+          <p className="text-sm">
+            <span className="font-medium">
+              {answered} of {asked.length}
+            </span>{" "}
+            <span className="text-muted">answered</span>
+          </p>
+          {total > 1 && (
+            <p className="ml-auto font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted">
+              Section {history.length}/{total}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
+/** Question types whose answer reads well as one line on the response card. */
+const cardTypes = new Set<string>(["short", "choice", "dropdown", "checkboxes", "date", "time", "scale", "rating"]);
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -472,10 +622,11 @@ function Item({
 
   if (item.type === "section") {
     return (
-      <div className="overflow-hidden rounded-xl border border-line bg-white">
-        <div className="h-2 bg-[var(--accent)]" />
-        <div className="p-5 sm:p-6">
-          <h2 className="text-xl font-semibold">{item.title}</h2>
+      <div className="overflow-hidden rounded-2xl border border-line bg-white">
+        <div className="h-1.5 bg-[var(--accent)]" />
+        <div className="p-5 sm:p-7">
+          <p className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-muted">Section</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.02em]">{item.title}</h2>
           {description}
         </div>
       </div>
@@ -534,8 +685,8 @@ function Item({
   const field = { value: answers[id], update: update(id), aria };
 
   return (
-    <div id={`item-${id}`} className={`${card} scroll-mt-24 ${error ? "border-red-600" : "border-line"}`}>
-      <div id={labelId} className="font-medium leading-snug">
+    <div id={`item-${id}`} data-item={id} data-invalid={error ? "" : undefined} className={`${card} scroll-mt-24 ${error ? "border-red-600" : "border-line"}`}>
+      <div id={labelId} className="text-[1.05rem] font-medium leading-snug">
         {item.title || "Untitled question"}
         {item.required && (
           <span className="text-red-700" aria-hidden="true">
@@ -583,28 +734,32 @@ function ShortField({ item, value, update, aria }: FieldProps<"short">) {
   const v = item.validation;
   const inputMode = v?.kind === "number" ? "decimal" : v?.kind === "text" && v.op === "email" ? "email" : v?.kind === "text" && v.op === "url" ? "url" : undefined;
   return (
-    <input
-      type="text"
-      value={str(value)}
-      onChange={(e) => update(orUndefined(e.target.value))}
-      inputMode={inputMode}
-      placeholder="Your answer"
-      className={`sm:max-w-sm ${lineInput}`}
-      {...aria}
-    />
+    <Line className="sm:max-w-md">
+      <input
+        type="text"
+        value={str(value)}
+        onChange={(e) => update(orUndefined(e.target.value))}
+        inputMode={inputMode}
+        placeholder="Your answer"
+        className={lineInput}
+        {...aria}
+      />
+    </Line>
   );
 }
 
 function ParagraphField({ value, update, aria }: FieldProps<"paragraph">) {
   return (
-    <textarea
-      value={str(value)}
-      onChange={(e) => update(orUndefined(e.target.value))}
-      placeholder="Your answer"
-      rows={1}
-      className={`field-sizing-content min-h-10 resize-none ${lineInput}`}
-      {...aria}
-    />
+    <Line>
+      <textarea
+        value={str(value)}
+        onChange={(e) => update(orUndefined(e.target.value))}
+        placeholder="Your answer"
+        rows={1}
+        className={`field-sizing-content min-h-11 resize-none ${lineInput}`}
+        {...aria}
+      />
+    </Line>
   );
 }
 
@@ -616,7 +771,7 @@ function ChoiceField({ item, value, update, aria }: FieldProps<"choice">) {
   return (
     <div role="radiogroup" {...aria}>
       {labels.map((label) => (
-        <label key={label} className="flex cursor-pointer items-center gap-3 py-2">
+        <label key={label} className={optionRow}>
           <input
             type="radio"
             name={item.id}
@@ -631,7 +786,7 @@ function ChoiceField({ item, value, update, aria }: FieldProps<"choice">) {
         </label>
       ))}
       {item.other && (
-        <div className="flex items-center gap-3 py-2">
+        <div className={`${optionRow} cursor-auto`}>
           <input
             type="radio"
             name={item.id}
@@ -644,17 +799,19 @@ function ChoiceField({ item, value, update, aria }: FieldProps<"choice">) {
             }}
           />
           <span aria-hidden="true">Other:</span>
-          <input
-            type="text"
-            aria-label="Other answer"
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              setOtherOn(true);
-              update(orUndefined(e.target.value));
-            }}
-            className={`flex-1 ${lineInput}`}
-          />
+          <Line className="flex-1">
+            <input
+              type="text"
+              aria-label="Other answer"
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setOtherOn(true);
+                update(orUndefined(e.target.value));
+              }}
+              className={lineInput}
+            />
+          </Line>
         </div>
       )}
       <ClearSelection
@@ -682,7 +839,7 @@ function CheckboxesField({ item, value, update, aria }: FieldProps<"checkboxes">
   return (
     <div role="group" {...aria}>
       {labels.map((label) => (
-        <label key={label} className="flex cursor-pointer items-center gap-3 py-2">
+        <label key={label} className={optionRow}>
           <input
             type="checkbox"
             className={tick}
@@ -693,7 +850,7 @@ function CheckboxesField({ item, value, update, aria }: FieldProps<"checkboxes">
         </label>
       ))}
       {item.other && (
-        <div className="flex items-center gap-3 py-2">
+        <div className={`${optionRow} cursor-auto`}>
           <input
             type="checkbox"
             className={tick}
@@ -705,17 +862,19 @@ function CheckboxesField({ item, value, update, aria }: FieldProps<"checkboxes">
             }}
           />
           <span aria-hidden="true">Other:</span>
-          <input
-            type="text"
-            aria-label="Other answer"
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              setOtherOn(true);
-              save(chosen, true, e.target.value);
-            }}
-            className={`flex-1 ${lineInput}`}
-          />
+          <Line className="flex-1">
+            <input
+              type="text"
+              aria-label="Other answer"
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setOtherOn(true);
+                save(chosen, true, e.target.value);
+              }}
+              className={lineInput}
+            />
+          </Line>
         </div>
       )}
     </div>
@@ -1041,7 +1200,7 @@ function FileField({
                 <span className="text-muted">{Math.round(u.progress * 100)}%</span>
               </div>
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-paper-2" role="progressbar" aria-label={`Uploading ${u.name}`} aria-valuenow={Math.round(u.progress * 100)} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full bg-[var(--accent)] transition-[width]" style={{ width: `${u.progress * 100}%` }} />
+                <div className="fm-progress h-full bg-[var(--accent)]" style={{ transform: `scaleX(${u.progress})` }} />
               </div>
             </li>
           ))}

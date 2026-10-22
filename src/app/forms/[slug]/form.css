@@ -1,0 +1,200 @@
+/*
+ * Motion for the public form (/forms/<slug>). The idea: answers are ink on paper, and the
+ * response card beside the form fills in as you go. Only transform, opacity and clip-path
+ * move; everything below sits behind prefers-reduced-motion, so with reduced motion the
+ * page is simply static.
+ */
+
+:root {
+  --fm-ease-primary: cubic-bezier(0.2, 0, 0, 1); /* taps, focus, selections */
+  --fm-ease-reveal: cubic-bezier(0.65, 0, 0.35, 1); /* ink strokes */
+  --fm-ease-transition: cubic-bezier(0.22, 1, 0.36, 1); /* moving between sections */
+  --fm-top: 4rem; /* below the sticky site header; 0 when embedded */
+}
+
+/* Underline that draws in from the left when the field has focus. */
+.fm-line {
+  position: relative;
+  display: block;
+}
+.fm-line::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.fm-line:focus-within::after {
+  transform: scaleX(1);
+}
+
+/* The focused question gets an accent rule down its left edge and lifts a little. */
+.fm-card {
+  position: relative;
+  isolation: isolate;
+}
+.fm-card::before {
+  content: "";
+  position: absolute;
+  inset: 12px auto 12px -1px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent);
+  transform: scaleY(0);
+}
+.fm-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow: 0 12px 32px -16px rgb(11 25 22 / 0.28);
+  opacity: 0;
+}
+.fm-card:focus-within::before {
+  transform: scaleY(1);
+}
+.fm-card:focus-within::after {
+  opacity: 1;
+}
+.fm-card[data-invalid]::before {
+  background: #dc2626;
+  transform: scaleY(1);
+}
+
+/* Progress along the top, under the site header. */
+.fm-progress {
+  transform-origin: left;
+}
+
+/* The bar at the bottom on small screens steps aside while the keyboard is up. */
+.fm-dock[data-hidden] {
+  transform: translateY(110%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fm-line::after {
+    transition: transform 220ms var(--fm-ease-primary);
+  }
+  .fm-card::before {
+    transition: transform 200ms var(--fm-ease-primary);
+  }
+  .fm-card::after {
+    transition: opacity 200ms var(--fm-ease-primary);
+  }
+  .fm-progress {
+    transition: transform 380ms var(--fm-ease-transition);
+  }
+  .fm-dock {
+    transition: transform 240ms var(--fm-ease-primary);
+  }
+
+  /* Header: the accent bar draws across, then the title settles. */
+  .fm-bar {
+    transform-origin: left;
+    animation: fm-draw 520ms var(--fm-ease-reveal) both;
+  }
+  .fm-rise {
+    animation: fm-rise 360ms var(--fm-ease-primary) 120ms both;
+  }
+
+  /* A choice "stamps" in when it becomes selected. */
+  .fm-tick:checked {
+    animation: fm-stamp 220ms var(--fm-ease-primary);
+  }
+
+  /* An answer is written onto the card, left to right, like a pen stroke. */
+  .fm-ink {
+    animation: fm-ink 460ms var(--fm-ease-reveal) both;
+  }
+
+  /* The "received" stamp lands on the card after a beat. */
+  .fm-stamp {
+    animation: fm-stamp-land 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms both;
+  }
+  .fm-card-in {
+    animation: fm-rise 420ms var(--fm-ease-transition) both;
+  }
+
+  /* Next / Back: the questions slide forwards or back; the rest of the page holds still. */
+  html[data-fm-dir]::view-transition-old(root),
+  html[data-fm-dir]::view-transition-new(root) {
+    animation: none;
+  }
+  html[data-fm-dir="forward"]::view-transition-old(fm-page) {
+    animation: fm-out-left 260ms var(--fm-ease-transition) both;
+  }
+  html[data-fm-dir="forward"]::view-transition-new(fm-page) {
+    animation: fm-in-right 380ms var(--fm-ease-transition) both;
+  }
+  html[data-fm-dir="back"]::view-transition-old(fm-page) {
+    animation: fm-out-right 260ms var(--fm-ease-transition) both;
+  }
+  html[data-fm-dir="back"]::view-transition-new(fm-page) {
+    animation: fm-in-left 380ms var(--fm-ease-transition) both;
+  }
+}
+
+@keyframes fm-draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes fm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes fm-stamp {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+}
+@keyframes fm-ink {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes fm-stamp-land {
+  from {
+    opacity: 0;
+    transform: rotate(-16deg) scale(1.7);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+@keyframes fm-out-left {
+  to {
+    opacity: 0;
+    transform: translateX(-48px);
+  }
+}
+@keyframes fm-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(64px);
+  }
+}
+@keyframes fm-out-right {
+  to {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+}
+@keyframes fm-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-64px);
+  }
+}

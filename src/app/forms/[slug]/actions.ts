@@ -13,7 +13,7 @@ import { getUser, isAdminEmail } from "@/lib/session";
 import { formFileSize, isFormFileKey } from "@/lib/video";
 
 export type SubmitInput = { answers: Answers; email?: string; sendCopy?: boolean; edit?: boolean; preview?: boolean };
-export type SubmitResult = { ok: true; preview?: boolean } | { ok: false; error: string; fieldErrors?: Record<string, string> };
+export type SubmitResult = { ok: true; preview?: boolean; /** Short reference shown on the confirmation stamp. */ ref: string } | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 const from = () => process.env.ENQUIRY_FROM_EMAIL ?? `${site.name} <enquiries@indusai.academy>`;
 
@@ -75,18 +75,24 @@ export async function submitForm(slug: string, input: SubmitInput): Promise<Subm
   }
   if (Object.keys(fieldErrors).length) return { ok: false, error: "Some answers need attention.", fieldErrors };
 
-  if (preview) return { ok: true, preview: true };
+  if (preview) return { ok: true, preview: true, ref: "PREVIEW" };
 
+  let responseId: string;
   if (editing) {
     await db.update(formResponses).set({ answers, email }).where(eq(formResponses.id, previous.id));
+    responseId = previous.id;
   } else {
-    await db.insert(formResponses).values({ formId: form.id, userId: user?.id ?? null, email, answers });
+    const [row] = await db
+      .insert(formResponses)
+      .values({ formId: form.id, userId: user?.id ?? null, email, answers })
+      .returning({ id: formResponses.id });
+    responseId = row.id;
   }
 
   const copyTo = email ?? user?.email ?? null;
   const wantsCopy = settings.sendCopy === "always" || (settings.sendCopy === "request" && Boolean(input?.sendCopy));
   after(() => notify(form, answers, email, wantsCopy ? copyTo : null, Boolean(editing)));
-  return { ok: true };
+  return { ok: true, ref: responseId.slice(0, 8).toUpperCase() };
 }
 
 /** Best effort: sendEmail never throws, and this runs after the response is sent. */
