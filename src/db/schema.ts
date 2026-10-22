@@ -10,6 +10,7 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { Answers, FormItem, FormSettings } from "../lib/forms/types.ts";
 
 // Shared column helpers. Every timestamp is timestamptz.
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -328,6 +329,40 @@ export const certificates = pgTable(
   (t) => [unique("certificates_user_id_course_id_unique").on(t.userId, t.courseId)],
 );
 
+// ---------------------------------------------------------------------------
+// Forms (Google Forms-style, built at /admin/forms, filled in at /forms/<slug>).
+
+export const forms = pgTable("forms", {
+  id: id(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  // Questions and layout, in order. See src/lib/forms/types.ts.
+  items: jsonb("items").$type<FormItem[]>().notNull().default([]),
+  settings: jsonb("settings").$type<FormSettings>().notNull(),
+  accepting: boolean("accepting").notNull().default(false),
+  createdBy: text("created_by"), // admin email
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const formResponses = pgTable(
+  "form_responses",
+  {
+    id: id(),
+    formId: uuid("form_id")
+      .notNull()
+      .references(() => forms.id, { onDelete: "cascade" }),
+    // Set when the respondent was signed in; kept if the account goes.
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    email: text("email"),
+    answers: jsonb("answers").$type<Answers>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("form_responses_form_id_created_at_idx").on(t.formId, t.createdAt), index("form_responses_user_id_idx").on(t.userId)],
+);
+
 export type User = typeof user.$inferSelect;
 export type Course = typeof courses.$inferSelect;
 export type Chapter = typeof chapters.$inferSelect;
@@ -339,3 +374,5 @@ export type Enrollment = typeof enrollments.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Certificate = typeof certificates.$inferSelect;
 export type Distributor = typeof distributors.$inferSelect;
+export type Form = typeof forms.$inferSelect;
+export type FormResponse = typeof formResponses.$inferSelect;

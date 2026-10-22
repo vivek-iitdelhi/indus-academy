@@ -10,6 +10,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 //   videos/<uid>/error.txt        the encoder could not process the upload
 //   trash/<uid>                   asks the encoder to delete everything for <uid>
 //   encoder/heartbeat.json        {"at": ISO time}, rewritten every minute while the encoder runs
+//   form-uploads/<formId>/<uuid>/<name>   files attached to form responses (never encoded)
 // Playlists are served by /api/video/<uid>/… (token-checked, segment URLs presigned);
 // segments come straight from R2, whose egress is free.
 
@@ -265,4 +266,40 @@ export async function playlistFor(uid: string, file: string, token: string): Pro
   const text = await check(res, `GET ${file}`);
   const expiresIn = Math.max(exp - Math.floor(Date.now() / 1000), 1);
   return rewritePlaylist(text, { uid, file, token, sign: (key) => presign("GET", key, expiresIn) });
+}
+
+// --- Form attachments ---------------------------------------------------------
+// Files learners attach to form responses. Same private bucket, outside the encoder's prefixes.
+
+const FORM_FILE_URL_TTL_SECONDS = 15 * 60;
+
+/** A fresh storage key for a file attached to a response of form `formId`. */
+export const formFileKey = (formId: string, name: string) =>
+  `form-uploads/${formId}/${randomUUID()}/${name.replace(/[^\w.-]+/g, "_").slice(-100) || "file"}`;
+
+/** True if `key` is a form attachment key of form `formId` (keys come back from the browser). */
+export const isFormFileKey = (formId: string, key: unknown): key is string =>
+  typeof key === "string" && new RegExp(`^form-uploads/${formId}/[0-9a-f-]{36}/[\\w.-]{1,100}$`).test(key);
+
+/** A presigned single PUT the browser uploads the file to. */
+export const formFileUploadUrl = (key: string) => presign("PUT", key, FORM_FILE_URL_TTL_SECONDS);
+
+/** Size in bytes of an uploaded attachment, or null if it is not there. */
+export async function formFileSize(key: string): Promise<number | null> {
+  const res = await r2Fetch("HEAD", key);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`R2 HEAD ${key} responded ${res.status}`);
+  return Number(res.headers.get("content-length") ?? 0);
+}
+
+/** A short-lived download link for an attachment (admins only). */
+export const formFileDownloadUrl = (key: string, filename: string) =>
+  presign("GET", key, FORM_FILE_URL_TTL_SECONDS, {
+    "response-content-disposition": `attachment; filename="${filename.replace(/[^\w.-]+/g, "_")}"`,
+  });
+
+/** Deletes an attachment; a missing file is not an error. */
+export async function deleteFormFile(key: string): Promise<void> {
+  const res = await r2Fetch("DELETE", key);
+  if (!res.ok && res.status !== 404) throw new Error(`R2 DELETE ${key} responded ${res.status}`);
 }
