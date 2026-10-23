@@ -65,10 +65,15 @@ export async function issueCertificate(userId: string, courseId: string): Promis
   return (await issueOrGetCertificate(userId, courseId)).certificate;
 }
 
-/** issueCertificate, also saying whether this call minted it (`issued`) or it already existed. */
+/**
+ * issueCertificate, also saying whether this call minted it (`issued`) or it already existed.
+ * `partnerName` and `searchVisible` apply only when this call mints it (partner certificates
+ * are co-branded and kept out of the sitemap).
+ */
 export async function issueOrGetCertificate(
   userId: string,
   courseId: string,
+  opts: { partnerName?: string | null; searchVisible?: boolean } = {},
 ): Promise<{ certificate: Certificate; issued: boolean }> {
   const existing = await findCertificate(userId, courseId);
   if (existing) return { certificate: existing, issued: false };
@@ -87,7 +92,13 @@ export async function issueOrGetCertificate(
 
   const [inserted] = await db
     .insert(certificates)
-    .values({ ...fields, holderName: holder.name, hash: certificateHash(fields) })
+    .values({
+      ...fields,
+      holderName: holder.name,
+      hash: certificateHash(fields),
+      partnerName: opts.partnerName ?? null,
+      searchVisible: opts.searchVisible ?? true,
+    })
     .onConflictDoNothing({ target: [certificates.userId, certificates.courseId] })
     .returning();
   if (inserted) return { certificate: inserted, issued: true };

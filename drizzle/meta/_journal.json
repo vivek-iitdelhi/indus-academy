@@ -99,6 +99,13 @@
       "when": 1792655865817,
       "tag": "0013_google_calendar",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792739818936,
+      "tag": "0014_partner_learners",
+      "breakpoints": true
     }
   ]
 }

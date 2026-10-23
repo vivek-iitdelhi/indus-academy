@@ -33,6 +33,7 @@ export const enrollmentStatuses = ["active", "revoked"] as const;
 export const paymentStatuses = ["created", "paid", "failed", "refunded"] as const;
 export const distributorStatuses = ["active", "revoked"] as const;
 export const bookingStatuses = ["held", "confirmed"] as const;
+export const certificateReleaseModes = ["on_payment", "on_completion", "manual"] as const;
 
 export type CourseFormat = (typeof courseFormats)[number];
 export type CourseStatus = (typeof courseStatuses)[number];
@@ -41,6 +42,7 @@ export type EnrollmentSource = (typeof enrollmentSources)[number];
 export type EnrollmentStatus = (typeof enrollmentStatuses)[number];
 export type PaymentStatus = (typeof paymentStatuses)[number];
 export type DistributorStatus = (typeof distributorStatuses)[number];
+export type CertificateReleaseMode = (typeof certificateReleaseModes)[number];
 
 // ---------------------------------------------------------------------------
 // Better Auth tables. Shape follows its Drizzle adapter; ids are Better Auth's own text ids.
@@ -246,6 +248,10 @@ export const distributors = pgTable("distributors", {
   keyPrefix: text("key_prefix").notNull(), // first ~8 chars, for display
   keyHash: text("key_hash").notNull().unique(), // sha256 hex of the full key
   status: text("status", { enum: distributorStatuses }).notNull().default("active"),
+  // Printed on co-branded certificates ("Delivered in partnership with …"); null = plain.
+  certificateName: text("certificate_name"),
+  // When partner learners' certificates are issued (docs/distributor-api.md).
+  certificateRelease: text("certificate_release", { enum: certificateReleaseModes }).notNull().default("on_payment"),
   createdAt: createdAt(),
   lastUsedAt: ts("last_used_at"),
 });
@@ -264,6 +270,53 @@ export const distributorCourses = pgTable(
   (t) => [primaryKey({ columns: [t.distributorId, t.courseId] })],
 );
 
+// A client's group of learners whose certificates are paid for together. Created on first use.
+export const distributorBatches = pgTable(
+  "distributor_batches",
+  {
+    id: id(),
+    distributorId: uuid("distributor_id")
+      .notNull()
+      .references(() => distributors.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    paidAt: ts("paid_at"), // set = paid
+    paidBy: text("paid_by"), // admin email
+    createdAt: createdAt(),
+  },
+  (t) => [unique("distributor_batches_distributor_id_name_unique").on(t.distributorId, t.name)],
+);
+
+/** Every flip of a batch's "Payment received" toggle. */
+export const batchPaymentEvents = pgTable("batch_payment_events", {
+  id: id(),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => distributorBatches.id, { onDelete: "cascade" }),
+  paid: boolean("paid").notNull(),
+  by: text("by").notNull(),
+  at: ts("at").notNull().defaultNow(),
+});
+
+// A client's learner: their user id on the client's platform, mapped to our own user row.
+// Never merged with direct customers, even on the same email.
+export const partnerLearners = pgTable(
+  "partner_learners",
+  {
+    distributorId: uuid("distributor_id")
+      .notNull()
+      .references(() => distributors.id, { onDelete: "cascade" }),
+    externalId: text("external_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: "cascade" }),
+    email: text("email"), // contact only; never used to sign in or to match accounts
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.distributorId, t.externalId] })],
+);
+
 // unique(user_id, course_id) leads with user_id, so it also serves user_id lookups.
 export const enrollments = pgTable(
   "enrollments",
@@ -280,6 +333,8 @@ export const enrollments = pgTable(
     status: text("status", { enum: enrollmentStatuses }).notNull().default("active"),
     cohortId: text("cohort_id"),
     distributorId: uuid("distributor_id").references(() => distributors.id),
+    batchId: uuid("batch_id").references(() => distributorBatches.id), // partner enrolments
+    completedAt: ts("completed_at"), // partner enrolments: the completion the client reported
     startedAt: ts("started_at").notNull().defaultNow(),
     expiresAt: ts("expires_at"), // null = never
     nudgedAt: ts("nudged_at"), // last "pick up where you left off" email, so it is sent once per idle spell
@@ -327,6 +382,7 @@ export const certificates = pgTable(
     revokedAt: ts("revoked_at"), // set, never deleted: verification must answer "revoked"
     // The holder can keep their verification page out of search engines; it stays public by link.
     searchVisible: boolean("search_visible").notNull().default(true),
+    partnerName: text("partner_name"), // snapshot of distributors.certificate_name at issue; not hashed
     hash: text("hash").notNull(),
   },
   (t) => [unique("certificates_user_id_course_id_unique").on(t.userId, t.courseId)],
@@ -462,3 +518,5 @@ export type Form = typeof forms.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type FormResponse = typeof formResponses.$inferSelect;
+export type PartnerLearner = typeof partnerLearners.$inferSelect;
+export type DistributorBatch = typeof distributorBatches.$inferSelect;
