@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, describe, test } from "node:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import { certificates, courses, distributorCourses, distributors, enrollments, user } from "../../db/schema.ts";
 import {
@@ -23,6 +23,9 @@ import {
   validExternalId,
   waitingCertificates,
 } from "./partners.ts";
+
+// Certificates are HMAC-signed; the tests issue real ones (certificates.ts reads this at call time).
+process.env.CERTIFICATE_SECRET ??= "test-only-secret";
 
 test("validExternalId: 1–200 chars, no surrounding spaces", () => {
   assert.equal(validExternalId("u_123"), true);
