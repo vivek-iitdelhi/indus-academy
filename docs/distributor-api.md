@@ -2,7 +2,9 @@
 
 For partner platforms licensed to deliver our courses. You get each licensed course's
 structure, its quizzes (with answers) and short-lived signed video URLs, and you run
-enrolment, progress and certificates on your own platform.
+enrolment, progress and grading on your own platform. You tell us about your learners and
+their completions, and we issue our certificate for them, co-branded with your name, when
+it is released under the terms agreed with you (for example, once the batch is paid).
 
 Base URL: `https://indusai.academy/api/v1`
 
@@ -164,6 +166,137 @@ curl -H "Authorization: Bearer $IAA_KEY" \
   - Playlists and segments allow any origin (CORS), so this works from your own domain.
   - Use `thumbnail` as the poster image.
 
+## Learners and certificates
+
+The lifecycle:
+
+1. A learner signs up or signs in on your platform → `PUT /learners/{your_user_id}`.
+2. They finish a course → `POST /learners/{your_user_id}/completions` with the course and the batch.
+3. You show their certificate → `GET /learners/{your_user_id}/certificates/{course}`. Until it is
+   released (for example, until the batch is paid) this answers `402 payment_pending`.
+
+`{your_user_id}` is your own id for the learner, URL-encoded: 1–200 characters, no leading
+or trailing spaces. The id `bulk` is reserved. Learners are private to you: another partner's
+key gets 404 for them.
+
+### `PUT /learners/{external_id}`
+
+Creates the learner or updates it. Safe to repeat. Answers 201 on create and 200 on update.
+
+```sh
+curl -X PUT -H "Authorization: Bearer $IAA_KEY" -H "Content-Type: application/json" \
+  -d '{"name":"Asha Rao","email":"asha@example.com"}' \
+  https://indusai.academy/api/v1/learners/u_123
+```
+
+```json
+{ "learner": { "external_id": "u_123", "name": "Asha Rao", "email": "asha@example.com", "created_at": "2026-10-23T06:20:20.865Z" } }
+```
+
+- `name` (required, 1–120 characters) is printed on the certificate. Send the learner's real name.
+- `email` is optional. It is kept for contact only and never used to sign in.
+- A later `PUT` replaces both fields. Certificates already released keep the name they were issued
+  with; ask us to correct one.
+
+### `POST /learners/{external_id}/completions`
+
+```sh
+curl -X POST -H "Authorization: Bearer $IAA_KEY" -H "Content-Type: application/json" \
+  -d '{"course":"ai-at-work-essentials","batch":"TCS-Jan-2027","completed_at":"2026-10-23T06:00:00Z"}' \
+  https://indusai.academy/api/v1/learners/u_123/completions
+```
+
+```json
+{
+  "completion": {
+    "course": "ai-at-work-essentials",
+    "batch": "TCS-Jan-2027",
+    "completed_at": "2026-10-23T06:00:00.000Z",
+    "certificate": { "status": "pending_payment" }
+  }
+}
+```
+
+- `course`: the slug of a course licensed to you.
+- `batch` (1–100 characters): your name for the group this learner is billed with. New names
+  create a batch.
+- `completed_at`: optional, defaults to now. It can't be in the future.
+- Safe to repeat. Until the certificate is released, a repeat can move the learner to another
+  batch. After release it changes nothing.
+- If the certificate can be released straight away, the response already shows it as `released`.
+
+### `DELETE /learners/{external_id}/completions/{course}`
+
+Takes back a completion sent by mistake. Answers 204. Once the certificate is released this
+answers `409 certificate_released`; ask us to revoke it instead.
+
+### `GET /learners/{external_id}/certificates`
+
+Every course the learner has completed:
+
+```json
+{
+  "certificates": [
+    {
+      "course": "ai-at-work-essentials",
+      "batch": "TCS-Jan-2027",
+      "completed_at": "2026-10-23T06:00:00.000Z",
+      "certificate": {
+        "status": "released",
+        "serial": "IAA-2026-0042",
+        "issued_at": "2026-10-25T09:12:00.000Z",
+        "image_url": "https://indusai.academy/api/certificates/IAA-2026-0042/image",
+        "verify_url": "https://indusai.academy/verify/IAA-2026-0042"
+      }
+    }
+  ]
+}
+```
+
+`certificate.status`:
+
+| Status            | Meaning                                                                 |
+| ----------------- | ----------------------------------------------------------------------- |
+| `pending_payment` | Waiting for payment of the learner's batch                              |
+| `pending_release` | Waiting for us to release it                                            |
+| `released`        | Issued. `serial`, `issued_at`, `image_url` and `verify_url` are present |
+| `revoked`         | Issued, then withdrawn. The verify page says so                         |
+| `not_offered`     | This course does not award certificates                                 |
+
+- `image_url` is a PNG (1600×1131). Add `?download=1` to get it as a file download.
+- `verify_url` is a public page anyone, such as an employer, can use to check the certificate.
+- Both are stable. Store them, or the serial.
+
+### `GET /learners/{external_id}/certificates/{course}`
+
+One course, in the same shape as an item above (released or revoked). Otherwise it answers
+with an error: `402 payment_pending` (the message names the batch), `409 certificate_pending`,
+`409 certificate_not_offered`, or `404 not_completed`.
+
+### `GET /batches`
+
+```json
+{ "batches": [ { "name": "TCS-Jan-2027", "paid": false, "paid_at": null, "learners": 42, "completed": 40, "released": 0 } ] }
+```
+
+### Bulk: `POST /learners/bulk` and `POST /completions/bulk`
+
+Up to 500 items per request. Each item behaves exactly like the single call, and one bad item
+doesn't stop the rest.
+
+```sh
+curl -X POST -H "Authorization: Bearer $IAA_KEY" -H "Content-Type: application/json" \
+  -d '{"learners":[{"external_id":"u_1","name":"Asha Rao"},{"external_id":"u_2","name":"Ravi K"}]}' \
+  https://indusai.academy/api/v1/learners/bulk
+# body for /completions/bulk: {"completions":[{"external_id":"u_1","course":"…","batch":"…"}]}
+```
+
+```json
+{ "results": [ { "index": 0, "ok": true }, { "index": 1, "ok": false, "error": { "code": "invalid_request", "message": "`name` is required, 1–120 characters." } } ] }
+```
+
+Completion results also carry `certificate.status` for the items that succeeded.
+
 ## Errors
 
 Errors share one shape:
@@ -172,13 +305,20 @@ Errors share one shape:
 { "error": { "code": "not_found", "message": "No such resource." } }
 ```
 
-| Status | `code`              | When                                                                  |
-| ------ | ------------------- | --------------------------------------------------------------------- |
-| 400    | `invalid_ttl`       | `ttl` is not a whole number from 300 to 86400                          |
-| 401    | `unauthorized`      | Missing, malformed, unknown, rotated or revoked key                    |
-| 404    | `not_found`         | Unknown course or lesson, or not licensed to you, or not published     |
-| 409    | `video_not_ready`   | The lesson has no playable video yet (quiz lesson, or still processing) |
-| 503    | `video_unavailable` | Video playback is temporarily unavailable; retry later                 |
+| Status | `code`                    | When                                                                    |
+| ------ | ------------------------- | ----------------------------------------------------------------------- |
+| 400    | `invalid_ttl`             | `ttl` is not a whole number from 300 to 86400                           |
+| 401    | `unauthorized`            | Missing, malformed, unknown, rotated or revoked key                     |
+| 404    | `not_found`               | Unknown course or lesson, or not licensed to you, or not published      |
+| 409    | `video_not_ready`         | The lesson has no playable video yet (quiz lesson, or still processing) |
+| 503    | `video_unavailable`       | Video playback is temporarily unavailable; retry later                  |
+| 400    | `invalid_request`         | The body or learner id is invalid; `message` says what to fix           |
+| 402    | `payment_pending`         | The learner's batch is not paid yet; `message` names the batch          |
+| 404    | `learner_not_found`       | No learner with that id (for your key)                                  |
+| 404    | `not_completed`           | The learner has not completed that course                               |
+| 409    | `certificate_pending`     | The certificate has not been released yet                               |
+| 409    | `certificate_not_offered` | The course does not award certificates                                  |
+| 409    | `certificate_released`    | The completion can't be taken back: its certificate is released         |
 
 ## Versioning
 
