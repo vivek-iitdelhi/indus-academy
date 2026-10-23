@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import { certificates, courses, enrollments, lessonProgress, lessons, user, type Certificate } from "../../db/schema.ts";
 import { sendEmail } from "../email.ts";
@@ -126,6 +126,8 @@ export async function sendNudges(now = new Date()) {
     .where(
       and(
         eq(enrollments.status, "active"),
+        // Partner learners learn on the client's platform and have unreachable .invalid emails.
+        ne(enrollments.source, "distributor"),
         or(isNull(enrollments.expiresAt), gt(enrollments.expiresAt, now)),
         sql`not exists (select 1 from ${certificates} where ${certificates.userId} = ${enrollments.userId} and ${certificates.courseId} = ${enrollments.courseId})`,
       ),
