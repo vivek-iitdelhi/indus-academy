@@ -21,7 +21,7 @@ export type Post = {
   wordCount: number;
   readingMinutes: number;
   html: string;
-  headings: { id: string; text: string }[];
+  headings: { id: string; text: string; depth: number }[];
 };
 
 function slugify(text: string) {
@@ -42,7 +42,8 @@ function decodeEntities(text: string) {
     .replace(/&gt;/g, ">");
 }
 
-function renderMarkdown(markdown: string) {
+/** Markdown to HTML with ids on headings; `headings` lists h2 (and deeper, up to `tocDepth`) for a table of contents. */
+export function renderMarkdown(markdown: string, tocDepth = 2) {
   const headings: Post["headings"] = [];
   const marked = new Marked({
     renderer: {
@@ -50,7 +51,7 @@ function renderMarkdown(markdown: string) {
         const html = this.parser.parseInline(tokens);
         const text = decodeEntities(html.replace(/<[^>]+>/g, ""));
         const id = slugify(text);
-        if (depth === 2) headings.push({ id, text });
+        if (depth >= 2 && depth <= tocDepth) headings.push({ id, text, depth });
         return `<h${depth} id="${id}">${html}</h${depth}>\n`;
       },
       link({ href, title, tokens }: Tokens.Link) {

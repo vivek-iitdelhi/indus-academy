@@ -15,14 +15,16 @@ const routes = [
   { path: "/consulting", priority: 0.8 },
   { path: "/consulting/book", priority: 0.7 },
   { path: "/blog", priority: 0.7 },
+  { path: "/developers", priority: 0.5 },
   { path: "/contact", priority: 0.5 },
   ...programs.map((p) => ({ path: `/programs/${p.slug}`, priority: 0.8 })),
   ...tracks.map((t) => ({ path: `/enterprise/${t.slug}`, priority: 0.8 })),
   ...legalDocuments.map((doc) => ({ path: `/${doc.slug}`, priority: 0.3 })),
 ];
 
-// Courses come from the database; revalidateCourse() and the hourly pass keep this current.
-export const revalidate = 3600;
+// Courses come from the database; revalidateCourse() and the minutely pass keep this current
+// (revalidateCourse only reaches the server that ran it; on AWS there are several).
+export const revalidate = 60;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [courses, certificates] = await Promise.all([listPublishedCourses(), listSearchableCertificates().catch(() => [])]);
