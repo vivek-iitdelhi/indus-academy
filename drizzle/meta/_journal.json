@@ -120,6 +120,13 @@
       "when": 1792747316699,
       "tag": "0016_distributor_all_courses",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792748187398,
+      "tag": "0017_api_usage_daily",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -270,6 +271,22 @@ export const distributorCourses = pgTable(
       .references(() => courses.id, { onDelete: "cascade" }),
   },
   (t) => [primaryKey({ columns: [t.distributorId, t.courseId] })],
+);
+
+// Partner API requests per client, per day (India time) and endpoint, for the admin's usage view.
+// One row per client/day/endpoint, incremented after each response (see withDistributor).
+export const apiUsageDaily = pgTable(
+  "api_usage_daily",
+  {
+    distributorId: uuid("distributor_id")
+      .notNull()
+      .references(() => distributors.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    endpoint: text("endpoint").notNull(), // "GET /courses/{slug}"
+    requests: integer("requests").notNull().default(0),
+    errors: integer("errors").notNull().default(0), // responses with status 400 and up
+  },
+  (t) => [primaryKey({ columns: [t.distributorId, t.day, t.endpoint] })],
 );
 
 // A client's group of learners whose certificates are paid for together. Created on first use.

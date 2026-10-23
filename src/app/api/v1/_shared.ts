@@ -1,4 +1,6 @@
+import { after } from "next/server";
 import type { Course, Distributor } from "@/db/schema";
+import { endpointOf, recordApiRequest } from "@/lib/api-usage";
 import { authenticateDistributor } from "@/lib/distributors";
 
 const NO_STORE = { "cache-control": "no-store" };
@@ -18,7 +20,17 @@ export function withDistributor<C>(handler: (distributor: Distributor, request: 
     if (!distributor) {
       return apiError(401, "unauthorized", "Missing, invalid or revoked API key.", { "www-authenticate": "Bearer" });
     }
-    return handler(distributor, request, context);
+    // Usage is counted after the response is sent, so it never slows the API down.
+    const count = (status: number) =>
+      after(() => recordApiRequest(distributor.id, endpointOf(request.method, request.url), status).catch((e) => console.error("[api usage]", e)));
+    try {
+      const response = await handler(distributor, request, context);
+      count(response.status);
+      return response;
+    } catch (error) {
+      count(500);
+      throw error;
+    }
   };
 }
 

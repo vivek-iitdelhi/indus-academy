@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ActionForm } from "@/app/admin/learners/action-form";
 import { db } from "@/db";
 import { distributors, type CertificateReleaseMode } from "@/db/schema";
+import { firstDay, usageByDay, usageByEndpoint } from "@/lib/api-usage";
 import { isUuid } from "@/lib/distributors";
 import { batchLearners, listBatches, waitingCertificates } from "@/lib/lms/partners";
 import { requireAdmin } from "@/lib/session";
@@ -28,7 +29,21 @@ export default async function DistributorPage({ params, searchParams }: PageProp
   if (!distributor) notFound();
 
   const { batch: openBatchId } = await searchParams;
-  const [batches, waiting] = await Promise.all([listBatches(id), waitingCertificates(id)]);
+  const [batches, waiting, byDay, byEndpoint] = await Promise.all([
+    listBatches(id),
+    waitingCertificates(id),
+    usageByDay(id, 30),
+    usageByEndpoint(id, 30),
+  ]);
+  const today = firstDay(1, new Date());
+  const weekAgo = firstDay(7, new Date());
+  const sum = (rows: typeof byDay) =>
+    rows.reduce((t, r) => ({ requests: t.requests + r.requests, errors: t.errors + r.errors }), { requests: 0, errors: 0 });
+  const windows: [string, { requests: number; errors: number }][] = [
+    ["Today", sum(byDay.filter((r) => r.day === today))],
+    ["Last 7 days", sum(byDay.filter((r) => r.day >= weekAgo))],
+    ["Last 30 days", sum(byDay)],
+  ];
   const openBatch = batches.find((b) => b.batch.id === openBatchId);
   const learners = openBatch ? await batchLearners(openBatch.batch.id) : [];
 
@@ -38,6 +53,70 @@ export default async function DistributorPage({ params, searchParams }: PageProp
         ← Distributors
       </Link>
       <h1 className="mt-4 text-3xl font-semibold tracking-[-0.03em]">{distributor.name}</h1>
+
+      <section className="mt-8 rounded-2xl border border-line bg-white p-5">
+        <h2 className="font-semibold">API usage</h2>
+        <p className="mt-1 text-sm text-muted">
+          Requests made with this client&apos;s key (India time). Last used {when(distributor.lastUsedAt)}.
+        </p>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+          {windows.map(([label, t]) => (
+            <div key={label}>
+              <dt className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted">{label}</dt>
+              <dd className="mt-1 text-2xl font-semibold tabular-nums">{t.requests.toLocaleString("en-IN")}</dd>
+              <dd className="text-muted">
+                {t.errors.toLocaleString("en-IN")} error{t.errors === 1 ? "" : "s"}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {byEndpoint.length > 0 ? (
+          <div className="mt-6 grid gap-8 lg:grid-cols-2">
+            <table className="w-full text-left text-sm">
+              <caption className="pb-2 text-left font-medium">By endpoint, last 30 days</caption>
+              <thead className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted">
+                <tr>
+                  <th className="py-2">Endpoint</th>
+                  <th className="text-right">Requests</th>
+                  <th className="text-right">Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byEndpoint.map((r) => (
+                  <tr key={r.endpoint} className="border-t border-line">
+                    <td className="py-2 font-mono text-xs">{r.endpoint}</td>
+                    <td className="text-right tabular-nums">{r.requests.toLocaleString("en-IN")}</td>
+                    <td className="text-right tabular-nums">{r.errors.toLocaleString("en-IN")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <table className="w-full text-left text-sm">
+              <caption className="pb-2 text-left font-medium">By day</caption>
+              <thead className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted">
+                <tr>
+                  <th className="py-2">Day</th>
+                  <th className="text-right">Requests</th>
+                  <th className="text-right">Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...byDay].reverse().map((r) => (
+                  <tr key={r.day} className="border-t border-line">
+                    <td className="py-2">
+                      {new Date(`${r.day}T00:00:00+05:30`).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", weekday: "short" })}
+                    </td>
+                    <td className="text-right tabular-nums">{r.requests.toLocaleString("en-IN")}</td>
+                    <td className="text-right tabular-nums">{r.errors.toLocaleString("en-IN")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-muted">No requests in the last 30 days.</p>
+        )}
+      </section>
 
       <section className="mt-8 rounded-2xl border border-line bg-white p-5">
         <h2 className="font-semibold">Certificates</h2>

@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { courses, distributorCourses, distributors, distributorStatuses, type DistributorStatus } from "@/db/schema";
+import type { ActionState } from "@/app/admin/learners/action-form";
 import { generateApiKey, isUuid } from "@/lib/distributors";
 import { requireAdminApi } from "@/lib/session";
 
@@ -47,22 +48,23 @@ export async function rotateDistributorKey(_prev: KeyResult, form: FormData): Pr
   return { key };
 }
 
-export async function setDistributorStatus(form: FormData) {
+export async function setDistributorStatus(_prev: ActionState, form: FormData): Promise<ActionState> {
   await requireAdminApi();
   const id = idOf(form);
   const status = field(form, "status") as DistributorStatus;
-  if (!id || !distributorStatuses.includes(status)) return;
+  if (!id || !distributorStatuses.includes(status)) return { error: "Distributor not found." };
   await db.update(distributors).set({ status }).where(eq(distributors.id, id));
   revalidatePath(PATH);
+  return { ok: status === "revoked" ? "Access revoked. Their key stopped working." : "Access restored." };
 }
 
-export async function setLicensedCourses(form: FormData) {
+export async function setLicensedCourses(_prev: ActionState, form: FormData): Promise<ActionState> {
   await requireAdminApi();
   const id = idOf(form);
-  if (!id) return;
+  if (!id) return { error: "Distributor not found." };
   const wanted = form.getAll("courseId").map(String).filter(isUuid);
   const allCourses = field(form, "scope") === "all";
-  await db.transaction(async (tx) => {
+  const picked = await db.transaction(async (tx) => {
     await tx.update(distributors).set({ allCourses }).where(eq(distributors.id, id));
     // The picked list is saved either way, so switching back from "all" restores it.
     // Keep only real courses, so a stale or tampered form cannot fail the insert.
@@ -73,6 +75,9 @@ export async function setLicensedCourses(form: FormData) {
     if (valid.length) {
       await tx.insert(distributorCourses).values(valid.map((course) => ({ distributorId: id, courseId: course.id })));
     }
+    return valid.length;
   });
   revalidatePath(PATH);
+  if (allCourses) return { ok: "Saved: all courses, including ones published later." };
+  return { ok: picked ? `Saved: ${picked} course${picked === 1 ? "" : "s"}.` : "Saved: no courses. They see nothing over the API." };
 }
