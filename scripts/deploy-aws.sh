@@ -27,9 +27,15 @@ secret_arn=$(aws secretsmanager describe-secret --secret-id "$SECRET" --query AR
 db_sg=$(aws cloudformation describe-stack-resource --stack-name "$STACK" --logical-resource-id DbSecurityGroup \
   --query StackResourceDetail.PhysicalResourceId --output text 2>/dev/null || true)
 if [[ -n "$db_sg" ]]; then
-  my_ip="$(curl -s https://checkip.amazonaws.com)/32"
-  aws ec2 authorize-security-group-ingress --group-id "$db_sg" --protocol tcp --port 5432 --cidr "$my_ip" >/dev/null 2>&1 || true
-  trap 'aws ec2 revoke-security-group-ingress --group-id "$db_sg" --protocol tcp --port 5432 --cidr "$my_ip" >/dev/null 2>&1 || true' EXIT
+  # Docker can leave by a different public IP than this machine (VPN, dual WAN), and the
+  # build runs in Docker: allow both.
+  build_ips=$( { curl -s https://checkip.amazonaws.com; echo
+    docker run --rm node:24-slim node -e 'fetch("https://checkip.amazonaws.com").then(r=>r.text()).then(t=>console.log(t.trim()))'
+  } | grep -E '^[0-9.]+$' | sort -u)
+  for ip in $build_ips; do
+    aws ec2 authorize-security-group-ingress --group-id "$db_sg" --protocol tcp --port 5432 --cidr "$ip/32" >/dev/null 2>&1 || true
+  done
+  trap 'for ip in $build_ips; do aws ec2 revoke-security-group-ingress --group-id "$db_sg" --protocol tcp --port 5432 --cidr "$ip/32" >/dev/null 2>&1 || true; done' EXIT
 fi
 # Lets the build prerender the course catalogue from the live database.
 DATABASE_URL=$(aws secretsmanager get-secret-value --secret-id "$SECRET" --query SecretString --output text |
