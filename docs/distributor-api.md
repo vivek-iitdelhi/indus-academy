@@ -138,7 +138,8 @@ curl -H "Authorization: Bearer $IAA_KEY" https://indusai.academy/api/v1/courses/
 
 ### `GET /lessons/{lessonId}/playback?ttl=<seconds>`
 
-Signed URLs for one video lesson. Request them when a learner starts watching.
+A player for one video lesson, to embed on your page. Request it when a learner starts
+watching.
 
 ```sh
 curl -H "Authorization: Bearer $IAA_KEY" \
@@ -147,24 +148,30 @@ curl -H "Authorization: Bearer $IAA_KEY" \
 
 ```json
 {
-  "hls": "https://indusai.academy/api/video/9b1c…/master.m3u8?t=1792504327.Kz8M…",
+  "embed_url": "https://indusai.academy/embed/9b1c…?t=1792504327.Kz8M…",
   "thumbnail": "https://…/thumb.jpg?X-Amz-Signature=…",
   "expires_at": "2026-10-20T08:26:01.000Z"
 }
 ```
 
-- `ttl`: how long the URLs stay valid, in seconds. Default 21600 (6 h), minimum 300
-  (5 min), maximum 86400 (24 h).
-- **Expiry.** Video segments are fetched with the same signature, so playback that is
-  still running at `expires_at` fails. Pick a `ttl` longer than the viewing session
-  (lesson length plus pauses), and fetch fresh URLs for each session rather than caching
-  them. The URLs are bearer credentials for that one video until they expire: hand them
-  only to the learner who is watching.
-- Playing it:
-  - **hls.js** (Chrome, Firefox, Edge): `const hls = new Hls(); hls.loadSource(hls_url); hls.attachMedia(videoElement);`
-  - **Safari / iOS**: plays HLS natively: `videoElement.src = hls_url`.
-  - Playlists and segments allow any origin (CORS), so this works from your own domain.
-  - Use `thumbnail` as the poster image.
+Show it in an iframe:
+
+```html
+<iframe src="EMBED_URL" style="width:100%;aspect-ratio:16/9;border:0"
+        allow="autoplay; fullscreen" allowfullscreen></iframe>
+```
+
+- **Protected video.** Our videos are encrypted and play only inside this player, which
+  handles quality switching on every modern browser (iPhone: iOS 17.1 or later). There is
+  no downloadable file or playlist for you to host or cache. (Until 23 Oct 2026 this
+  endpoint returned an `hls` URL; it was replaced by `embed_url`.)
+- `ttl`: how long the player link stays valid, in seconds. Default 21600 (6 h), minimum
+  300 (5 min), maximum 86400 (24 h).
+- **Expiry.** Playback that is still running at `expires_at` stops. Pick a `ttl` longer
+  than the viewing session (lesson length plus pauses), and fetch a fresh `embed_url` for
+  each session rather than caching it. The link lets whoever has it watch that one video
+  until it expires: put it only on the page of the learner who is watching.
+- Use `thumbnail` as a placeholder image before the player loads.
 
 ## Learners and certificates
 

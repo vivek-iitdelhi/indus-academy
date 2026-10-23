@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hlsManifestUrl, rewritePlaylist, signPlaybackToken, signS3, verifyPlaybackToken } from "./video.ts";
+import { hlsManifestUrl, keyProof, rewritePlaylist, signPlaybackToken, signS3, verifyKeyProof, verifyPlaybackToken } from "./video.ts";
 
 test("presigns a URL matching AWS's published SigV4 example", () => {
   // docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
@@ -51,4 +51,25 @@ test("rewrites playlists: playlists keep the token, segments get signed URLs", (
   );
   assert.throws(() => rewritePlaylist("../../secret.ts", { uid: "u", file: "master.m3u8", token: "T", sign }));
   assert.throws(() => rewritePlaylist("https://evil/x.ts", { uid: "u", file: "master.m3u8", token: "T", sign }));
+});
+
+test("rewrites the key tag to the key endpoint, never to a signed storage URL", () => {
+  const sign = (key: string) => `https://r2/${key}?sig`;
+  const media = '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="key"\n#EXTINF:6.0,\ne_seg_0000.ts\n#EXT-X-ENDLIST';
+  assert.equal(
+    rewritePlaylist(media, { uid: "u", file: "0/index.m3u8", token: "T 1", sign }),
+    '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="/api/video/u/key?t=T%201"\n#EXTINF:6.0,\nhttps://r2/videos/u/0/e_seg_0000.ts?sig\n#EXT-X-ENDLIST',
+  );
+  assert.throws(() => rewritePlaylist('#EXT-X-KEY:METHOD=AES-128,URI="https://evil/k"', { uid: "u", file: "0/index.m3u8", token: "T", sign }));
+});
+
+test("key proofs: bound to the token, required to fetch the key", () => {
+  process.env.VIDEO_TOKEN_SECRET ??= "test-only-video-secret";
+  const token = signPlaybackToken("video-a", 600);
+  const proof = keyProof(token);
+  assert.equal(verifyKeyProof(token, proof), true);
+  assert.equal(verifyKeyProof(token, ""), false);
+  assert.equal(verifyKeyProof(token, proof.slice(1)), false);
+  assert.equal(verifyKeyProof(signPlaybackToken("video-b", 600), proof), false);
+  assert.notEqual(proof, token.split(".")[1]); // not derivable from anything in a URL
 });

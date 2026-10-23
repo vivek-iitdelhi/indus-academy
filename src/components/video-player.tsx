@@ -31,6 +31,8 @@ function writeLocalPosition(lessonId: string, seconds: number) {
 type Props = {
   /** HLS manifest URL, already authorised for this viewer. */
   src: string;
+  /** keyProof(token) for src's token: unlocks the segments' decryption key (see video.ts). */
+  keyProof?: string;
   lessonId: string;
   title: string;
   durationSeconds: number;
@@ -53,7 +55,9 @@ export function VideoPlayer(props: Props) {
   const [completion, setCompletion] = useState<{ certificate: boolean } | null>(null);
   const router = useRouter();
 
-  // Playback: native HLS where the platform has no MediaSource (iPhone Safari), hls.js elsewhere.
+  // Playback: hls.js wherever it runs (MediaSource, or ManagedMediaSource on iOS 17.1+), since
+  // only hls.js can send the key proof header; native HLS only as a last resort, which cannot
+  // fetch the key of an encrypted video and so fails cleanly.
   useEffect(() => {
     const video = videoRef.current!;
     const startAt =
@@ -67,29 +71,40 @@ export function VideoPlayer(props: Props) {
     let hls: Hls | undefined;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
-
-    if (!("MediaSource" in window) && video.canPlayType("application/vnd.apple.mpegurl")) {
-      const seek = () => {
-        if (startAt > 0) video.currentTime = startAt;
-      };
-      const fail = () => setFailed(true);
-      video.addEventListener("loadedmetadata", seek, { once: true });
-      video.addEventListener("error", fail);
-      video.src = initial.src;
-      return () => {
-        video.removeEventListener("loadedmetadata", seek);
-        video.removeEventListener("error", fail);
-        video.removeAttribute("src");
-        video.load();
-      };
-    }
+    let detachNative = () => {};
 
     void import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
-      if (!Hls.isSupported()) return setFailed(true);
+      if (!Hls.isSupported()) {
+        if (!video.canPlayType("application/vnd.apple.mpegurl")) return setFailed(true);
+        const seek = () => {
+          if (startAt > 0) video.currentTime = startAt;
+        };
+        const fail = () => setFailed(true);
+        video.addEventListener("loadedmetadata", seek, { once: true });
+        video.addEventListener("error", fail);
+        video.src = initial.src;
+        detachNative = () => {
+          video.removeEventListener("loadedmetadata", seek);
+          video.removeEventListener("error", fail);
+          video.removeAttribute("src");
+          video.load();
+        };
+        return;
+      }
       let networkRetries = 0;
       let mediaRecoveries = 0;
-      const player = new Hls({ startPosition: startAt, capLevelToPlayerSize: true });
+      // ManagedMediaSource (iOS) plays only with remote playback off; protected video has no AirPlay.
+      video.disableRemotePlayback = true;
+      const proof = initial.keyProof;
+      const player = new Hls({
+        startPosition: startAt,
+        capLevelToPlayerSize: true,
+        // Same header name as KEY_PROOF_HEADER in video.ts (a server module, not importable here).
+        xhrSetup: (xhr, url) => {
+          if (proof && /\/api\/video\/[^/]+\/key\?/.test(url)) xhr.setRequestHeader("x-iaa-key-proof", proof);
+        },
+      });
       hls = player;
       player.on(Hls.Events.FRAG_LOADED, () => {
         networkRetries = 0;
@@ -114,6 +129,7 @@ export function VideoPlayer(props: Props) {
       cancelled = true;
       clearTimeout(retryTimer);
       hls?.destroy();
+      detachNative();
     };
   }, [initial, attempt]);
 
@@ -204,6 +220,9 @@ export function VideoPlayer(props: Props) {
         <video
           ref={videoRef}
           controls
+          controlsList="nodownload noremoteplayback"
+          disablePictureInPicture
+          onContextMenu={(event) => event.preventDefault()}
           playsInline
           preload="metadata"
           aria-label={initial.title}

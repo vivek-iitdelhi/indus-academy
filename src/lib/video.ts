@@ -1,10 +1,12 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { KEY_FILE, KEY_URI_PLACEHOLDER } from "./hls-crypto.ts";
 
 // The ONLY file that knows where videos live: a private Cloudflare R2 bucket, spoken to
 // over the S3 API. Everything else deals in opaque video UIDs and the URLs returned here.
 // Encoding runs on our own machine (scripts/encoder.ts). Bucket layout, shared with it:
 //   uploads/<uid>                 the admin's upload, waiting for the encoder
-//   videos/<uid>/master.m3u8      HLS master; <rung>/index.m3u8 and <rung>/seg_NNNN.ts per quality
+//   videos/<uid>/master.m3u8      HLS master; <rung>/index.m3u8 and <rung>/[e_]seg_NNNN.ts per quality
+//   videos/<uid>/enc.key          AES-128 key of the (e_) segments; served only by videoKeyFor
 //   videos/<uid>/thumb.jpg
 //   videos/<uid>/meta.json        written last: {"durationSeconds": n}; its presence = ready
 //   videos/<uid>/error.txt        the encoder could not process the upload
@@ -12,7 +14,9 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 //   encoder/heartbeat.json        {"at": ISO time}, rewritten every minute while the encoder runs
 //   form-uploads/<formId>/<uuid>/<name>   files attached to form responses (never encoded)
 // Playlists are served by /api/video/<uid>/… (token-checked, segment URLs presigned);
-// segments come straight from R2, whose egress is free.
+// segments come straight from R2, whose egress is free. Segments are AES-128 encrypted; the key
+// comes from /api/video/<uid>/key only with the token AND a proof header that our player pages
+// hold but no URL contains, so download tools that follow the playlist get unplayable bytes.
 
 const MAX_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 const UPLOAD_URL_TTL_SECONDS = 24 * 60 * 60;
@@ -225,6 +229,32 @@ export function verifyPlaybackToken(uid: string, token: string): number | null {
   return given.length === expected.length && timingSafeEqual(given, expected) ? exp : null;
 }
 
+const proofSignature = (token: string) =>
+  createHmac("sha256", env("VIDEO_TOKEN_SECRET")).update(`key-proof.${token}`).digest("base64url");
+
+/**
+ * What our player sends in the KEY_PROOF_HEADER to get the decryption key for `token`. Only
+ * ever rendered into our own player pages, never into a URL or the partner API.
+ */
+export const keyProof = (token: string) => proofSignature(token);
+
+export function verifyKeyProof(token: string, proof: string): boolean {
+  const expected = Buffer.from(proofSignature(token));
+  const given = Buffer.from(proof);
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+export const KEY_PROOF_HEADER = "x-iaa-key-proof";
+
+/** The video's AES-128 key for a valid token and proof; null if refused or missing. */
+export async function videoKeyFor(uid: string, token: string, proof: string): Promise<Buffer | null> {
+  if (!verifyPlaybackToken(uid, token) || !verifyKeyProof(token, proof)) return null;
+  const res = await r2Fetch("GET", `videos/${uid}/${KEY_FILE}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`R2 GET key responded ${res.status}`);
+  return Buffer.from(await res.arrayBuffer()); // binary: not through check(), which reads text
+}
+
 /** HLS master playlist (same-origin path; prefix an origin for other sites). */
 export const hlsManifestUrl = (uid: string, token: string) => `/api/video/${uid}/master.m3u8?t=${encodeURIComponent(token)}`;
 
@@ -251,6 +281,13 @@ export function rewritePlaylist(
     .map((raw) => {
       const line = raw.trim();
       if (!line) return line;
+      if (line.startsWith("#EXT-X-KEY")) {
+        // The key never gets a storage URL: it comes from our endpoint, with the proof header.
+        return line.replace(/URI="([^"]+)"/, (_, name: string) => {
+          if (name !== KEY_URI_PLACEHOLDER) throw new Error(`Unexpected key URI: ${name}`);
+          return `URI="/api/video/${uid}/key?t=${encodeURIComponent(token)}"`;
+        });
+      }
       if (line.startsWith("#")) return line.replace(/URI="([^"]+)"/, (_, name: string) => `URI="${ref(name)}"`);
       return ref(line);
     })

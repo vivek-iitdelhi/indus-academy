@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
   // (such as per-article Open Graph images), not just with statically built pages.
   outputFileTracingIncludes: {
     "/*": ["./content/blog/**/*"],
+    // The partner player's hls.js, read from disk by src/app/embed/hls.js/route.ts.
+    "/embed/hls.js": ["./node_modules/hls.js/dist/hls.min.js"],
   },
 };
 

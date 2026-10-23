@@ -1,6 +1,7 @@
 // Video encoder: runs on our own machine, not on Vercel. Every 30 s it looks in the R2
 // bucket for new uploads (uploads/<uid>), turns each into adaptive HLS (240p up to the
-// source's quality, 6-second segments), uploads it to videos/<uid>/ and writes meta.json,
+// source's quality, 6-second segments), encrypts the segments (AES-128, key in enc.key),
+// uploads it to videos/<uid>/ and writes meta.json,
 // which marks the video ready. It also deletes videos queued in trash/.
 // Bucket layout: see src/lib/video.ts. Setup: docs/lms-go-live.md.
 //
@@ -11,11 +12,12 @@
 // R2_SECRET_ACCESS_KEY. VIDEO_ENCODER=h264_nvenc encodes on an NVIDIA GPU (default libx264).
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { encryptPlaylist, encryptSegment, KEY_FILE, newVideoKey } from "../src/lib/hls-crypto.ts";
 import { r2Fetch } from "../src/lib/video.ts";
 
 const POLL_MS = 30_000;
@@ -182,6 +184,7 @@ async function encode(uid: string) {
       return;
     }
     log(uid, `encoded in ${Math.round((Date.now() - started) / 1000)} s`);
+    await encryptOutput(out);
 
     const files = (await readdir(out, { recursive: true, withFileTypes: true })).filter((f) => f.isFile());
     log(uid, `uploading ${files.length} files`);
@@ -195,6 +198,24 @@ async function encode(uid: string) {
   } finally {
     await rm(work, { recursive: true, force: true });
   }
+}
+
+/** Encrypts every rung's segments in place and writes the key; see src/lib/hls-crypto.ts. */
+async function encryptOutput(out: string) {
+  const key = newVideoKey();
+  const playlists = (await readdir(out, { recursive: true, withFileTypes: true })).filter(
+    (f) => f.isFile() && f.name === "index.m3u8",
+  );
+  for (const f of playlists) {
+    const file = join(f.parentPath, f.name);
+    const { text, segments } = encryptPlaylist(await readFile(file, "utf8"));
+    for (const seg of segments) {
+      const path = join(f.parentPath, seg.from);
+      await writeFile(path, encryptSegment(await readFile(path), key, seg.sequence));
+    }
+    await writeFile(file, text);
+  }
+  await writeFile(join(out, KEY_FILE), key);
 }
 
 async function purge(uid: string) {

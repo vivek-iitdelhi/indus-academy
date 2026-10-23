@@ -1,6 +1,6 @@
 import { site } from "@/content/site";
 import { licensedLesson } from "@/lib/distributors";
-import { hlsManifestUrl, signPlaybackToken, thumbnailUrl, videoConfigured } from "@/lib/video";
+import { signPlaybackToken, thumbnailUrl, videoConfigured } from "@/lib/video";
 import { apiError, json, notFound, withDistributor } from "../../../_shared";
 
 const MIN_TTL = 5 * 60;
@@ -24,10 +24,10 @@ export const GET = withDistributor(
 
     const expiresAt = new Date((Math.floor(Date.now() / 1000) + ttl) * 1000);
     const token = signPlaybackToken(lesson.videoUid, ttl);
+    // A player page to embed, not a playlist: the segments are encrypted and only our player
+    // (on our origin) can fetch the key, so nothing a partner receives is downloadable.
     return json({
-      // The public origin, not request.url: behind the AWS load balancer that is the container's
-      // internal address, which partners' players cannot reach.
-      hls: new URL(hlsManifestUrl(lesson.videoUid, token), site.url).href,
+      embed_url: `${site.url}/embed/${lesson.videoUid}?t=${encodeURIComponent(token)}`,
       thumbnail: thumbnailUrl(lesson.videoUid, ttl),
       expires_at: expiresAt.toISOString(),
     });

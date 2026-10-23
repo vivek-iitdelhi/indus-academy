@@ -6,7 +6,7 @@ import { courses, lessonProgress, lessons, quizQuestions, type QuizQuestion } fr
 import { formatDuration, isUuid } from "@/lib/admin/courses";
 import { requireAdmin } from "@/lib/session";
 import { VideoPlayer } from "@/components/video-player";
-import { hlsManifestUrl, signPlaybackToken, videoConfigured } from "@/lib/video";
+import { hlsManifestUrl, keyProof, signPlaybackToken, videoConfigured } from "@/lib/video";
 import {
   deleteLesson,
   deleteQuestion,
@@ -90,6 +90,7 @@ export default async function LessonEditorPage({ params }: PageProps<"/admin/cou
   ]);
   const configured = videoConfigured();
   const ready = Boolean(lesson.videoUid) && lesson.durationSeconds > 0;
+  const previewToken = ready && lesson.videoUid ? signPlaybackToken(lesson.videoUid, 3600) : null;
 
   return (
     <div className="space-y-8">
@@ -167,7 +168,8 @@ export default async function LessonEditorPage({ params }: PageProps<"/admin/cou
               {ready && lesson.videoUid && (
                 <VideoPlayer
                   key={lesson.videoUid} // a promoted replacement remounts the player
-                  src={hlsManifestUrl(lesson.videoUid, signPlaybackToken(lesson.videoUid, 3600))}
+                  src={hlsManifestUrl(lesson.videoUid, previewToken!)}
+                  keyProof={keyProof(previewToken!)}
                   lessonId={lesson.id}
                   title={`Preview: ${lesson.title}`}
                   durationSeconds={lesson.durationSeconds}

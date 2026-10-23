@@ -12,13 +12,17 @@ import { quizQuestions } from "@/db/schema";
 import { canViewLesson } from "@/lib/lms/access";
 import { getLesson, isLessonUnlocked } from "@/lib/lms/courses";
 import { requireUser } from "@/lib/session";
-import { hlsManifestUrl, signPlaybackToken, videoConfigured } from "@/lib/video";
+import { hlsManifestUrl, keyProof, signPlaybackToken, videoConfigured } from "@/lib/video";
 
 // Public test stream so the player and progress can be exercised without a video provider.
 const DEV_SAMPLE_HLS = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
 
 function playbackSource(videoUid: string | null) {
-  if (videoConfigured()) return videoUid ? { src: hlsManifestUrl(videoUid, signPlaybackToken(videoUid)), devSample: false } : null;
+  if (videoConfigured()) {
+    if (!videoUid) return null;
+    const token = signPlaybackToken(videoUid);
+    return { src: hlsManifestUrl(videoUid, token), keyProof: keyProof(token), devSample: false };
+  }
   return process.env.NODE_ENV !== "production" ? { src: DEV_SAMPLE_HLS, devSample: true } : null;
 }
 
@@ -68,6 +72,7 @@ export default async function LessonPage({ params }: PageProps<"/learn/[course]/
         <VideoPlayer
           key={lesson.id}
           src={source.src}
+          keyProof={"keyProof" in source ? source.keyProof : undefined}
           lessonId={lesson.id}
           title={lesson.title}
           durationSeconds={lesson.durationSeconds}
