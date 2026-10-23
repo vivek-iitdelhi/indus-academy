@@ -287,15 +287,19 @@ export const distributorBatches = pgTable(
 );
 
 /** Every flip of a batch's "Payment received" toggle. */
-export const batchPaymentEvents = pgTable("batch_payment_events", {
-  id: id(),
-  batchId: uuid("batch_id")
-    .notNull()
-    .references(() => distributorBatches.id, { onDelete: "cascade" }),
-  paid: boolean("paid").notNull(),
-  by: text("by").notNull(),
-  at: ts("at").notNull().defaultNow(),
-});
+export const batchPaymentEvents = pgTable(
+  "batch_payment_events",
+  {
+    id: id(),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => distributorBatches.id, { onDelete: "cascade" }),
+    paid: boolean("paid").notNull(),
+    by: text("by").notNull(),
+    at: ts("at").notNull().defaultNow(),
+  },
+  (t) => [index("batch_payment_events_batch_id_idx").on(t.batchId)],
+);
 
 // A client's learner: their user id on the client's platform, mapped to our own user row.
 // Never merged with direct customers, even on the same email.
@@ -339,7 +343,11 @@ export const enrollments = pgTable(
     expiresAt: ts("expires_at"), // null = never
     nudgedAt: ts("nudged_at"), // last "pick up where you left off" email, so it is sent once per idle spell
   },
-  (t) => [unique("enrollments_user_id_course_id_unique").on(t.userId, t.courseId)],
+  (t) => [
+    unique("enrollments_user_id_course_id_unique").on(t.userId, t.courseId),
+    index("enrollments_batch_id_idx").on(t.batchId),
+    index("enrollments_distributor_id_idx").on(t.distributorId),
+  ],
 );
 
 export const payments = pgTable("payments", {

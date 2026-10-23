@@ -23,6 +23,7 @@ import {
   validExternalId,
   waitingCertificates,
 } from "./partners.ts";
+import { issueOrGetCertificate } from "./certificates.ts";
 
 // Certificates are HMAC-signed; the tests issue real ones (certificates.ts reads this at call time).
 process.env.CERTIFICATE_SECRET ??= "test-only-secret";
@@ -33,6 +34,8 @@ test("validExternalId: 1–200 chars, no surrounding spaces", () => {
   assert.equal(validExternalId(" u"), false);
   assert.equal(validExternalId("x".repeat(200)), true);
   assert.equal(validExternalId("x".repeat(201)), false);
+  assert.equal(validExternalId("bulk"), false); // reserved: /learners/bulk is the bulk endpoint
+  assert.equal(validExternalId("bulky"), true);
 });
 
 test("parseLearnerInput: name required, email optional and checked", () => {
@@ -227,6 +230,7 @@ describe("partner learners", { skip: !process.env.DATABASE_URL && "DATABASE_URL 
     const { d, course, learner } = await setup({ mode: "on_completion", certificateEnabled: false });
     const done = await recordCompletion(d.id, learner, course.id, { batch: "Jun", completedAt: new Date() });
     assert.equal(done.status, "not_offered");
+    assert.equal((await listBatches(d.id))[0].waiting, 0);
     const [{ batch }] = await listBatches(d.id);
     assert.equal(await releaseCertificates(await batchEnrollmentIds(batch.id), { force: true }), 0);
   });
@@ -235,6 +239,7 @@ describe("partner learners", { skip: !process.env.DATABASE_URL && "DATABASE_URL 
     const { d, course, learner } = await setup({ mode: "manual" });
     await recordCompletion(d.id, learner, course.id, { batch: "Jul", completedAt: new Date() });
     assert.equal(await waitingCertificates(d.id), 1);
+    assert.equal((await listBatches(d.id))[0].waiting, 1);
     assert.equal(await setReleaseMode(d.id, "on_completion"), 1);
     assert.equal(await waitingCertificates(d.id), 0);
   });
@@ -250,6 +255,22 @@ describe("partner learners", { skip: !process.env.DATABASE_URL && "DATABASE_URL 
     assert.equal(await undoCompletion(learner.userId, course.id), "released");
   });
 
+  test("undo racing a release: a certificate that exists wins, and a repeat completion records it", async () => {
+    const { d, course, learner } = await setup();
+    await recordCompletion(d.id, learner, course.id, { batch: "Race", completedAt: new Date() });
+    assert.equal(await undoCompletion(learner.userId, course.id), "undone");
+    // The release landed between undo's check and its update: a certificate with an uncompleted enrolment.
+    await issueOrGetCertificate(learner.userId, course.id, { partnerName: "TCS", searchVisible: false });
+    assert.equal(await undoCompletion(learner.userId, course.id), "released");
+    const done = await recordCompletion(d.id, learner, course.id, { batch: "Race", completedAt: new Date() });
+    assert.equal(done.status, "released");
+    assert.equal(done.batch, "Race");
+    // Completed and certified: undo is refused and the batch is untouched.
+    assert.equal(await undoCompletion(learner.userId, course.id), "released");
+    const again = await recordCompletion(d.id, learner, course.id, { batch: "Other", completedAt: new Date() });
+    assert.equal(again.batch, "Race");
+  });
+
   test("a released completion is not changed by a repeat", async () => {
     const { d, course, learner } = await setup({ mode: "on_completion" });
     const first = await recordCompletion(d.id, learner, course.id, { batch: "Sep", completedAt: new Date() });
@@ -262,7 +283,7 @@ describe("partner learners", { skip: !process.env.DATABASE_URL && "DATABASE_URL 
     const { d, course, learner } = await setup({ mode: "on_completion" });
     await recordCompletion(d.id, learner, course.id, { batch: "Oct", completedAt: new Date() });
     const [row] = await listBatches(d.id);
-    assert.deepEqual([row.batch.name, row.learners, row.completed, row.released], ["Oct", 1, 1, 1]);
+    assert.deepEqual([row.batch.name, row.learners, row.completed, row.released, row.waiting], ["Oct", 1, 1, 1, 0]);
     assert.equal(await renameLearner(learner.userId, "Asha R. Rao"), true);
     assert.equal((await certRows(learner.userId))[0].holderName, "Asha R. Rao");
     assert.equal(await renameLearner("not-a-partner-user", "X"), false);

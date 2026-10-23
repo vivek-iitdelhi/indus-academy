@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, notExists, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import {
   batchPaymentEvents,
@@ -33,7 +33,7 @@ const record = (body: unknown): Record<string, unknown> =>
 const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 /** The client's user id: 1–200 characters, no leading or trailing spaces. */
-export const validExternalId = (id: string) => id.length >= 1 && id.length <= 200 && id.trim() === id;
+export const validExternalId = (id: string) => id.length >= 1 && id.length <= 200 && id.trim() === id && id !== "bulk"; // "bulk" is the /learners/bulk endpoint
 
 export function parseLearnerInput(body: unknown): Parsed<LearnerInput> {
   const b = record(body);
@@ -139,7 +139,10 @@ const completedPartnerEnrollment = and(eq(enrollments.source, "distributor"), is
  * Idempotent: an existing certificate is never issued again. Returns how many were newly issued.
  */
 export async function releaseCertificates(enrollmentIds: string[], { force = false } = {}): Promise<number> {
-  if (!enrollmentIds.length) return 0;
+  return enrollmentIds.length ? releaseWhere(inArray(enrollments.id, enrollmentIds), force) : 0;
+}
+
+async function releaseWhere(which: SQL, force = false): Promise<number> {
   const rows = await db
     .select({
       userId: enrollments.userId,
@@ -152,7 +155,8 @@ export async function releaseCertificates(enrollmentIds: string[], { force = fal
     .innerJoin(courses, eq(courses.id, enrollments.courseId))
     .innerJoin(distributors, eq(distributors.id, enrollments.distributorId))
     .leftJoin(distributorBatches, eq(distributorBatches.id, enrollments.batchId))
-    .where(and(inArray(enrollments.id, enrollmentIds), completedPartnerEnrollment, eq(courses.certificateEnabled, true)));
+    .leftJoin(certificates, certificateOfEnrollment)
+    .where(and(which, completedPartnerEnrollment, eq(courses.certificateEnabled, true), isNull(certificates.serial)));
   let issued = 0;
   // ponytail: one enrolment at a time (about 4 queries each); fine for batches of hundreds.
   for (const r of rows) {
@@ -216,28 +220,52 @@ export async function recordCompletion(
   courseId: string,
   input: Pick<CompletionInput, "batch" | "completedAt">,
 ): Promise<LearnerCertificate> {
-  if (!(await hasCertificate(learner.userId, courseId))) {
+  const certified = await hasCertificate(learner.userId, courseId);
+  const [done] = certified
+    ? await db
+        .select({ id: enrollments.id })
+        .from(enrollments)
+        .where(and(eq(enrollments.userId, learner.userId), eq(enrollments.courseId, courseId), completedPartnerEnrollment))
+    : [];
+  if (!done) {
     const batch = await batchNamed(distributorId, input.batch);
     const values = { distributorId, batchId: batch.id, completedAt: input.completedAt, source: "distributor" as const };
+    // A certificate already out (an undo lost the race with a release): record the completion
+    // but never move the enrolment to another batch.
+    const set = certified
+      ? {
+          ...values,
+          completedAt: sql`coalesce(${enrollments.completedAt}, ${input.completedAt.toISOString()}::timestamptz)`,
+          batchId: sql`coalesce(${enrollments.batchId}, ${batch.id})`,
+        }
+      : values;
     const [enrollment] = await db
       .insert(enrollments)
       .values({ userId: learner.userId, courseId, ...values })
-      .onConflictDoUpdate({ target: [enrollments.userId, enrollments.courseId], set: values })
+      .onConflictDoUpdate({ target: [enrollments.userId, enrollments.courseId], set })
       .returning({ id: enrollments.id });
-    await releaseCertificates([enrollment.id]);
+    if (!certified) await releaseCertificates([enrollment.id]);
   }
   return (await learnerCertificates(learner.userId, courseId))[0];
 }
 
 /** Takes back a mistaken completion. Refused once the certificate is out (revoke it instead). */
 export async function undoCompletion(userId: string, courseId: string): Promise<"undone" | "not_completed" | "released"> {
-  if (await hasCertificate(userId, courseId)) return "released";
+  // One statement, so a release cannot slip in between the certificate check and the update.
   const undone = await db
     .update(enrollments)
     .set({ completedAt: null, batchId: null })
-    .where(and(eq(enrollments.userId, userId), eq(enrollments.courseId, courseId), completedPartnerEnrollment))
+    .where(
+      and(
+        eq(enrollments.userId, userId),
+        eq(enrollments.courseId, courseId),
+        completedPartnerEnrollment,
+        notExists(db.select({ one: sql`1` }).from(certificates).where(certificateOfEnrollment)),
+      ),
+    )
     .returning({ id: enrollments.id });
-  return undone.length ? "undone" : "not_completed";
+  if (undone.length) return "undone";
+  return (await hasCertificate(userId, courseId)) ? "released" : "not_completed";
 }
 
 export async function batchEnrollmentIds(batchId: string): Promise<string[]> {
@@ -260,11 +288,7 @@ export async function setBatchPaid(batchId: string, paid: boolean, by: string): 
 /** Changes when the client's certificates are issued, then releases whatever the new mode allows. */
 export async function setReleaseMode(distributorId: string, mode: CertificateReleaseMode): Promise<number> {
   await db.update(distributors).set({ certificateRelease: mode }).where(eq(distributors.id, distributorId));
-  const rows = await db
-    .select({ id: enrollments.id })
-    .from(enrollments)
-    .where(and(eq(enrollments.distributorId, distributorId), completedPartnerEnrollment));
-  return releaseCertificates(rows.map((r) => r.id));
+  return releaseWhere(eq(enrollments.distributorId, distributorId));
 }
 
 export function listBatches(distributorId: string) {
@@ -274,9 +298,12 @@ export function listBatches(distributorId: string) {
       learners: sql<number>`count(distinct ${enrollments.userId})::int`,
       completed: sql<number>`count(${enrollments.completedAt})::int`,
       released: sql<number>`count(${certificates.serial}) filter (where ${certificates.revokedAt} is null)::int`,
+      // Completed, certificate course, no certificate yet: what "Generate" would issue.
+      waiting: sql<number>`count(*) filter (where ${enrollments.completedAt} is not null and ${courses.certificateEnabled} and ${certificates.serial} is null)::int`,
     })
     .from(distributorBatches)
     .leftJoin(enrollments, eq(enrollments.batchId, distributorBatches.id))
+    .leftJoin(courses, eq(courses.id, enrollments.courseId))
     .leftJoin(certificates, certificateOfEnrollment)
     .where(eq(distributorBatches.distributorId, distributorId))
     .groupBy(distributorBatches.id)
