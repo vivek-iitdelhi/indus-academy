@@ -1,3 +1,4 @@
+import { site } from "@/content/site";
 import { licensedLesson } from "@/lib/distributors";
 import { hlsManifestUrl, signPlaybackToken, thumbnailUrl, videoConfigured } from "@/lib/video";
 import { apiError, json, notFound, withDistributor } from "../../../_shared";
@@ -24,7 +25,9 @@ export const GET = withDistributor(
     const expiresAt = new Date((Math.floor(Date.now() / 1000) + ttl) * 1000);
     const token = signPlaybackToken(lesson.videoUid, ttl);
     return json({
-      hls: new URL(hlsManifestUrl(lesson.videoUid, token), request.url).href,
+      // The public origin, not request.url: behind the AWS load balancer that is the container's
+      // internal address, which partners' players cannot reach.
+      hls: new URL(hlsManifestUrl(lesson.videoUid, token), site.url).href,
       thumbnail: thumbnailUrl(lesson.videoUid, ttl),
       expires_at: expiresAt.toISOString(),
     });
