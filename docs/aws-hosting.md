@@ -83,3 +83,19 @@ The Vercel project no longer serves the domain.
 
 `aws cloudformation delete-stack --profile sociafy --region ap-south-1 --stack-name indus-academy`
 removes everything except the ECR repository and the secret.
+
+## Video encoder (L40S GPU)
+
+`scripts/encoder.ts` runs on the L40S box `l40ssociafy` (SSH alias in `~/.ssh/config`;
+Sociafy account, ap-south-2) as the systemd **user** service `indus-encoder`, encoding with
+`h264_nvenc` and encrypting the segments (AES-128) before upload. It needs only three files,
+copied to `~/indus-encoder/` there, plus `.env.encoder` (R2 keys, `VIDEO_ENCODER=h264_nvenc`):
+
+```sh
+scp scripts/encoder.ts l40ssociafy:indus-encoder/scripts/
+scp src/lib/video.ts src/lib/hls-crypto.ts l40ssociafy:indus-encoder/src/lib/
+ssh l40ssociafy 'systemctl --user restart indus-encoder && systemctl --user is-active indus-encoder'
+```
+
+Node 24 lives in `~/.local/node` there (no sudo on that box). The admin panel shows the encoder
+online from its heartbeat in R2 (`encoder/heartbeat.json`).
