@@ -40,12 +40,17 @@ export async function recordApiRequest(distributorId: string, endpoint: string, 
     });
 }
 
-const totals = { requests: sql<number>`sum(${apiUsageDaily.requests})::int`, errors: sql<number>`sum(${apiUsageDaily.errors})::int` };
-const inWindow = (distributorId: string, days: number, now: Date) =>
-  and(eq(apiUsageDaily.distributorId, distributorId), gte(apiUsageDaily.day, firstDay(days, now)));
+/** Every day ("2026-10-23") of the last `days` days, oldest first, India time. */
+export const daysInWindow = (days: number, now = new Date()) =>
+  Array.from({ length: days }, (_, i) => firstDay(days - i, now));
 
-/** The client's requests per endpoint over the last `days` days, busiest first. */
-export function usageByEndpoint(distributorId: string, days = 30, now = new Date()) {
+const totals = { requests: sql<number>`sum(${apiUsageDaily.requests})::int`, errors: sql<number>`sum(${apiUsageDaily.errors})::int` };
+/** The last `days` days, for one client or (null) every client. */
+const inWindow = (distributorId: string | null, days: number, now: Date) =>
+  and(gte(apiUsageDaily.day, firstDay(days, now)), distributorId ? eq(apiUsageDaily.distributorId, distributorId) : undefined);
+
+/** Requests per endpoint over the last `days` days, busiest first; null = every client. */
+export function usageByEndpoint(distributorId: string | null, days = 30, now = new Date()) {
   return db
     .select({ endpoint: apiUsageDaily.endpoint, ...totals })
     .from(apiUsageDaily)
@@ -54,8 +59,8 @@ export function usageByEndpoint(distributorId: string, days = 30, now = new Date
     .orderBy(desc(totals.requests));
 }
 
-/** The client's requests per day over the last `days` days (days with none are absent), oldest first. */
-export function usageByDay(distributorId: string, days = 30, now = new Date()) {
+/** Requests per day over the last `days` days (days with none are absent), oldest first; null = every client. */
+export function usageByDay(distributorId: string | null, days = 30, now = new Date()) {
   return db
     .select({ day: apiUsageDaily.day, ...totals })
     .from(apiUsageDaily)
@@ -64,12 +69,12 @@ export function usageByDay(distributorId: string, days = 30, now = new Date()) {
     .orderBy(apiUsageDaily.day);
 }
 
-/** Requests per client over the last `days` days, for the distributors list. */
-export async function requestsByDistributor(days = 7, now = new Date()): Promise<Map<string, number>> {
+/** Requests and errors per client over the last `days` days. */
+export async function usageByDistributor(days = 7, now = new Date()): Promise<Map<string, { requests: number; errors: number }>> {
   const rows = await db
-    .select({ distributorId: apiUsageDaily.distributorId, requests: totals.requests })
+    .select({ distributorId: apiUsageDaily.distributorId, ...totals })
     .from(apiUsageDaily)
-    .where(gte(apiUsageDaily.day, firstDay(days, now)))
+    .where(inWindow(null, days, now))
     .groupBy(apiUsageDaily.distributorId);
-  return new Map(rows.map((r) => [r.distributorId, r.requests]));
+  return new Map(rows.map((r) => [r.distributorId, { requests: r.requests, errors: r.errors }]));
 }

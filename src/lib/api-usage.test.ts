@@ -4,7 +4,7 @@ import { after, describe, test } from "node:test";
 import { inArray } from "drizzle-orm";
 import { db } from "../db/index.ts";
 import { distributors } from "../db/schema.ts";
-import { endpointOf, recordApiRequest, requestsByDistributor, usageByDay, usageByEndpoint } from "./api-usage.ts";
+import { daysInWindow, endpointOf, recordApiRequest, usageByDay, usageByDistributor, usageByEndpoint } from "./api-usage.ts";
 
 test("endpointOf: method plus route pattern, ids replaced", () => {
   const u = (path: string) => `https://indusai.academy/api/v1${path}`;
@@ -20,6 +20,11 @@ test("endpointOf: method plus route pattern, ids replaced", () => {
   assert.equal(endpointOf("POST", u("/completions/bulk")), "POST /completions/bulk");
   assert.equal(endpointOf("GET", u("/batches")), "GET /batches");
   assert.equal(endpointOf("GET", u("/nope/x")), "GET other");
+});
+
+test("daysInWindow: consecutive India-time days ending today", () => {
+  const now = new Date("2026-10-23T20:00:00Z"); // 01:30 on the 24th in India
+  assert.deepEqual(daysInWindow(3, now), ["2026-10-22", "2026-10-23", "2026-10-24"]);
 });
 
 // Against a real database: DATABASE_URL=postgres://localhost/indus_lms npm test
@@ -57,7 +62,11 @@ describe("api usage", { skip: !process.env.DATABASE_URL && "DATABASE_URL not set
       ],
     );
     assert.equal((await usageByDay(d.id, 1, now)).length, 1); // today only
-    const totals = await requestsByDistributor(7, now);
-    assert.equal(totals.get(d.id), 4);
+    const totals = await usageByDistributor(7, now);
+    assert.deepEqual(totals.get(d.id), { requests: 4, errors: 2 });
+    // null = every client: includes this one's rows
+    const all = await usageByEndpoint(null, 30, now);
+    assert.ok((all.find((r) => r.endpoint === "GET /courses")?.requests ?? 0) >= 3);
+    assert.ok((await usageByDay(null, 30, now)).some((r) => r.day === "2026-10-24" && r.requests >= 3));
   });
 });

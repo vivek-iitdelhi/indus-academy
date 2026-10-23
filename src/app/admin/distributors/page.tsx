@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { db } from "@/db";
 import { courses, distributorCourses, distributors } from "@/db/schema";
 import { ActionForm } from "@/app/admin/learners/action-form";
-import { requestsByDistributor } from "@/lib/api-usage";
+import { usageByDistributor } from "@/lib/api-usage";
 import { requireAdmin } from "@/lib/session";
 import { setDistributorStatus, setLicensedCourses } from "./actions";
 import { CreateDistributorForm, RotateKeyForm } from "./key-forms";
@@ -27,7 +27,7 @@ export default async function AdminDistributorsPage() {
     db.select().from(distributors).orderBy(desc(distributors.createdAt)),
     db.select().from(distributorCourses),
     db.select({ id: courses.id, title: courses.title, status: courses.status }).from(courses).orderBy(asc(courses.title)),
-    requestsByDistributor(7),
+    usageByDistributor(7),
   ]);
 
   return (
@@ -35,7 +35,11 @@ export default async function AdminDistributorsPage() {
       <h1 className="text-3xl font-semibold tracking-[-0.03em]">Distributors</h1>
       <p className="mt-3 max-w-2xl text-muted">
         Partner platforms that receive licensed courses over the API (<code>docs/distributor-api.md</code>). They see
-        only licensed courses that are published.
+        only licensed courses that are published. Usage, learners and certificates for every client side by side:{" "}
+        <Link href="/admin/analytics" className="text-pine underline underline-offset-4">
+          Partner analytics
+        </Link>
+        .
       </p>
 
       <section className="mt-8 rounded-2xl border border-line bg-white p-5">
@@ -73,7 +77,7 @@ export default async function AdminDistributorsPage() {
                 <Fact label="Licensed courses">{d.allCourses ? "All courses" : licensed.size}</Fact>
                 <Fact label="Created">{when(d.createdAt)}</Fact>
                 <Fact label="Last used">{when(d.lastUsedAt)}</Fact>
-                <Fact label="Requests (7 days)">{(requests7d.get(d.id) ?? 0).toLocaleString("en-IN")}</Fact>
+                <Fact label="Requests (7 days)">{(requests7d.get(d.id)?.requests ?? 0).toLocaleString("en-IN")}</Fact>
               </dl>
 
               <div className="mt-4 flex flex-wrap items-start gap-6">

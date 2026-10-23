@@ -17,6 +17,7 @@ import {
   releaseCertificates,
   renameLearner,
   setBatchPaid,
+  partnerStats,
   setReleaseMode,
   undoCompletion,
   upsertLearner,
@@ -277,6 +278,15 @@ describe("partner learners", { skip: !process.env.DATABASE_URL && "DATABASE_URL 
     const again = await recordCompletion(d.id, learner, course.id, { batch: "Other", completedAt: new Date() });
     assert.equal(again.batch, "Sep");
     assert.equal(again.certificate?.serial, first.certificate?.serial);
+  });
+
+  test("partnerStats: learners, completions, released, waiting and unpaid batches per client", async () => {
+    const { d, course, learner } = await setup();
+    await recordCompletion(d.id, learner, course.id, { batch: "Stats", completedAt: new Date() });
+    assert.deepEqual((await partnerStats()).get(d.id), { learners: 1, completions: 1, released: 0, waiting: 1, unpaidBatches: 1 });
+    const [{ batch }] = await listBatches(d.id);
+    await setBatchPaid(batch.id, true, "admin@x.com");
+    assert.deepEqual((await partnerStats()).get(d.id), { learners: 1, completions: 1, released: 1, waiting: 0, unpaidBatches: 0 });
   });
 
   test("listBatches counts, and renameLearner fixes released certificates", async () => {

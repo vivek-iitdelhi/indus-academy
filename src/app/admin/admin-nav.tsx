@@ -11,6 +11,7 @@ const links = [
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/certificates", label: "Certificates" },
   { href: "/admin/distributors", label: "Distributors" },
+  { href: "/admin/analytics", label: "Partner analytics" },
   { href: "/admin/admins", label: "Admins" },
 ];
 

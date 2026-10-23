@@ -355,3 +355,34 @@ export async function renameLearner(userId: string, name: string): Promise<boole
   await db.update(certificates).set({ holderName: name }).where(and(eq(certificates.userId, userId), isNull(certificates.revokedAt)));
   return true;
 }
+
+export type PartnerStats = { learners: number; completions: number; released: number; waiting: number; unpaidBatches: number };
+
+/**
+ * Per client: learners created over the API, completions reported, certificates released (not
+ * revoked), completions still waiting for a certificate, and unpaid batches that have completions.
+ */
+export async function partnerStats(): Promise<Map<string, PartnerStats>> {
+  const rows = await db.execute<{ id: string } & PartnerStats>(sql`
+    select d.id,
+      (select count(*) from ${partnerLearners} pl where pl.distributor_id = d.id)::int as learners,
+      (select count(*) from ${enrollments} e
+        where e.distributor_id = d.id and e.source = 'distributor' and e.completed_at is not null)::int as completions,
+      (select count(*) from ${enrollments} e
+        join ${certificates} c on c.user_id = e.user_id and c.course_id = e.course_id and c.revoked_at is null
+        where e.distributor_id = d.id and e.source = 'distributor')::int as released,
+      (select count(*) from ${enrollments} e
+        join ${courses} co on co.id = e.course_id and co.certificate_enabled
+        where e.distributor_id = d.id and e.source = 'distributor' and e.completed_at is not null
+          and not exists (select 1 from ${certificates} c where c.user_id = e.user_id and c.course_id = e.course_id))::int as waiting,
+      (select count(*) from ${distributorBatches} b
+        where b.distributor_id = d.id and b.paid_at is null
+          and exists (select 1 from ${enrollments} e where e.batch_id = b.id and e.completed_at is not null))::int as "unpaidBatches"
+    from ${distributors} d`);
+  return new Map(
+    [...rows].map(({ id, learners, completions, released, waiting, unpaidBatches }) => [
+      id,
+      { learners, completions, released, waiting, unpaidBatches },
+    ]),
+  );
+}
