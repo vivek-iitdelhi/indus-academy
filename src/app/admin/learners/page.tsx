@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, notExists, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { enrollments, user } from "@/db/schema";
+import { enrollments, partnerLearners, user } from "@/db/schema";
 import { formatDate } from "@/lib/admin/ops";
 import { requireAdmin } from "@/lib/session";
 import { btn, input, PAGE_SIZE, PageTitle, Pager, pageParam, param, Table } from "./admin-ui";
@@ -23,7 +23,13 @@ export default async function AdminLearnersPage({ searchParams }: PageProps<"/ad
     })
     .from(user)
     .leftJoin(enrollments, eq(enrollments.userId, user.id))
-    .where(q ? or(ilike(user.email, pattern), ilike(user.name, pattern)) : undefined)
+    .where(
+      and(
+        // Partner learners are managed on their distributor's page.
+        notExists(db.select({ one: sql`1` }).from(partnerLearners).where(eq(partnerLearners.userId, user.id))),
+        q ? or(ilike(user.email, pattern), ilike(user.name, pattern)) : undefined,
+      ),
+    )
     .groupBy(user.id)
     .orderBy(desc(user.createdAt), user.id)
     .limit(PAGE_SIZE + 1)

@@ -129,7 +129,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
             {courseTitle}
           </div>
           {cert.partnerName && (
-            <div style={{ marginTop: 22, fontSize: 26, color: muted }}>{`Delivered in partnership with ${cert.partnerName}`}</div>
+            <div style={{ marginTop: 22, fontSize: 26, color: muted, textAlign: "center", maxWidth: 1200 }}>{`Delivered in partnership with ${cert.partnerName}`}</div>
           )}
 
           <div style={{ display: "flex", width: "100%", gap: 48, marginTop: "auto" }}>

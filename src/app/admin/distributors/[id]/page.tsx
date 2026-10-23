@@ -17,6 +17,7 @@ const MODES: [CertificateReleaseMode, string][] = [
 const when = (date: Date | null) =>
   date ? date.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" }) : "–";
 const button = "h-9 rounded-full bg-ink px-4 text-sm font-medium text-paper hover:bg-pine";
+const certificates = (n: number) => `${n} certificate${n === 1 ? "" : "s"}`;
 const link = "text-sm font-medium text-pine underline underline-offset-4";
 
 export default async function DistributorPage({ params, searchParams }: PageProps<"/admin/distributors/[id]">) {
@@ -80,9 +81,8 @@ export default async function DistributorPage({ params, searchParams }: PageProp
         <h2 className="font-semibold">Batches</h2>
         {batches.length === 0 && <p className="mt-3 text-sm text-muted">No batches yet. They appear when the client reports completions.</p>}
         <ul className="mt-4 grid gap-3">
-          {batches.map(({ batch, learners: count, completed, released }) => {
+          {batches.map(({ batch, learners: count, completed, released, waiting: waitingHere }) => {
             const paid = batch.paidAt !== null;
-            const waitingHere = completed - released;
             return (
               <li key={batch.id} className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-3 text-sm">
                 <Link href={`?batch=${batch.id}`} className="font-semibold underline underline-offset-4">
@@ -97,7 +97,7 @@ export default async function DistributorPage({ params, searchParams }: PageProp
                   confirm={
                     paid
                       ? `Mark ${batch.name} as not paid? Certificates already released stay valid.`
-                      : `Mark ${batch.name} as paid${distributor.certificateRelease === "on_payment" && waitingHere ? ` and release ${waitingHere} certificates` : ""}?`
+                      : `Mark ${batch.name} as paid${distributor.certificateRelease === "on_payment" && waitingHere ? ` and release ${certificates(waitingHere)}` : ""}?`
                   }
                   className="flex flex-wrap items-center gap-2"
                 >
@@ -108,7 +108,7 @@ export default async function DistributorPage({ params, searchParams }: PageProp
                 {waitingHere > 0 && (
                   <ActionForm
                     action={generateCertificates}
-                    confirm={`Generate ${waitingHere} certificates for ${batch.name} now, whether or not it is paid?`}
+                    confirm={`Generate ${certificates(waitingHere)} for ${batch.name} now, whether or not it is paid?`}
                     className="flex flex-wrap items-center gap-2"
                   >
                     <input type="hidden" name="distributorId" value={id} />
@@ -142,7 +142,7 @@ export default async function DistributorPage({ params, searchParams }: PageProp
                     <ActionForm action={renameLearnerAction} className="flex flex-wrap items-center gap-2">
                       <input type="hidden" name="distributorId" value={id} />
                       <input type="hidden" name="userId" value={l.userId} />
-                      <input name="name" defaultValue={l.name} maxLength={120} className="h-8 rounded-lg border border-line px-2" />
+                      <input name="name" aria-label={`Name for ${l.externalId}`} defaultValue={l.name} maxLength={120} className="h-8 rounded-lg border border-line px-2" />
                       <button className={link}>Save</button>
                     </ActionForm>
                   </td>
