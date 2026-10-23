@@ -61,7 +61,10 @@ export async function setLicensedCourses(form: FormData) {
   const id = idOf(form);
   if (!id) return;
   const wanted = form.getAll("courseId").map(String).filter(isUuid);
+  const allCourses = field(form, "scope") === "all";
   await db.transaction(async (tx) => {
+    await tx.update(distributors).set({ allCourses }).where(eq(distributors.id, id));
+    // The picked list is saved either way, so switching back from "all" restores it.
     // Keep only real courses, so a stale or tampered form cannot fail the insert.
     const valid = wanted.length
       ? await tx.select({ id: courses.id }).from(courses).where(inArray(courses.id, wanted))

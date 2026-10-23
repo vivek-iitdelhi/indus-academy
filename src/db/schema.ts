@@ -248,6 +248,8 @@ export const distributors = pgTable("distributors", {
   keyPrefix: text("key_prefix").notNull(), // first ~8 chars, for display
   keyHash: text("key_hash").notNull().unique(), // sha256 hex of the full key
   status: text("status", { enum: distributorStatuses }).notNull().default("active"),
+  // Licensed for every published course, including ones published later (distributor_courses then unused).
+  allCourses: boolean("all_courses").notNull().default(false),
   // Printed on co-branded certificates ("Delivered in partnership with …"); null = plain.
   certificateName: text("certificate_name"),
   // When partner learners' certificates are issued (docs/distributor-api.md).

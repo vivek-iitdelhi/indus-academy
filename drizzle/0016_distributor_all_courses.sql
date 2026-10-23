@@ -1,0 +1,1 @@
+ALTER TABLE "distributors" ADD COLUMN "all_courses" boolean DEFAULT false NOT NULL;

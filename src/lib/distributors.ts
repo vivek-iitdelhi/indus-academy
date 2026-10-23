@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, or, sql } from "drizzle-orm";
 import { db } from "../db/index.ts";
 import { courses, distributorCourses, distributors, lessons, type Course, type Distributor, type Lesson } from "../db/schema.ts";
 
@@ -43,8 +43,15 @@ export async function authenticateDistributor(request: Request): Promise<Distrib
   return distributor;
 }
 
+/** Condition on `courses`: published, and licensed to the distributor (all courses, or picked ones). */
 const licensedPublished = (distributorId: string) =>
-  and(eq(distributorCourses.distributorId, distributorId), eq(distributorCourses.courseId, courses.id), eq(courses.status, "published"));
+  and(
+    eq(courses.status, "published"),
+    or(
+      sql`exists (select 1 from ${distributors} where ${distributors.id} = ${distributorId} and ${distributors.allCourses})`,
+      sql`exists (select 1 from ${distributorCourses} where ${distributorCourses.distributorId} = ${distributorId} and ${distributorCourses.courseId} = ${courses.id})`,
+    ),
+  );
 
 /** Published courses licensed to the distributor, with lesson count and total duration. */
 export function licensedCourses(distributorId: string) {
@@ -55,8 +62,8 @@ export function licensedCourses(distributorId: string) {
       totalDurationSeconds: sql<number>`coalesce(sum(${lessons.durationSeconds}), 0)::int`,
     })
     .from(courses)
-    .innerJoin(distributorCourses, licensedPublished(distributorId))
     .leftJoin(lessons, eq(lessons.courseId, courses.id))
+    .where(licensedPublished(distributorId))
     .groupBy(courses.id)
     .orderBy(asc(courses.title));
 }
@@ -66,8 +73,7 @@ export async function licensedCourse(distributorId: string, slug: string): Promi
   const [row] = await db
     .select({ course: courses })
     .from(courses)
-    .innerJoin(distributorCourses, licensedPublished(distributorId))
-    .where(eq(courses.slug, slug))
+    .where(and(eq(courses.slug, slug), licensedPublished(distributorId)))
     .limit(1);
   return row?.course ?? null;
 }
@@ -82,8 +88,7 @@ export async function licensedLesson(distributorId: string, lessonId: string): P
     .select({ lesson: lessons })
     .from(lessons)
     .innerJoin(courses, eq(lessons.courseId, courses.id))
-    .innerJoin(distributorCourses, licensedPublished(distributorId))
-    .where(eq(lessons.id, lessonId))
+    .where(and(eq(lessons.id, lessonId), licensedPublished(distributorId)))
     .limit(1);
   return row?.lesson ?? null;
 }

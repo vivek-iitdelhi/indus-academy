@@ -67,7 +67,7 @@ export default async function AdminDistributorsPage() {
                 <Fact label="Key">
                   <code className="font-mono text-xs">{d.keyPrefix}…</code>
                 </Fact>
-                <Fact label="Licensed courses">{licensed.size}</Fact>
+                <Fact label="Licensed courses">{d.allCourses ? "All courses" : licensed.size}</Fact>
                 <Fact label="Created">{when(d.createdAt)}</Fact>
                 <Fact label="Last used">{when(d.lastUsedAt)}</Fact>
               </dl>
@@ -87,9 +87,22 @@ export default async function AdminDistributorsPage() {
               </div>
 
               <details className="mt-4 border-t border-line pt-4">
-                <summary className="cursor-pointer text-sm font-medium">Edit licensed courses</summary>
+                <summary className="cursor-pointer text-sm font-medium">Edit courses</summary>
                 <form action={setLicensedCourses} className="mt-3">
                   <input type="hidden" name="id" value={d.id} />
+                  <fieldset className="mb-4 grid gap-2 text-sm">
+                    <legend className="sr-only">Which courses {d.name} gets</legend>
+                    <label className="flex items-center gap-3">
+                      <input type="radio" name="scope" value="all" defaultChecked={d.allCourses} />
+                      <span>
+                        <span className="font-medium">All courses</span>, including ones published later
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-3">
+                      <input type="radio" name="scope" value="selected" defaultChecked={!d.allCourses} />
+                      <span>Only the courses ticked below</span>
+                    </label>
+                  </fieldset>
                   <fieldset className="grid gap-2">
                     <legend className="sr-only">Licensed courses for {d.name}</legend>
                     {allCourses.map((c) => (
@@ -101,7 +114,7 @@ export default async function AdminDistributorsPage() {
                     ))}
                   </fieldset>
                   <button className="mt-4 h-10 rounded-full bg-ink px-5 text-sm font-medium text-paper hover:bg-pine">
-                    Save licences
+                    Save courses
                   </button>
                 </form>
               </details>
