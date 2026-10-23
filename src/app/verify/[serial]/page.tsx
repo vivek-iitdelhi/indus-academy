@@ -113,6 +113,7 @@ export default async function VerifyPage({ params }: PageProps<"/verify/[serial]
         {[
           ["Awarded to", c.holderName || "Name not yet confirmed"],
           ["Course", r.courseTitle],
+          ...(c.partnerName ? [["In partnership with", c.partnerName]] : []),
           ["Issued on", formatIssueDate(c.issuedAt)],
           ["Certificate no.", c.serial],
           ["Issued by", `${company.legalName} (CIN ${company.cin})`],

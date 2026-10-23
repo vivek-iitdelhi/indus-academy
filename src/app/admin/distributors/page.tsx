@@ -1,4 +1,5 @@
 import { asc, desc } from "drizzle-orm";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { db } from "@/db";
 import { courses, distributorCourses, distributors } from "@/db/schema";
@@ -72,6 +73,9 @@ export default async function AdminDistributorsPage() {
               </dl>
 
               <div className="mt-4 flex flex-wrap items-start gap-6">
+                <Link href={`/admin/distributors/${d.id}`} className="text-sm font-medium text-pine underline underline-offset-4">
+                  Learners &amp; certificates
+                </Link>
                 <RotateKeyForm id={d.id} name={d.name} />
                 <form action={setDistributorStatus}>
                   <input type="hidden" name="id" value={d.id} />

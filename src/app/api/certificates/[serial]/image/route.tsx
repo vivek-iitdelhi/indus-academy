@@ -50,7 +50,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
   // Revalidated on every view (cheap: one query) and re-rendered only when what it shows
   // changes (revocation, a name being set, a redeploy), so a revocation shows at once.
   const etag = `"${createHash("sha1")
-    .update(JSON.stringify([cert.holderName, courseTitle, cert.issuedAt, stamp, fonts.length, site.url, process.env.VERCEL_GIT_COMMIT_SHA]))
+    .update(JSON.stringify([cert.holderName, courseTitle, cert.partnerName, cert.issuedAt, stamp, fonts.length, site.url, process.env.VERCEL_GIT_COMMIT_SHA]))
     .digest("base64url")}"`;
   const headers: Record<string, string> = { "Cache-Control": "public, no-cache", ETag: etag };
   if (new URL(request.url).searchParams.get("download") === "1") {
@@ -128,6 +128,9 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
           >
             {courseTitle}
           </div>
+          {cert.partnerName && (
+            <div style={{ marginTop: 22, fontSize: 26, color: muted }}>{`Delivered in partnership with ${cert.partnerName}`}</div>
+          )}
 
           <div style={{ display: "flex", width: "100%", gap: 48, marginTop: "auto" }}>
             {[
