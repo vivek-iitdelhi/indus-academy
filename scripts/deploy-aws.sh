@@ -27,11 +27,14 @@ secret_arn=$(aws secretsmanager describe-secret --secret-id "$SECRET" --query AR
 db_sg=$(aws cloudformation describe-stack-resource --stack-name "$STACK" --logical-resource-id DbSecurityGroup \
   --query StackResourceDetail.PhysicalResourceId --output text 2>/dev/null || true)
 if [[ -n "$db_sg" ]]; then
-  # Docker can leave by a different public IP than this machine (VPN, dual WAN), and the
-  # build runs in Docker: allow both.
-  build_ips=$( { curl -s https://checkip.amazonaws.com; echo
-    docker run --rm node:24-slim node -e 'fetch("https://checkip.amazonaws.com").then(r=>r.text()).then(t=>console.log(t.trim()))'
-  } | grep -E '^[0-9.]+$' | sort -u)
+  # This network can leave by a different public IP per connection and destination (dual
+  # WAN), and the build runs in Docker: ask several IP echo services, several times, from
+  # here and from Docker, and allow every IP seen.
+  echo_urls="https://checkip.amazonaws.com https://api.ipify.org https://icanhazip.com https://ifconfig.me/ip https://ipinfo.io/ip"
+  build_ips=$( { for _ in 1 2 3; do for u in $echo_urls; do curl -s --max-time 5 "$u"; echo; done; done
+    docker run --rm node:24-slim node -e 'for (const u of process.argv.slice(1)) fetch(u).then(r=>r.text()).then(t=>console.log(t.trim())).catch(()=>{})' $echo_urls
+  } | grep -E '^[0-9]+(\.[0-9]+){3}$' | sort -u)
+  echo "Database open to the build machine: $(echo $build_ips)"
   for ip in $build_ips; do
     aws ec2 authorize-security-group-ingress --group-id "$db_sg" --protocol tcp --port 5432 --cidr "$ip/32" >/dev/null 2>&1 || true
   done
