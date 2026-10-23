@@ -4,7 +4,7 @@ import { digestAlreadySent, newsletterConfigured, sendDigest, todayInIndia } fro
 const DIGEST_DAYS = 7;
 
 /**
- * Called weekly by Vercel Cron (see vercel.json: Tuesdays, 04:30 UTC =
+ * Called weekly by EventBridge (infra/aws.yml, NewsletterSchedule: Tuesdays, 04:30 UTC =
  * 10:00 AM IST). Emails subscribers the articles published since the last
  * digest, or nothing at all if there were none.
  */

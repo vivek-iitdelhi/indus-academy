@@ -3,7 +3,7 @@ import { sendNudges } from "@/lib/lms/lifecycle";
 export const maxDuration = 120;
 
 /**
- * Called daily by Vercel Cron (see vercel.json: 03:30 UTC = 9:00 AM IST). Emails
+ * Called daily by EventBridge (infra/aws.yml, NudgeSchedule: 03:30 UTC = 9:00 AM IST). Emails
  * learners idle for over a week a link to their next lesson; see sendNudges.
  * Unlike the newsletter cron this fails closed: no CRON_SECRET, no run.
  */
