@@ -56,6 +56,48 @@ Resources:
       SecurityGroupIngress:
         - { IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSecurityGroup }
 
+  # Postgres next to the app (was Supabase in Sydney: every query crossed to Australia).
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: indus-academy database, reachable only from the app containers
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref AppSecurityGroup }
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: indus-academy database
+      SubnetIds: !Ref SubnetIds
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: indus-academy
+      Engine: postgres
+      EngineVersion: "17"
+      # ponytail: single-AZ small instance (2 vCPU burst, 2 GB, ~200 connections, enough for
+      # 10 tasks x 10). Set MultiAZ: true when an AZ outage must not take the site down.
+      DBInstanceClass: db.t4g.small
+      AllocatedStorage: "20"
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: indus
+      MasterUsername: indus
+      ManageMasterUserPassword: true # password lives in a Secrets Manager secret RDS manages
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups: [!Ref DbSecurityGroup]
+      # Public endpoint so a one-off data load can reach it; the security group admits only
+      # the app containers (plus an operator IP added by hand, then removed).
+      PubliclyAccessible: true
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+      AutoMinorVersionUpgrade: true
+
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -304,3 +346,7 @@ Outputs:
     Value: !GetAtt LoadBalancer.DNSName
   ServiceUrl:
     Value: !If [HasCert, !Ref SiteUrl, !Sub "http://${LoadBalancer.DNSName}"]
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  DatabaseSecretArn:
+    Value: !GetAtt Database.MasterUserSecret.SecretArn

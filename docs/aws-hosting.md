@@ -5,7 +5,7 @@ as the same Next.js app it was on Vercel, packaged as a container.
 
 ```
 indusai.academy ─► Application Load Balancer ─► ECS Fargate: 2–10 containers (0.5 vCPU / 1 GB, ARM)
-                                                 ├─ Supabase Postgres (unchanged)
+                                                 ├─ RDS Postgres 17 (Mumbai, same network)
                                                  └─ Cloudflare R2 video (unchanged)
 ```
 
@@ -16,7 +16,8 @@ indusai.academy ─► Application Load Balancer ─► ECS Fargate: 2–10 cont
 | Containers, auto-scaled on CPU (target 60%, min 2, max 10) | ECS cluster and service `indus-academy` |
 | App environment, one JSON object | Secrets Manager `indus-academy/prod` |
 | Logs (14 days) | CloudWatch `/ecs/indus-academy` |
-| Weekly newsletter, daily nudge (were Vercel crons) | EventBridge rules, off until `CRONS_ENABLED=true` |
+| Weekly newsletter, daily nudge (were Vercel crons) | EventBridge rules (on since 23 Oct 2026) |
+| Database: RDS `indus-academy` (db.t4g.small, 7-day backups, deletion protection). Admits only the app containers; `deploy-aws.sh` lets the build machine in while it builds | Master password in the RDS-managed secret (stack output `DatabaseSecretArn`) |
 
 The load balancer checks `/`, not `/api/health`. `/api/health` queries the database, so a
 database blip would mark every container unhealthy at once. Use `/api/health` yourself to
@@ -49,7 +50,14 @@ Every key listed under `Secrets` in `infra/aws.yml` must exist in the JSON (an e
 is fine). A missing key stops the containers from starting. To add a new setting, add it in
 both places.
 
-## Going live (DNS at Hostinger)
+## Status
+
+Live since 23 Oct 2026: `indusai.academy` and `www` point at the load balancer (Hostinger ALIAS/CNAME),
+HTTPS uses ACM certificate `598fc400-…`, and the database moved from Supabase (Sydney) to RDS in
+Mumbai the same day. The Supabase project still holds the data as of that move: a backup, not live.
+The Vercel project no longer serves the domain.
+
+## Going live (DNS at Hostinger), done
 
 1. Request the certificate: `aws acm request-certificate --profile sociafy --region ap-south-1
    --domain-name indusai.academy --subject-alternative-names www.indusai.academy

@@ -23,6 +23,14 @@ fi
 aws ecr get-login-password | docker login --username AWS --password-stdin "$registry" >/dev/null
 
 secret_arn=$(aws secretsmanager describe-secret --secret-id "$SECRET" --query ARN --output text)
+# The database admits only the app containers; let this machine in for the build, then out.
+db_sg=$(aws cloudformation describe-stack-resource --stack-name "$STACK" --logical-resource-id DbSecurityGroup \
+  --query StackResourceDetail.PhysicalResourceId --output text 2>/dev/null || true)
+if [[ -n "$db_sg" ]]; then
+  my_ip="$(curl -s https://checkip.amazonaws.com)/32"
+  aws ec2 authorize-security-group-ingress --group-id "$db_sg" --protocol tcp --port 5432 --cidr "$my_ip" >/dev/null 2>&1 || true
+  trap 'aws ec2 revoke-security-group-ingress --group-id "$db_sg" --protocol tcp --port 5432 --cidr "$my_ip" >/dev/null 2>&1 || true' EXIT
+fi
 # Lets the build prerender the course catalogue from the live database.
 DATABASE_URL=$(aws secretsmanager get-secret-value --secret-id "$SECRET" --query SecretString --output text |
   node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0, "utf8")).DATABASE_URL || "")')
