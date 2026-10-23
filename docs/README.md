@@ -22,6 +22,8 @@ Background (the original plan; superseded where the foundation doc says so):
 
 ## Operations
 
+- **[aws-hosting.md](aws-hosting.md)**: how the site runs on AWS (ECS Fargate behind a
+  load balancer, Mumbai), how to deploy, change settings and go live.
 - **[program-delivery.md](program-delivery.md)** — how the live programmes are run:
   delivery standards, cohort dates, early-bird rules, refund terms.
 - **[blog-automation.md](blog-automation.md)** — the cloud routine that researches and

@@ -1,0 +1,306 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  indusai.academy on AWS: the Next.js container on ECS Fargate (ARM) behind an
+  Application Load Balancer, auto-scaling on CPU, plus the two scheduled jobs.
+  Deployed by scripts/deploy-aws.sh; see docs/aws-hosting.md.
+
+Parameters:
+  ImageUri:
+    Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets (the default VPC's). Tasks get public IPs, so no NAT gateway.
+  SecretArn:
+    Type: String
+    Description: Secrets Manager secret holding the app's environment as one JSON object.
+  SiteUrl:
+    Type: String
+    Default: https://indusai.academy
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate for the site. Empty = plain HTTP only (before the DNS switch).
+  CronsEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Turn on only after DNS points here and the Vercel crons are gone, or jobs run twice.
+  MinTasks:
+    Type: Number
+    Default: 2
+  MaxTasks:
+    Type: Number
+    Default: 10
+
+Conditions:
+  HasCert: !Not [!Equals [!Ref CertificateArn, ""]]
+  CronsOn: !Equals [!Ref CronsEnabled, "true"]
+
+Resources:
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: indus-academy load balancer
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: indus-academy app containers, reachable only from the load balancer
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 3000, ToPort: 3000, SourceSecurityGroupId: !Ref AlbSecurityGroup }
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: indus-academy
+      Scheme: internet-facing
+      Subnets: !Ref SubnetIds
+      SecurityGroups: [!Ref AlbSecurityGroup]
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: indus-academy
+      VpcId: !Ref VpcId
+      TargetType: ip
+      Protocol: HTTP
+      Port: 3000
+      # The home page, not /api/health: that one checks the database, and a database blip
+      # would then mark every container unhealthy and restart them all at once.
+      HealthCheckPath: /
+      Matcher: { HttpCode: "200-399" }
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - { Key: deregistration_delay.timeout_seconds, Value: "30" }
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - !If
+          - HasCert
+          - Type: redirect
+            RedirectConfig: { Protocol: HTTPS, Port: "443", StatusCode: HTTP_301 }
+          - Type: forward
+            TargetGroupArn: !Ref TargetGroup
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCert
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates: [{ CertificateArn: !Ref CertificateArn }]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/indus-academy
+      RetentionInDays: 14
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: indus-academy
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: ecs-tasks.amazonaws.com }, Action: sts:AssumeRole }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: read-app-secret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - { Effect: Allow, Action: secretsmanager:GetSecretValue, Resource: !Ref SecretArn }
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: indus-academy
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      RuntimePlatform: { CpuArchitecture: ARM64, OperatingSystemFamily: LINUX }
+      Cpu: "512"
+      Memory: "1024"
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: app
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings: [{ ContainerPort: 3000 }]
+          Environment:
+            - { Name: NEXT_PUBLIC_SITE_URL, Value: !Ref SiteUrl }
+            - { Name: BETTER_AUTH_URL, Value: !Ref SiteUrl }
+          # Every key must exist in the secret's JSON (an empty string is fine for unset
+          # ones), or the container fails to start. Add a key here and in the secret together.
+          Secrets:
+            - { Name: DATABASE_URL, ValueFrom: !Sub "${SecretArn}:DATABASE_URL::" }
+            - { Name: BETTER_AUTH_SECRET, ValueFrom: !Sub "${SecretArn}:BETTER_AUTH_SECRET::" }
+            - { Name: ADMIN_EMAILS, ValueFrom: !Sub "${SecretArn}:ADMIN_EMAILS::" }
+            - { Name: AUTH_GOOGLE_ID, ValueFrom: !Sub "${SecretArn}:AUTH_GOOGLE_ID::" }
+            - { Name: AUTH_GOOGLE_SECRET, ValueFrom: !Sub "${SecretArn}:AUTH_GOOGLE_SECRET::" }
+            - { Name: RESEND_API_KEY, ValueFrom: !Sub "${SecretArn}:RESEND_API_KEY::" }
+            - { Name: RESEND_SEGMENT_ID, ValueFrom: !Sub "${SecretArn}:RESEND_SEGMENT_ID::" }
+            - { Name: ENQUIRY_TO_EMAIL, ValueFrom: !Sub "${SecretArn}:ENQUIRY_TO_EMAIL::" }
+            - { Name: ENQUIRY_FROM_EMAIL, ValueFrom: !Sub "${SecretArn}:ENQUIRY_FROM_EMAIL::" }
+            - { Name: NEWSLETTER_FROM, ValueFrom: !Sub "${SecretArn}:NEWSLETTER_FROM::" }
+            - { Name: CRON_SECRET, ValueFrom: !Sub "${SecretArn}:CRON_SECRET::" }
+            - { Name: STATS_TOKEN, ValueFrom: !Sub "${SecretArn}:STATS_TOKEN::" }
+            - { Name: CASHFREE_APP_ID, ValueFrom: !Sub "${SecretArn}:CASHFREE_APP_ID::" }
+            - { Name: CASHFREE_SECRET_KEY, ValueFrom: !Sub "${SecretArn}:CASHFREE_SECRET_KEY::" }
+            - { Name: COMPANY_GSTIN, ValueFrom: !Sub "${SecretArn}:COMPANY_GSTIN::" }
+            - { Name: CERTIFICATE_SECRET, ValueFrom: !Sub "${SecretArn}:CERTIFICATE_SECRET::" }
+            - { Name: LINKEDIN_ORGANIZATION_ID, ValueFrom: !Sub "${SecretArn}:LINKEDIN_ORGANIZATION_ID::" }
+            - { Name: GOOGLE_SITE_VERIFICATION, ValueFrom: !Sub "${SecretArn}:GOOGLE_SITE_VERIFICATION::" }
+            - { Name: R2_ENDPOINT, ValueFrom: !Sub "${SecretArn}:R2_ENDPOINT::" }
+            - { Name: R2_BUCKET, ValueFrom: !Sub "${SecretArn}:R2_BUCKET::" }
+            - { Name: R2_ACCESS_KEY_ID, ValueFrom: !Sub "${SecretArn}:R2_ACCESS_KEY_ID::" }
+            - { Name: R2_SECRET_ACCESS_KEY, ValueFrom: !Sub "${SecretArn}:R2_SECRET_ACCESS_KEY::" }
+            - { Name: VIDEO_TOKEN_SECRET, ValueFrom: !Sub "${SecretArn}:VIDEO_TOKEN_SECRET::" }
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: app
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: HttpListener
+    Properties:
+      ServiceName: indus-academy
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      # No DesiredCount: auto-scaling owns it, and a deploy must not reset it.
+      HealthCheckGracePeriodSeconds: 30
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+        DeploymentCircuitBreaker: { Enable: true, Rollback: true }
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups: [!Ref AppSecurityGroup]
+      LoadBalancers:
+        - { ContainerName: app, ContainerPort: 3000, TargetGroupArn: !Ref TargetGroup }
+
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      ResourceId: !Sub "service/${Cluster}/${Service.Name}"
+      MinCapacity: !Ref MinTasks
+      MaxCapacity: !Ref MaxTasks
+
+  CpuScaling:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: indus-academy-cpu
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification: { PredefinedMetricType: ECSServiceAverageCPUUtilization }
+        TargetValue: 60
+        ScaleOutCooldown: 60
+        ScaleInCooldown: 300
+
+  # Scheduled jobs (were Vercel crons). EventBridge calls the same endpoints with the
+  # Bearer CRON_SECRET header Vercel used to send.
+  # ponytail: API destinations give up after 5 s; the routes keep running after the
+  # caller hangs up, but nothing retries a failure. Move to a Lambda if that bites.
+  CronConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: indus-academy-cron
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: Authorization
+          ApiKeyValue: !Sub "Bearer {{resolve:secretsmanager:${SecretArn}:SecretString:CRON_SECRET}}"
+
+  NewsletterDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      ConnectionArn: !GetAtt CronConnection.Arn
+      InvocationEndpoint: !Sub "${SiteUrl}/api/newsletter/send"
+      HttpMethod: GET
+      InvocationRateLimitPerSecond: 1
+
+  NudgeDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      ConnectionArn: !GetAtt CronConnection.Arn
+      InvocationEndpoint: !Sub "${SiteUrl}/api/cron/nudge"
+      HttpMethod: GET
+      InvocationRateLimitPerSecond: 1
+
+  CronRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: events.amazonaws.com }, Action: sts:AssumeRole }
+      Policies:
+        - PolicyName: invoke-cron-endpoints
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource: [!GetAtt NewsletterDestination.Arn, !GetAtt NudgeDestination.Arn]
+
+  # Same UTC times as vercel.json. No retries: a timed-out call may still have sent mail.
+  NewsletterSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: cron(30 4 ? * TUE *)
+      State: !If [CronsOn, ENABLED, DISABLED]
+      Targets:
+        - Id: newsletter
+          Arn: !GetAtt NewsletterDestination.Arn
+          RoleArn: !GetAtt CronRole.Arn
+          RetryPolicy: { MaximumRetryAttempts: 0 }
+
+  NudgeSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: cron(30 3 * * ? *)
+      State: !If [CronsOn, ENABLED, DISABLED]
+      Targets:
+        - Id: nudge
+          Arn: !GetAtt NudgeDestination.Arn
+          RoleArn: !GetAtt CronRole.Arn
+          RetryPolicy: { MaximumRetryAttempts: 0 }
+
+Outputs:
+  LoadBalancerDns:
+    Value: !GetAtt LoadBalancer.DNSName
+  ServiceUrl:
+    Value: !If [HasCert, !Ref SiteUrl, !Sub "http://${LoadBalancer.DNSName}"]

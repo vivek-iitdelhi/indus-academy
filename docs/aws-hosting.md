@@ -1,0 +1,77 @@
+# AWS hosting
+
+The site runs on AWS account **902916048044** (Sociafy), region **ap-south-1** (Mumbai),
+as the same Next.js app it was on Vercel, packaged as a container.
+
+```
+indusai.academy ─► Application Load Balancer ─► ECS Fargate: 2–10 containers (0.5 vCPU / 1 GB, ARM)
+                                                 ├─ Supabase Postgres (unchanged)
+                                                 └─ Cloudflare R2 video (unchanged)
+```
+
+| Piece | Where |
+| --- | --- |
+| Everything below as one CloudFormation stack, `indus-academy` | `infra/aws.yml` |
+| Container image (last 10 kept) | ECR repository `indus-academy` |
+| Containers, auto-scaled on CPU (target 60%, min 2, max 10) | ECS cluster and service `indus-academy` |
+| App environment, one JSON object | Secrets Manager `indus-academy/prod` |
+| Logs (14 days) | CloudWatch `/ecs/indus-academy` |
+| Weekly newsletter, daily nudge (were Vercel crons) | EventBridge rules, off until `CRONS_ENABLED=true` |
+
+The load balancer checks `/`, not `/api/health`. `/api/health` queries the database, so a
+database blip would mark every container unhealthy at once. Use `/api/health` yourself to
+diagnose a deployment.
+
+## Deploy
+
+```sh
+aws login --profile sociafy   # when the session has expired
+scripts/deploy-aws.sh
+```
+
+This builds the image from your working tree, pushes it, and rolls it out. It waits until
+the new containers pass health checks. A rollout that fails health checks rolls back on its
+own. It needs Docker running.
+
+## Change a setting
+
+```sh
+aws secretsmanager get-secret-value --profile sociafy --region ap-south-1 \
+  --secret-id indus-academy/prod --query SecretString --output text > /tmp/env.json
+# edit /tmp/env.json, then:
+aws secretsmanager put-secret-value --profile sociafy --region ap-south-1 \
+  --secret-id indus-academy/prod --secret-string file:///tmp/env.json && rm /tmp/env.json
+aws ecs update-service --profile sociafy --region ap-south-1 \
+  --cluster indus-academy --service indus-academy --force-new-deployment
+```
+
+Every key listed under `Secrets` in `infra/aws.yml` must exist in the JSON (an empty string
+is fine). A missing key stops the containers from starting. To add a new setting, add it in
+both places.
+
+## Going live (DNS at Hostinger)
+
+1. Request the certificate: `aws acm request-certificate --profile sociafy --region ap-south-1
+   --domain-name indusai.academy --subject-alternative-names www.indusai.academy
+   --validation-method DNS`. Add the CNAME it gives you (`aws acm describe-certificate`) at
+   Hostinger and wait for `ISSUED`.
+2. `CERTIFICATE_ARN=<arn> scripts/deploy-aws.sh`: adds HTTPS and redirects HTTP to it.
+3. At Hostinger, point `indusai.academy` and `www` at the load balancer (stack output
+   `LoadBalancerDns`). For the apex, use an ALIAS/ANAME record, or a CNAME on `www` with the
+   apex redirecting to it.
+4. Update the Cashfree webhook URL and the Google OAuth redirect if they named a Vercel host.
+5. Remove the crons from Vercel (or the Vercel project), then
+   `CRONS_ENABLED=true scripts/deploy-aws.sh`. Run both and every newsletter goes out twice.
+
+## Multi-container rules
+
+- The catalogue (`/courses`, the sitemap) revalidates every 60 s. `revalidateCourse()` only
+  refreshes the container that handled the admin edit; the others catch up within a minute.
+- `deploymentId` is the image tag, so tabs that were open during a deploy reload cleanly.
+- Anything kept in memory (a `Map`, a counter) exists once per container. Shared state
+  belongs in Postgres.
+
+## Tear down
+
+`aws cloudformation delete-stack --profile sociafy --region ap-south-1 --stack-name indus-academy`
+removes everything except the ECR repository and the secret.

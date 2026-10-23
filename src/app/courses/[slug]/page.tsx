@@ -14,9 +14,9 @@ import { breadcrumbSchema, ORGANIZATION_ID } from "@/lib/schema";
 import { formatDuration, formatLabels, getCatalogCourse, listPublishedCourses } from "../catalog";
 
 // Static per course, built from the database. Courses published after the build render on
-// first request and are cached; revalidateCourse() refreshes them, hourly as a safety net.
+// first request and are cached; revalidateCourse() refreshes them, and every minute on all servers.
 // Never read the session here: the per-visitor button state comes from CourseAction.
-export const revalidate = 3600;
+export const revalidate = 60;
 
 export async function generateStaticParams() {
   return (await listPublishedCourses()).map((course) => ({ slug: course.slug }));

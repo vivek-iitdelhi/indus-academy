@@ -7,9 +7,10 @@ import { pageMetadata } from "@/lib/metadata";
 import { breadcrumbSchema } from "@/lib/schema";
 import { listPublishedCourses } from "./catalog";
 
-// Prerendered; revalidateCourse() refreshes it after admin edits. The hourly pass is a
+// Prerendered; revalidateCourse() refreshes it after admin edits on the server that ran
+// them, and the minutely pass brings every other server (AWS runs several) up to date. It is a
 // safety net (and fills in a build that ran without a database).
-export const revalidate = 3600;
+export const revalidate = 60;
 
 export const metadata: Metadata = pageMetadata({
   title: "Self-Paced Online AI Courses",
