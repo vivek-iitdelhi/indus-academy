@@ -8,7 +8,7 @@ import { pageMetadata } from "@/lib/metadata";
 export const metadata = pageMetadata({
   title: "Developers: Partner API",
   description:
-    "The Indus AI Academy partner API: licensed courses, signed video playback, learners, completions and co-branded certificates over REST.",
+    "The Indus AI Academy partner API: licensed courses, protected video playback, learners, completions and co-branded certificates over REST.",
   path: "/developers",
 });
 
@@ -26,7 +26,7 @@ export default function DevelopersPage() {
       <PageHero
         eyebrow="Developers"
         title="Partner API"
-        intro="Deliver our courses on your own platform: course structure and quizzes, signed video playback, and co-branded certificates for your learners, over a simple REST API."
+        intro="Deliver our courses on your own platform: course structure and quizzes, protected video playback, and co-branded certificates for your learners, over a simple REST API."
         breadcrumbs={[
           { name: "Home", path: "/" },
           { name: "Developers", path: "/developers" },

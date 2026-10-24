@@ -1,7 +1,7 @@
 # Indus AI Academy distributor API (v1)
 
 For partner platforms licensed to deliver our courses. You get each licensed course's
-structure, its quizzes (with answers) and short-lived signed video URLs, and you run
+structure, its quizzes (with answers) and a protected video player to embed, and you run
 enrolment, progress and grading on your own platform. You tell us about your learners and
 their completions, and we issue our certificate for them, co-branded with your name, when
 it is released under the terms agreed with you (for example, once the batch is paid).
@@ -326,6 +326,29 @@ Errors share one shape:
 | 409    | `certificate_pending`     | The certificate has not been released yet                               |
 | 409    | `certificate_not_offered` | The course does not award certificates                                  |
 | 409    | `certificate_released`    | The completion can't be taken back: its certificate is released         |
+
+## Changelog
+
+### 23 Oct 2026: video playback moved to an embedded player (action needed)
+
+`GET /lessons/{lessonId}/playback` no longer returns `hls` (a playlist URL you played in
+your own player). It returns `embed_url`, a page with our player that you show in an
+iframe. Our videos are now encrypted, so the old playlist URLs, and any player other than
+ours, can no longer play them. This is the one exception to the rule below, made to stop
+course videos being downloaded.
+
+What to change on your side:
+
+1. Wherever you read `hls` from the playback response, read `embed_url` instead.
+2. Replace your video player (hls.js, video.js, `<video src>`, a native player…) with an
+   iframe whose `src` is `embed_url`, as shown under
+   [`GET /lessons/{lessonId}/playback`](#get-lessonslessonidplaybackttlseconds).
+3. Fetch a fresh `embed_url` each time a learner opens the lesson; don't store it.
+4. Remove any code that downloads, proxies or caches our playlists or video segments: it
+   only gets encrypted bytes now.
+
+Nothing else changed: the same key, the same lesson ids, and `thumbnail` and `expires_at`
+mean what they did. Mobile apps show `embed_url` in a WebView.
 
 ## Versioning
 
