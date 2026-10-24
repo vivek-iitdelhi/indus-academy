@@ -59,6 +59,7 @@ export function CourseOutlineList({
         <li key={chapter.id}>
           <p className="font-mono text-[0.7rem] uppercase tracking-[0.16em] text-muted">{chapter.title}</p>
           <ol className="mt-2 divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
+            {chapter.lessons.length === 0 && <li className="px-4 py-3 text-[0.95rem] text-muted">Coming soon</li>}
             {chapter.lessons.map((lesson) => {
               const current = lesson.id === currentLessonId;
               const body = (

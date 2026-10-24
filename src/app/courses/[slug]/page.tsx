@@ -137,6 +137,7 @@ export default async function CoursePage({ params }: PageProps<"/courses/[slug]"
                 <div>
                   <h3 className="text-xl font-semibold tracking-tight">{chapter.title}</h3>
                   <ol className="mt-4 space-y-2.5">
+                    {chapter.lessons.length === 0 && <li className="text-muted">Coming soon</li>}
                     {chapter.lessons.map((lesson) => (
                       <li key={lesson.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         <span className="mt-2.5 size-1 shrink-0 self-start rounded-full bg-saffron" aria-hidden="true" />
