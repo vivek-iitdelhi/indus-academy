@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { programBySlug, SHOW_PRICES } from "@/content/programs";
 import { db } from "@/db";
-import { payments, user as userTable } from "@/db/schema";
+import { enrollments, payments, user as userTable } from "@/db/schema";
 import { hasAccess } from "@/lib/lms/access";
+import { discountedPaise, findCoupon, INVALID_COUPON } from "@/lib/lms/coupons";
 import { getCourseBySlug } from "@/lib/lms/courses";
 import { cashfreeConfigured, cashfreeMode, createOrder } from "@/lib/cashfree";
 import { site } from "@/content/site";
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   const peek = (await request
     .clone()
     .json()
-    .catch(() => null)) as { courseSlug?: unknown; phone?: unknown } | null;
+    .catch(() => null)) as { courseSlug?: unknown; phone?: unknown; coupon?: unknown } | null;
   if (peek?.courseSlug !== undefined) return courseCheckout(peek);
 
   if (!cashfreeConfigured() || !SHOW_PRICES) {
@@ -92,11 +93,12 @@ export async function POST(request: Request) {
 }
 
 /**
- * A self-paced course, for the signed-in user. The payments row is written before the
- * order goes to the browser, so an abandoned payment leaves a trace; it blocks nothing,
- * since every attempt gets its own order.
+ * A self-paced course, for the signed-in user, optionally with a coupon code. The payments
+ * row is written before the order goes to the browser, so an abandoned payment leaves a
+ * trace; it blocks nothing, since every attempt gets its own order. A coupon that brings the
+ * price to nothing enrols straight away, without the gateway.
  */
-async function courseCheckout(body: { courseSlug?: unknown; phone?: unknown }) {
+async function courseCheckout(body: { courseSlug?: unknown; phone?: unknown; coupon?: unknown }) {
   const user = await getUser();
   if (!user) return Response.json({ error: "Please sign in to buy this course" }, { status: 401 });
 
@@ -106,6 +108,21 @@ async function courseCheckout(body: { courseSlug?: unknown; phone?: unknown }) {
   if (await hasAccess(user.id, course.id)) {
     return Response.json({ error: "You already own this course" }, { status: 409 });
   }
+
+  const wantsCoupon = typeof body.coupon === "string" && body.coupon.trim() !== "";
+  const coupon = wantsCoupon ? await findCoupon(course.id, body.coupon) : null;
+  if (wantsCoupon && !coupon) return Response.json({ error: INVALID_COUPON }, { status: 400 });
+  const amountPaise = coupon ? discountedPaise(course.pricePaise, coupon.percentOff) : course.pricePaise;
+
+  if (amountPaise === 0) {
+    // As with free courses, an existing (revoked) enrolment is left alone.
+    await db.insert(enrollments).values({ userId: user.id, courseId: course.id, source: "free", status: "active" }).onConflictDoNothing();
+    if (!(await hasAccess(user.id, course.id))) {
+      return Response.json({ error: "Your access to this course was removed. Please contact us." }, { status: 403 });
+    }
+    return Response.json({ redirect: `/learn/${course.slug}` });
+  }
+
   if (!cashfreeConfigured()) {
     return Response.json({ error: "Online payment is not available yet" }, { status: 503 });
   }
@@ -122,16 +139,17 @@ async function courseCheckout(body: { courseSlug?: unknown; phone?: unknown }) {
     const orderId = newOrderId("course");
     const order = await createOrder({
       orderId,
-      amountPaise: course.pricePaise,
+      amountPaise,
       customer: { id: user.id, phone, email: user.email, name: user.name },
       returnUrl: `${site.url}/courses/${course.slug}?order=${orderId}`,
-      tags: { kind: "course", course: course.slug },
+      tags: { kind: "course", course: course.slug, ...(coupon && { coupon: coupon.code }) },
     });
     await db.insert(payments).values({
       orderId: order.orderId,
       userId: user.id,
       courseId: course.id,
-      amountPaise: course.pricePaise,
+      amountPaise,
+      couponCode: coupon?.code ?? null,
       status: "created",
     });
     return Response.json({ ...order, mode: cashfreeMode() });

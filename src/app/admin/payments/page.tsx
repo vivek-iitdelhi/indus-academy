@@ -22,6 +22,7 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps<"/ad
       id: payments.id,
       createdAt: payments.createdAt,
       amountPaise: payments.amountPaise,
+      couponCode: payments.couponCode,
       status: payments.status,
       orderId: payments.orderId,
       paymentId: payments.paymentId,
@@ -87,7 +88,10 @@ export default async function AdminPaymentsPage({ searchParams }: PageProps<"/ad
                 )}
               </td>
               <td>{p.course}</td>
-              <td className="whitespace-nowrap">{formatRupees(p.amountPaise)}</td>
+              <td className="whitespace-nowrap">
+                {formatRupees(p.amountPaise)}
+                {p.couponCode && <span className="block font-mono text-xs text-muted">{p.couponCode}</span>}
+              </td>
               <td><Badge tone={statusTone[p.status]}>{p.status}</Badge></td>
               <td className="font-mono text-xs leading-relaxed">
                 {p.orderId}

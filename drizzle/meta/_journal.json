@@ -127,6 +127,13 @@
       "when": 1792748187398,
       "tag": "0017_api_usage_daily",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792818378407,
+      "tag": "0018_coupons",
+      "breakpoints": true
     }
   ]
 }

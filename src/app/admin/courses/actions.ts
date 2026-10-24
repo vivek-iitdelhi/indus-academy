@@ -7,6 +7,7 @@ import { db } from "@/db";
 import {
   chapters,
   courseFormats,
+  coupons,
   courseStatuses,
   courses,
   lessonKinds,
@@ -24,6 +25,7 @@ import {
   uniqueSlug,
 } from "@/lib/admin/courses";
 import { revalidateCourse } from "@/lib/catalog-cache";
+import { normalizeCode } from "@/lib/lms/coupons";
 import { requireAdminApi } from "@/lib/session";
 import { deleteVideo, videoConfigured } from "@/lib/video";
 import { SLUG_PATTERN, slugify } from "./slug";
@@ -439,3 +441,36 @@ export async function deleteQuestion(lessonId: string, questionId: string) {
   changed(course.slug);
 }
 
+
+// --- Coupons ----------------------------------------------------------------
+
+export async function createCoupon(courseId: string, form: FormData): Promise<ActionResult> {
+  await requireAdminApi();
+  const course = await findCourse(courseId);
+  const code = normalizeCode(form.get("code"));
+  if (!code) return { error: "Codes are 3–32 letters, numbers, - or _." };
+  const percentOff = Number(text(form, "percentOff"));
+  if (!Number.isInteger(percentOff) || percentOff < 1 || percentOff > 100) return { error: "Percent off must be a whole number from 1 to 100." };
+  try {
+    await db.insert(coupons).values({ courseId: course.id, code, percentOff });
+  } catch (e) {
+    if (isUniqueViolation(e)) return { error: `${code} already exists on this course.` };
+    throw e;
+  }
+  refresh();
+  return { ok: `${code} added: ${percentOff}% off.` };
+}
+
+export async function setCouponActive(couponId: string, active: boolean) {
+  await requireAdminApi();
+  if (!isUuid(couponId)) notFound();
+  await db.update(coupons).set({ active: Boolean(active) }).where(eq(coupons.id, couponId));
+  refresh();
+}
+
+export async function deleteCoupon(couponId: string) {
+  await requireAdminApi();
+  if (!isUuid(couponId)) notFound();
+  await db.delete(coupons).where(eq(coupons.id, couponId));
+  refresh();
+}

@@ -380,11 +380,28 @@ export const payments = pgTable("payments", {
     .notNull()
     .references(() => courses.id),
   amountPaise: integer("amount_paise").notNull(),
+  couponCode: text("coupon_code"), // the coupon that discounted amountPaise, if any
   status: text("status", { enum: paymentStatuses }).notNull().default("created"),
   refundId: text("refund_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+// Admin-made discount codes, one course each. Codes are stored uppercase.
+export const coupons = pgTable(
+  "coupons",
+  {
+    id: id(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    percentOff: integer("percent_off").notNull(), // 1–100
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [unique("coupons_course_id_code_unique").on(t.courseId, t.code)],
+);
 
 // Numbers the serials: IAA-<year>-<nextval, zero-padded to 4>.
 /** Last certificate number issued in each year (India time); serials restart at 0001 every year. */

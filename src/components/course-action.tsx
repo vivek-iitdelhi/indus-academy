@@ -6,6 +6,7 @@ import { formatRupees } from "@/lib/rupees";
 import { ButtonLink } from "./ui";
 
 type Ownership = { signedIn: boolean; owned: boolean; needsPhone: boolean; paymentsEnabled: boolean };
+type Coupon = { code: string; percentOff: number; pricePaise: number };
 
 const buttonClass =
   "inline-flex h-12 w-full items-center justify-center rounded-full bg-ink px-6 font-medium text-paper transition-colors hover:bg-pine disabled:opacity-60";
@@ -24,13 +25,26 @@ async function postJson(url: string, body: unknown) {
  */
 export function CourseAction({ slug, pricePaise }: { slug: string; pricePaise: number }) {
   const phoneId = useId();
+  const couponId = useId();
   const free = pricePaise <= 0;
+  const [coupon, setCoupon] = useState<Coupon | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
   const [me, setMe] = useState<Ownership | null>(null);
   const [askPhone, setAskPhone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const rupees = formatRupees(pricePaise);
-  const label = free ? "Start free" : `Buy ${rupees}`;
+  const rupees = formatRupees(coupon ? coupon.pricePaise : pricePaise);
+  const label = free ? "Start free" : coupon?.pricePaise === 0 ? "Enrol free with coupon" : `Buy ${rupees}`;
+
+  async function applyCoupon(code: string) {
+    setCouponError(null);
+    const { res, data } = await postJson("/api/checkout/coupon", { courseSlug: slug, code }).catch(() => ({
+      res: null,
+      data: {} as Record<string, string>,
+    }));
+    if (res?.ok) setCoupon(data as Coupon);
+    else setCouponError(data.error ?? "Couldn't check that code. Please try again.");
+  }
 
   async function enrolFree() {
     setBusy(true);
@@ -65,11 +79,13 @@ export function CourseAction({ slug, pricePaise }: { slug: string; pricePaise: n
     setBusy(true);
     setError(null);
     try {
-      const { res, data: order } = await postJson("/api/checkout", { courseSlug: slug, phone });
+      const { res, data: order } = await postJson("/api/checkout", { courseSlug: slug, phone, coupon: coupon?.code });
       if (!res.ok) {
         if (order.needsPhone) setAskPhone(true);
         throw new Error(order.error ?? "Could not start the payment");
       }
+      // A 100%-off coupon: enrolled without a payment.
+      if (order.redirect) return window.location.assign(order.redirect);
       setAskPhone(false);
 
       const result = await openCheckout(order);
@@ -83,6 +99,7 @@ export function CourseAction({ slug, pricePaise }: { slug: string; pricePaise: n
 
   function start(state: Ownership) {
     if (free) return void enrolFree();
+    if (coupon?.pricePaise === 0) return void pay();
     if (!state.paymentsEnabled) return;
     if (state.needsPhone) return setAskPhone(true);
     void pay();
@@ -180,6 +197,46 @@ export function CourseAction({ slug, pricePaise }: { slug: string; pricePaise: n
         {busy ? (free ? "Enrolling…" : "Opening payment…") : label}
       </button>
       {!free && <p className="mt-3 text-center text-xs text-muted">Secure payment. Price includes 18% GST.</p>}
+      {!free &&
+        (coupon ? (
+          <p role="status" className="mt-3 text-center text-sm text-pine">
+            {coupon.code}: {coupon.percentOff}% off (was {formatRupees(pricePaise)}).{" "}
+            <button type="button" onClick={() => setCoupon(null)} className="text-muted underline underline-offset-2 hover:text-ink">
+              Remove
+            </button>
+          </p>
+        ) : (
+          <details className="mt-3 text-sm">
+            <summary className="cursor-pointer text-center text-muted hover:text-ink">Have a coupon code?</summary>
+            <form
+              className="mt-2 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void applyCoupon(String(new FormData(e.currentTarget).get("code") ?? ""));
+              }}
+            >
+              <label htmlFor={couponId} className="sr-only">
+                Coupon code
+              </label>
+              <input
+                id={couponId}
+                name="code"
+                required
+                autoCapitalize="characters"
+                autoComplete="off"
+                className={`${inputClass} mt-0 uppercase`}
+              />
+              <button type="submit" className="shrink-0 rounded-xl border border-line px-4 font-medium hover:border-ink">
+                Apply
+              </button>
+            </form>
+            {couponError && (
+              <p role="alert" className="mt-2 text-red-800">
+                {couponError}
+              </p>
+            )}
+          </details>
+        ))}
       {errorNote}
     </>
   );

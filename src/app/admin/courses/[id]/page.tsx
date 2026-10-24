@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { count, eq } from "drizzle-orm";
+import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { courseFormats, courses, lessonProgress, lessons, quizQuestions, type CourseStatus } from "@/db/schema";
+import { coupons, courseFormats, courses, lessonProgress, lessons, payments, quizQuestions, type CourseStatus } from "@/db/schema";
 import { coursePublishProblems, formatDuration, isUuid, learnerRecordCounts } from "@/lib/admin/courses";
+import { discountedPaise } from "@/lib/lms/coupons";
 import { getCourseOutline, totalDurationSeconds } from "@/lib/lms/courses";
+import { formatRupees } from "@/lib/rupees";
 import { requireAdmin } from "@/lib/session";
 import {
   addChapter,
   addLesson,
+  createCoupon,
+  deleteCoupon,
   deleteChapter,
   deleteCourse,
   deleteLesson,
@@ -16,6 +20,7 @@ import {
   moveLesson,
   moveLessonToChapter,
   renameChapter,
+  setCouponActive,
   setCourseStatus,
   updateCourse,
 } from "../actions";
@@ -57,7 +62,7 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
   const [course] = await db.select().from(courses).where(eq(courses.id, id));
   if (!course) notFound();
 
-  const [outline, problems, records, progressRows, questionRows] = await Promise.all([
+  const [outline, problems, records, progressRows, questionRows, courseCoupons] = await Promise.all([
     getCourseOutline(course.id, { includeUnready: true }),
     coursePublishProblems(course.id),
     learnerRecordCounts(course.id),
@@ -73,6 +78,15 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
       .innerJoin(lessons, eq(quizQuestions.lessonId, lessons.id))
       .where(eq(lessons.courseId, course.id))
       .groupBy(quizQuestions.lessonId),
+    db
+      .select({
+        coupon: coupons,
+        uses: sql<number>`(select count(*) from ${payments} where ${payments.courseId} = ${coupons.courseId}
+          and ${payments.couponCode} = ${coupons.code} and ${payments.status} = 'paid')::int`,
+      })
+      .from(coupons)
+      .where(eq(coupons.courseId, course.id))
+      .orderBy(asc(coupons.code)),
   ]);
   const learnersOn = new Map(progressRows.map((r) => [r.lessonId, r.n]));
   const questionsOn = new Map(questionRows.map((r) => [r.lessonId, r.n]));
@@ -232,6 +246,66 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
               defaultChecked={course.certificateEnabled}
             />
           </div>
+        </ActionForm>
+      </section>
+
+      <section className={cardClass}>
+        <SectionTitle>Coupon codes</SectionTitle>
+        <p className="mt-1 text-sm text-muted">
+          Learners enter a code on the course page for a percentage off {formatRupees(course.pricePaise)}. 100% off enrols them
+          without a payment. Uses count paid orders.
+        </p>
+        {courseCoupons.length > 0 && (
+          <table className="mt-4 w-full max-w-2xl text-left text-sm">
+            <thead className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted">
+              <tr>
+                <th className="py-2">Code</th>
+                <th className="text-right">Off</th>
+                <th className="text-right">Learner pays</th>
+                <th className="text-right">Uses</th>
+                <th className="pl-6">Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {courseCoupons.map(({ coupon, uses }) => (
+                <tr key={coupon.id} className="border-t border-line">
+                  <td className="py-2 font-mono">{coupon.code}</td>
+                  <td className="text-right tabular-nums">{coupon.percentOff}%</td>
+                  <td className="text-right tabular-nums">{formatRupees(discountedPaise(course.pricePaise, coupon.percentOff))}</td>
+                  <td className="text-right tabular-nums">{uses}</td>
+                  <td className="pl-6">
+                    <form action={setCouponActive.bind(null, coupon.id, !coupon.active)}>
+                      <button className={miniButtonClass} aria-label={`${coupon.active ? "Pause" : "Turn on"} ${coupon.code}`}>
+                        {coupon.active ? "Active · pause" : "Paused · turn on"}
+                      </button>
+                    </form>
+                  </td>
+                  <td className="text-right">
+                    <form action={deleteCoupon.bind(null, coupon.id)}>
+                      <ConfirmButton message={`Delete coupon ${coupon.code}?`} className={`${miniButtonClass} text-red-800`}>
+                        Delete
+                      </ConfirmButton>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <ActionForm
+          action={createCoupon.bind(null, course.id)}
+          submitLabel="Add coupon"
+          submitClass={secondaryButtonClass}
+          resetOnSuccess
+          className="mt-4 flex flex-wrap items-end gap-3"
+        >
+          <Field label="Code">
+            <input name="code" required pattern="[A-Za-z0-9_-]{3,32}" placeholder="DIWALI20" className={`${inputClass} font-mono uppercase`} />
+          </Field>
+          <Field label="Percent off">
+            <input name="percentOff" type="number" min="1" max="100" step="1" required placeholder="20" className={`${inputClass} w-28 tabular-nums`} />
+          </Field>
         </ActionForm>
       </section>
 
