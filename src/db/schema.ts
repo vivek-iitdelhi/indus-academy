@@ -547,7 +547,28 @@ export const formResponses = pgTable(
   (t) => [index("form_responses_form_id_created_at_idx").on(t.formId, t.createdAt), index("form_responses_user_id_idx").on(t.userId)],
 );
 
+// ---------------------------------------------------------------------------
+// Live classes (src/lib/live.ts): one webinar.gg webinar each, scheduled from the course editor.
+
+export const liveSessions = pgTable(
+  "live_sessions",
+  {
+    id: id(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    startsAt: ts("starts_at").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    webinarId: text("webinar_id").notNull().unique(),
+    recordingUrl: text("recording_url"), // set by the webinar.gg webhook once the recording is ready
+    createdAt: createdAt(),
+  },
+  (t) => [index("live_sessions_course_id_starts_at_idx").on(t.courseId, t.startsAt)],
+);
+
 export type User = typeof user.$inferSelect;
+export type LiveSession = typeof liveSessions.$inferSelect;
 export type Course = typeof courses.$inferSelect;
 export type Chapter = typeof chapters.$inferSelect;
 export type Lesson = typeof lessons.$inferSelect;

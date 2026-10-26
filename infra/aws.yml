@@ -222,6 +222,7 @@ Resources:
             - { Name: R2_ACCESS_KEY_ID, ValueFrom: !Sub "${SecretArn}:R2_ACCESS_KEY_ID::" }
             - { Name: R2_SECRET_ACCESS_KEY, ValueFrom: !Sub "${SecretArn}:R2_SECRET_ACCESS_KEY::" }
             - { Name: VIDEO_TOKEN_SECRET, ValueFrom: !Sub "${SecretArn}:VIDEO_TOKEN_SECRET::" }
+            - { Name: WEBINAR_GG_TOKEN, ValueFrom: !Sub "${SecretArn}:WEBINAR_GG_TOKEN::" }
           LogConfiguration:
             LogDriver: awslogs
             Options:

@@ -173,6 +173,63 @@ Show it in an iframe:
   until it expires: put it only on the page of the learner who is watching.
 - Use `thumbnail` as a placeholder image before the player loads.
 
+## Live classes
+
+Some courses have scheduled live classes, taught by our instructors. Your learners attend
+them inside an iframe on your page, so they never leave your platform. Every class is
+recorded.
+
+### `GET /courses/{slug}/live-sessions`
+
+The course's live classes, oldest first.
+
+```json
+{
+  "live_sessions": [
+    {
+      "id": "5b0e7c1a-…",
+      "title": "Week 1: Prompting basics",
+      "starts_at": "2026-10-27T12:30:00.000Z",
+      "duration_minutes": 120,
+      "status": "open",
+      "recording_url": null
+    }
+  ]
+}
+```
+
+- `status`: `upcoming`, `open` (from 15 minutes before `starts_at` until an hour after the
+  planned end) or `ended`.
+- `recording_url` is set once the recording is ready, usually within a few hours of the end.
+
+### `POST /live-sessions/{id}/join`
+
+A room link for one learner. Call it when the learner opens the class, with the id you used
+in `PUT /learners/{external_id}`.
+
+```sh
+curl -X POST -H "Authorization: Bearer $IAA_KEY" -H "Content-Type: application/json" \
+  -d '{"external_id":"u_123"}' \
+  https://indusai.academy/api/v1/live-sessions/5b0e7c1a-…/join
+```
+
+```json
+{ "embed_url": "https://…", "expires_at": "2026-10-27T12:40:00.000Z" }
+```
+
+Show it in an iframe that may use the camera and microphone:
+
+```html
+<iframe src="EMBED_URL" style="width:100%;height:80vh;border:0"
+        allow="camera; microphone; autoplay; display-capture; fullscreen" allowfullscreen></iframe>
+```
+
+- The link is for that one learner. It must be opened within 10 minutes and survives a few
+  reloads. Fetch a new one each time the learner opens the class; don't store or share it.
+- The learner joins under the name you gave us. Their email is not passed on.
+- `409 not_open_yet` before the room opens, `409 ended` after the class; `404
+  learner_not_found` if you haven't created the learner yet.
+
 ## Learners and certificates
 
 The lifecycle:
@@ -328,6 +385,11 @@ Errors share one shape:
 | 409    | `certificate_released`    | The completion can't be taken back: its certificate is released         |
 
 ## Changelog
+
+### 26 Oct 2026: live classes
+
+New: [`GET /courses/{slug}/live-sessions`](#get-coursesslug-live-sessions) and
+[`POST /live-sessions/{id}/join`](#post-live-sessionsidjoin). Nothing existing changed.
 
 ### 23 Oct 2026: video playback moved to an embedded player (action needed)
 

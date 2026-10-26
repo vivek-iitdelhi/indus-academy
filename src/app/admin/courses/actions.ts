@@ -12,6 +12,7 @@ import {
   courses,
   lessonKinds,
   lessons,
+  liveSessions,
   quizQuestions,
   type CourseStatus,
 } from "@/db/schema";
@@ -25,6 +26,7 @@ import {
   uniqueSlug,
 } from "@/lib/admin/courses";
 import { revalidateCourse } from "@/lib/catalog-cache";
+import { createWebinar, deleteWebinar, liveConfigured, parseIndiaDateTime } from "@/lib/live";
 import { normalizeCode } from "@/lib/lms/coupons";
 import { requireAdminApi } from "@/lib/session";
 import { deleteVideo, videoConfigured } from "@/lib/video";
@@ -472,5 +474,43 @@ export async function deleteCoupon(couponId: string) {
   await requireAdminApi();
   if (!isUuid(couponId)) notFound();
   await db.delete(coupons).where(eq(coupons.id, couponId));
+  refresh();
+}
+
+// --- Live classes -----------------------------------------------------------
+
+const MAX_LIVE_MINUTES = 8 * 60;
+
+export async function scheduleLiveSession(courseId: string, form: FormData): Promise<ActionResult> {
+  await requireAdminApi();
+  const course = await findCourse(courseId);
+  if (!liveConfigured()) return { error: "Live classes aren't set up: WEBINAR_GG_TOKEN is missing." };
+  const title = text(form, "title");
+  const startsAt = parseIndiaDateTime(text(form, "startsAt"));
+  const durationMinutes = Number(text(form, "durationMinutes"));
+  if (!title) return { error: "Give the class a title." };
+  if (!startsAt) return { error: "Pick a start date and time." };
+  if (startsAt.getTime() < Date.now() - 5 * 60_000) return { error: "The start time is in the past." };
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > MAX_LIVE_MINUTES) {
+    return { error: `Length must be a whole number of minutes from 15 to ${MAX_LIVE_MINUTES}.` };
+  }
+  let webinarId: string;
+  try {
+    webinarId = await createWebinar({ title: `${course.title}: ${title}`, startsAt, durationMinutes });
+  } catch (e) {
+    console.error("[live] createWebinar failed", e);
+    return { error: "webinar.gg didn't accept the class. Try again in a minute." };
+  }
+  await db.insert(liveSessions).values({ courseId: course.id, title, startsAt, durationMinutes, webinarId });
+  refresh();
+  return { ok: `${title} scheduled.` };
+}
+
+export async function deleteLiveSession(sessionId: string) {
+  await requireAdminApi();
+  if (!isUuid(sessionId)) notFound();
+  const [session] = await db.delete(liveSessions).where(eq(liveSessions.id, sessionId)).returning();
+  // Best effort: a webinar left behind on webinar.gg is harmless; nobody can get a token for it.
+  if (session) await deleteWebinar(session.webinarId).catch((e) => console.error(`[live] deleteWebinar ${session.webinarId} failed`, e));
   refresh();
 }

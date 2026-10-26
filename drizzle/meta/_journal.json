@@ -134,6 +134,13 @@
       "when": 1792818378407,
       "tag": "0018_coupons",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793000840790,
+      "tag": "0019_live_sessions",
+      "breakpoints": true
     }
   ]
 }

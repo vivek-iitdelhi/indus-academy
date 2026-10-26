@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { asc, eq } from "drizzle-orm";
 import { loadCourseState } from "@/app/learn/data";
 import { CourseOutlineList, formatLabel, ProgressBar } from "@/components/learn/outline";
 import { formatDuration, percentComplete } from "@/components/learn/playback";
 import { Accent, ButtonLink, Container, Eyebrow } from "@/components/ui";
+import { db } from "@/db";
+import { liveSessions, type LiveSession } from "@/db/schema";
+import { formatDateTime } from "@/lib/admin/ops";
+import { liveStatus } from "@/lib/live";
 import { getCourseBySlug, totalDurationSeconds } from "@/lib/lms/courses";
 import { requireUser } from "@/lib/session";
 
@@ -13,6 +18,9 @@ export default async function CoursePage({ params }: PageProps<"/learn/[course]"
   const course = await getCourseBySlug(slug);
   if (!course) notFound();
   const state = await loadCourseState(user.id, course);
+  const sessions = state.enrolled
+    ? await db.select().from(liveSessions).where(eq(liveSessions.courseId, course.id)).orderBy(asc(liveSessions.startsAt))
+    : [];
   // Without access the outline is shown only to try the free previews.
   if (!state.enrolled && !state.hasPreviews) notFound();
 
@@ -63,6 +71,8 @@ export default async function CoursePage({ params }: PageProps<"/learn/[course]"
         </div>
       )}
 
+      {sessions.length > 0 && <LiveClasses courseSlug={course.slug} sessions={sessions} />}
+
       <h2 className="mt-12 text-xl font-semibold tracking-[-0.01em]">Course outline</h2>
       <div className="mt-5">
         <CourseOutlineList chapters={state.chapters} courseSlug={course.slug} />
@@ -88,4 +98,40 @@ function CertificateStatus({
   if (certificate) return <p className="text-sm text-muted">Certificate revoked</p>;
   if (!enabled) return null;
   return <p className="text-sm text-muted">Finish every lesson to earn your certificate.</p>;
+}
+
+function LiveClasses({ courseSlug, sessions }: { courseSlug: string; sessions: LiveSession[] }) {
+  return (
+    <>
+      <h2 className="mt-12 text-xl font-semibold tracking-[-0.01em]">Live classes</h2>
+      <ul className="mt-5 divide-y divide-line rounded-3xl border border-line bg-white">
+        {sessions.map((s) => {
+          const status = liveStatus(s);
+          return (
+            <li key={s.id} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">{s.title}</p>
+                <p className="text-sm text-muted">
+                  {formatDateTime(s.startsAt)} · {s.durationMinutes} minutes
+                </p>
+              </div>
+              {status === "open" ? (
+                <ButtonLink href={`/learn/${courseSlug}/live/${s.id}`} variant="dark" className="h-10 shrink-0">
+                  Join live
+                </ButtonLink>
+              ) : status === "upcoming" ? (
+                <p className="text-sm text-muted">Opens 15 minutes before the start</p>
+              ) : s.recordingUrl ? (
+                <a href={s.recordingUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-pine underline underline-offset-4">
+                  Watch recording
+                </a>
+              ) : (
+                <p className="text-sm text-muted">Recording on its way</p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
 }
