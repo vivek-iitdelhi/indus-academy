@@ -1,12 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { asc, count, desc, eq, sql } from "drizzle-orm";
+import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { site } from "@/content/site";
 import { coupons, courseFormats, courses, lessonProgress, lessons, liveSessions, payments, quizQuestions, type CourseStatus } from "@/db/schema";
 import { coursePublishProblems, formatDuration, isUuid, learnerRecordCounts } from "@/lib/admin/courses";
-import { formatDateTime } from "@/lib/admin/ops";
-import { liveConfigured, liveStatus, webhookKey } from "@/lib/live";
 import { discountedPaise } from "@/lib/lms/coupons";
 import { getCourseOutline, totalDurationSeconds } from "@/lib/lms/courses";
 import { formatRupees } from "@/lib/rupees";
@@ -19,12 +16,10 @@ import {
   deleteChapter,
   deleteCourse,
   deleteLesson,
-  deleteLiveSession,
   moveChapter,
   moveLesson,
   moveLessonToChapter,
   renameChapter,
-  scheduleLiveSession,
   setCouponActive,
   setCourseStatus,
   updateCourse,
@@ -92,7 +87,7 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
       .from(coupons)
       .where(eq(coupons.courseId, course.id))
       .orderBy(asc(coupons.code)),
-    db.select().from(liveSessions).where(eq(liveSessions.courseId, course.id)).orderBy(desc(liveSessions.startsAt)),
+    db.select({ id: liveSessions.id }).from(liveSessions).where(eq(liveSessions.courseId, course.id)),
   ]);
   const learnersOn = new Map(progressRows.map((r) => [r.lessonId, r.n]));
   const questionsOn = new Map(questionRows.map((r) => [r.lessonId, r.n]));
@@ -318,76 +313,10 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
       <section className={cardClass}>
         <SectionTitle>Live classes</SectionTitle>
         <p className="mt-1 text-sm text-muted">
-          Recorded. Enrolled learners join from the course page, partners through the API. To teach, open Host from 15 minutes
-          before the start. Times are India time.
-        </p>
-        {!liveConfigured() && <p className="mt-3 rounded-xl bg-saffron/15 p-4 text-sm">Not set up: add WEBINAR_GG_TOKEN to the app&apos;s environment.</p>}
-        {sessions.length > 0 && (
-          <table className="mt-4 w-full text-left text-sm">
-            <thead className="font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted">
-              <tr>
-                <th className="py-2">Class</th>
-                <th>Starts</th>
-                <th className="text-right">Minutes</th>
-                <th className="pl-6">Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.map((s) => (
-                <tr key={s.id} className="border-t border-line">
-                  <td className="py-2">{s.title}</td>
-                  <td>{formatDateTime(s.startsAt)}</td>
-                  <td className="text-right tabular-nums">{s.durationMinutes}</td>
-                  <td className="pl-6">
-                    {s.recordingUrl ? (
-                      <a href={s.recordingUrl} target="_blank" rel="noreferrer" className="text-pine hover:underline">
-                        Recording
-                      </a>
-                    ) : (
-                      liveStatus(s)
-                    )}
-                  </td>
-                  <td className="flex justify-end gap-2 py-2">
-                    {liveStatus(s) !== "ended" && (
-                      <Link href={`/admin/live/${s.id}`} className={miniButtonClass}>
-                        Host
-                      </Link>
-                    )}
-                    <form action={deleteLiveSession.bind(null, s.id)}>
-                      <ConfirmButton message={`Cancel “${s.title}”? Learners can no longer join it.`} className={`${miniButtonClass} text-red-800`}>
-                        Delete
-                      </ConfirmButton>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {liveConfigured() && (
-          <ActionForm
-            action={scheduleLiveSession.bind(null, course.id)}
-            submitLabel="Schedule class"
-            submitClass={secondaryButtonClass}
-            resetOnSuccess
-            className="mt-4 flex flex-wrap items-end gap-3"
-          >
-            <Field label="Title">
-              <input name="title" required placeholder="Week 1: Prompting basics" className={`${inputClass} w-72`} />
-            </Field>
-            <Field label="Starts (India time)">
-              <input name="startsAt" type="datetime-local" required className={inputClass} />
-            </Field>
-            <Field label="Minutes">
-              <input name="durationMinutes" type="number" min="15" max="480" step="5" required defaultValue={120} className={`${inputClass} w-24 tabular-nums`} />
-            </Field>
-          </ActionForm>
-        )}
-        <p className="mt-4 text-xs text-muted">
-          Recordings appear here by themselves a few hours after each class. They arrive at{" "}
-          <code className="break-all font-mono">{`${site.url}/api/live/webhook?key=${webhookKey()}`}</code>, the webhook set on
-          the webinar.gg account.
+          {sessions.length} {sessions.length === 1 ? "class" : "classes"} for this course.{" "}
+          <Link href="/admin/live" className="text-pine hover:underline">
+            Schedule and host live classes
+          </Link>
         </p>
       </section>
 

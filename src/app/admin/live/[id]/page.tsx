@@ -35,12 +35,12 @@ export default async function HostLivePage({ params }: PageProps<"/admin/live/[i
   return (
     <div>
       <title>{`Host: ${session.title}`}</title>
-      <Link href={`/admin/courses/${course.id}`} className="text-sm text-muted hover:text-ink">
-        ← {course.title}
+      <Link href="/admin/live" className="text-sm text-muted hover:text-ink">
+        ← Live classes
       </Link>
       <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em]">{session.title}</h1>
       <p className="mt-1 text-sm text-muted">
-        {formatDateTime(session.startsAt)} · {session.durationMinutes} minutes · You are the host: start the class, share your screen and end it here.
+        {course.title} · {formatDateTime(session.startsAt)} · {session.durationMinutes} minutes · You are the host: start the class, share your screen and end it here.
       </p>
       {studio ? (
         <iframe src={studio} title={`Host ${session.title}`} allow={ROOM_ALLOW} allowFullScreen className="mt-6 h-[82vh] min-h-[560px] w-full rounded-2xl border border-line bg-white" />

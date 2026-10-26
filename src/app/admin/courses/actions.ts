@@ -506,6 +506,11 @@ export async function scheduleLiveSession(courseId: string, form: FormData): Pro
   return { ok: `${title} scheduled.` };
 }
 
+/** The /admin/live form, where the course comes from a dropdown. */
+export async function scheduleLiveClass(form: FormData): Promise<ActionResult> {
+  return scheduleLiveSession(text(form, "courseId"), form);
+}
+
 export async function deleteLiveSession(sessionId: string) {
   await requireAdminApi();
   if (!isUuid(sessionId)) notFound();
