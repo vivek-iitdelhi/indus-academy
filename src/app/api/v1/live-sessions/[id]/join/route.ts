@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { courses, liveSessions } from "@/db/schema";
 import { isUuid, licensedCourse } from "@/lib/distributors";
 import { joinUrl, liveConfigured, liveStatus } from "@/lib/live";
+import { recordOpen } from "@/lib/live-attendance";
 import { findLearner, validExternalId } from "@/lib/lms/partners";
 import { apiError, json, notFound, withDistributor } from "../../../_shared";
 import { learnerNotFound, readJson } from "../../../_learners";
@@ -29,6 +30,7 @@ export const POST = withDistributor(async (distributor, request, { params }: Rou
   if (status === "ended") return apiError(409, "ended", "This class has ended; use recording_url from the live sessions list.");
   if (!liveConfigured()) return apiError(503, "live_unavailable", "Live classes are temporarily unavailable.");
 
+  await recordOpen(row.session.id, learner.userId, distributor.id);
   try {
     const { url, expiresAt } = await joinUrl(row.session.webinarId, { userId: learner.userId, name: learner.name });
     return json({ embed_url: url, expires_at: expiresAt.toISOString() });

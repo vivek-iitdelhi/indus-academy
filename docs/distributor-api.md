@@ -239,6 +239,30 @@ Show it in an iframe that may use the camera and microphone:
   room can't be opened just now (retry in a few seconds). The `message`s are for you, not
   your learners.
 
+### `GET /live-sessions/{id}/attendance`
+
+Which of your learners opened the class, and whether they got into the room.
+
+```json
+{
+  "final": true,
+  "attendance": [
+    {
+      "external_id": "u_123",
+      "opens": 2,
+      "first_opened_at": "2026-10-27T12:28:10.000Z",
+      "last_opened_at": "2026-10-27T12:41:52.000Z",
+      "attended": true
+    }
+  ]
+}
+```
+
+- A learner appears once you've called `join` for them. `opens` counts those calls.
+- `attended` is `null` until the class has ended. Then it is `true` if they were in the room,
+  or `false` if they opened it but never got in. `final` turns `true` at the same point.
+- Learners who never opened the class aren't listed.
+
 ## Learners and certificates
 
 The lifecycle:
@@ -400,8 +424,9 @@ Errors share one shape:
 
 ### 26 Oct 2026: live classes
 
-New: [`GET /courses/{slug}/live-sessions`](#get-coursesslug-live-sessions) and
-[`POST /live-sessions/{id}/join`](#post-live-sessionsidjoin). Nothing existing changed.
+New: [`GET /courses/{slug}/live-sessions`](#get-coursesslug-live-sessions),
+[`POST /live-sessions/{id}/join`](#post-live-sessionsidjoin) and
+[`GET /live-sessions/{id}/attendance`](#get-live-sessionsidattendance). Nothing existing changed.
 
 ### 23 Oct 2026: video playback moved to an embedded player (action needed)
 

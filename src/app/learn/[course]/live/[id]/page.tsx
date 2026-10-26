@@ -7,6 +7,7 @@ import { courses, liveSessions } from "@/db/schema";
 import { formatDateTime } from "@/lib/admin/ops";
 import { isUuid } from "@/lib/distributors";
 import { joinUrl, liveStatus, ROOM_ALLOW } from "@/lib/live";
+import { recordOpen } from "@/lib/live-attendance";
 import { hasAccess } from "@/lib/lms/access";
 import { requireUser } from "@/lib/session";
 
@@ -34,6 +35,7 @@ export default async function LiveClassPage({ params }: PageProps<"/learn/[cours
   } else if (status === "ended") {
     problem = session.recordingUrl ? null : "This class has ended. Its recording will appear on the course page shortly.";
   } else {
+    await recordOpen(session.id, user.id, null);
     try {
       room = (await joinUrl(session.webinarId, { userId: user.id, name: user.name })).url;
     } catch (e) {

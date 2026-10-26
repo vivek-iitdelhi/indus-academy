@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { indiaParts, liveStatus, parseIndiaDateTime } from "./live.ts";
+import { indiaParts, learnerIdFromEmail, liveStatus, parseIndiaDateTime } from "./live.ts";
 
 test("indiaParts gives webinar.gg's India wall-clock date and 12-hour time", () => {
   assert.deepEqual(indiaParts(new Date("2026-10-27T12:30:00Z")), { date: "2026-10-27", time: "06:00", meridiem: "PM" });
@@ -20,4 +20,11 @@ test("liveStatus opens 15 minutes early and closes an hour after the planned end
   assert.equal(liveStatus(session, new Date("2026-10-27T12:15:00Z")), "open");
   assert.equal(liveStatus(session, new Date("2026-10-27T14:30:00Z")), "open");
   assert.equal(liveStatus(session, new Date("2026-10-27T14:31:00Z")), "ended");
+});
+
+test("learnerIdFromEmail reads both placeholder forms and nothing else", () => {
+  assert.equal(learnerIdFromEmail("zW7BkzTG@learners.invalid"), "zW7BkzTG");
+  assert.equal(learnerIdFromEmail("zW7BkzTG.0a1b2c3d@learners.invalid"), "zW7BkzTG");
+  assert.equal(learnerIdFromEmail("academyindusai@gmail.com"), null);
+  assert.equal(learnerIdFromEmail("a.b.c@learners.invalid"), null);
 });

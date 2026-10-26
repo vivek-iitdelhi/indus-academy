@@ -562,9 +562,29 @@ export const liveSessions = pgTable(
     durationMinutes: integer("duration_minutes").notNull(),
     webinarId: text("webinar_id").notNull().unique(),
     recordingUrl: text("recording_url"), // set by the webinar.gg webhook once the recording is ready
+    attendanceSyncedAt: ts("attendance_synced_at"), // when live_attendance.attended was read from webinar.gg
     createdAt: createdAt(),
   },
   (t) => [index("live_sessions_course_id_starts_at_idx").on(t.courseId, t.startsAt)],
+);
+
+// Who opened each live class (our site or a partner's), and whether webinar.gg saw them in the room.
+export const liveAttendance = pgTable(
+  "live_attendance",
+  {
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => liveSessions.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    distributorId: uuid("distributor_id").references(() => distributors.id, { onDelete: "set null" }), // null = our site
+    opens: integer("opens").notNull().default(0), // room links issued; 0 = in the room without one (before tracking)
+    firstOpenedAt: ts("first_opened_at"),
+    lastOpenedAt: ts("last_opened_at"),
+    attended: boolean("attended"), // from webinar.gg once the class ends; null = not known yet
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
 );
 
 export type User = typeof user.$inferSelect;

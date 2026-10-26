@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { asc, eq } from "drizzle-orm";
+import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { courses, liveSessions } from "@/db/schema";
+import { courses, liveAttendance, liveSessions } from "@/db/schema";
 import { formatDateTime } from "@/lib/admin/ops";
 import { liveConfigured, liveStatus } from "@/lib/live";
 import { requireAdmin } from "@/lib/session";
@@ -12,14 +12,23 @@ import { cardClass, Field, inputClass, miniButtonClass, SectionTitle, secondaryB
 /** Every live class: schedule one, host the next, find past recordings. */
 export default async function LiveClassesPage() {
   await requireAdmin();
-  const [rows, courseList] = await Promise.all([
+  const [rows, courseList, counts] = await Promise.all([
     db
       .select({ session: liveSessions, course: { id: courses.id, title: courses.title } })
       .from(liveSessions)
       .innerJoin(courses, eq(liveSessions.courseId, courses.id))
       .orderBy(asc(liveSessions.startsAt)),
     db.select({ id: courses.id, title: courses.title, status: courses.status }).from(courses).orderBy(asc(courses.title)),
+    db
+      .select({
+        sessionId: liveAttendance.sessionId,
+        opened: count(),
+        attended: sql<number>`count(*) filter (where ${liveAttendance.attended})`.mapWith(Number),
+      })
+      .from(liveAttendance)
+      .groupBy(liveAttendance.sessionId),
   ]);
+  const attendance = new Map(counts.map((c) => [c.sessionId, c]));
   const upcoming = rows.filter((r) => liveStatus(r.session) !== "ended");
   const past = rows.filter((r) => liveStatus(r.session) === "ended").reverse();
 
@@ -67,15 +76,17 @@ export default async function LiveClassesPage() {
         )}
       </section>
 
-      <Sessions title="Upcoming" rows={upcoming} empty="No classes scheduled." host />
-      {past.length > 0 && <Sessions title="Past" rows={past} empty="" />}
+      <Sessions title="Upcoming" rows={upcoming} attendance={attendance} empty="No classes scheduled." host />
+      {past.length > 0 && <Sessions title="Past" rows={past} attendance={attendance} empty="" />}
     </div>
   );
 }
 
 type Row = { session: typeof liveSessions.$inferSelect; course: { id: string; title: string } };
 
-function Sessions({ title, rows, empty, host = false }: { title: string; rows: Row[]; empty: string; host?: boolean }) {
+type Counts = Map<string, { opened: number; attended: number }>;
+
+function Sessions({ title, rows, attendance, empty, host = false }: { title: string; rows: Row[]; attendance: Counts; empty: string; host?: boolean }) {
   return (
     <section className={cardClass}>
       <SectionTitle>{title}</SectionTitle>
@@ -89,6 +100,7 @@ function Sessions({ title, rows, empty, host = false }: { title: string; rows: R
               <th>Course</th>
               <th>Starts</th>
               <th className="text-right">Minutes</th>
+              <th className="text-right">{host ? "Opened" : "Attended"}</th>
               <th />
             </tr>
           </thead>
@@ -103,12 +115,18 @@ function Sessions({ title, rows, empty, host = false }: { title: string; rows: R
                 </td>
                 <td>{formatDateTime(s.startsAt)}</td>
                 <td className="text-right tabular-nums">{s.durationMinutes}</td>
+                <td className="text-right tabular-nums">
+                  {host
+                    ? (attendance.get(s.id)?.opened ?? 0)
+                    : s.attendanceSyncedAt
+                      ? `${attendance.get(s.id)?.attended ?? 0} of ${attendance.get(s.id)?.opened ?? 0}`
+                      : "—"}
+                </td>
                 <td className="flex justify-end gap-2 py-2">
-                  {host ? (
-                    <Link href={`/admin/live/${s.id}`} className={liveStatus(s) === "open" ? secondaryButtonClass : miniButtonClass}>
-                      Host
-                    </Link>
-                  ) : s.recordingUrl ? (
+                  <Link href={`/admin/live/${s.id}`} className={host && liveStatus(s) === "open" ? secondaryButtonClass : miniButtonClass}>
+                    {host ? "Host" : "Attendance"}
+                  </Link>
+                  {host ? null : s.recordingUrl ? (
                     <a href={s.recordingUrl} target="_blank" rel="noreferrer" className={miniButtonClass}>
                       Recording
                     </a>

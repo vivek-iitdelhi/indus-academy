@@ -105,3 +105,25 @@ export const hostJoinUrl = (webinarId: string) => tokenUrl(webinarId, host().nam
 
 /** iframe `allow` list for the room. */
 export const ROOM_ALLOW = "camera; microphone; autoplay; display-capture; fullscreen";
+
+/** The user id inside a learner's placeholder email ("<id>@…" or "<id>.<name hash>@…"), else null. */
+export function learnerIdFromEmail(email: string): string | null {
+  const match = email.match(/^([A-Za-z0-9_-]+)(\.[0-9a-f]{8})?@learners\.invalid$/);
+  return match ? match[1] : null;
+}
+
+/** Our user ids that webinar.gg saw in the room (it lists everyone who got a join token). */
+export async function attendedUserIds(webinarId: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (let page = 0; ; page++) {
+    const { users, pagination } = await call<{
+      users: { email: string; isHost: boolean; attended: boolean | null }[];
+      pagination: { total: number };
+    }>("GET", `/webinar/${encodeURIComponent(webinarId)}/invite?page=${page}&limit=20`);
+    for (const u of users) {
+      const id = !u.isHost && u.attended ? learnerIdFromEmail(u.email) : null;
+      if (id) ids.add(id);
+    }
+    if (users.length === 0 || (page + 1) * 20 >= pagination.total) return ids;
+  }
+}
