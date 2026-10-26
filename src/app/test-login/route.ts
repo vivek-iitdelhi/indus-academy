@@ -1,28 +1,16 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { auth } from "@/lib/auth";
+import { safeNextPath } from "@/lib/safe-next";
+import { TEST_EMAIL } from "@/lib/test-login";
 
-// A shared test learner for trying the site (live classes, lessons) from any browser without
-// an emailed code. Opening /test-login?key=<testLoginKey()> signs in as TEST_EMAIL; the key is
-// derived from BETTER_AUTH_SECRET, so rotating that secret also changes this link.
+// The test learner signs in without an emailed code: the sign-in form sends that address here
+// instead of asking for a link. It is an ordinary user (no enrolments, no admin), so this opens
+// nothing anyone couldn't get by signing up.
 // ponytail: mints a one-off magic-link token in Better Auth's own format ("magic-link:<token>",
 // see better-auth/dist/plugins/magic-link) and lets its verify endpoint do the sign-in; recheck
 // after a Better Auth upgrade.
-
-const TEST_EMAIL = "test@indusai.academy";
-
-const testLoginKey = () =>
-  createHash("sha256").update(`test-login:${process.env.BETTER_AUTH_SECRET ?? ""}`).digest("hex").slice(0, 32);
-
-const sameKey = (given: string) => {
-  const a = Buffer.from(given);
-  const b = Buffer.from(testLoginKey());
-  return Boolean(process.env.BETTER_AUTH_SECRET) && a.length === b.length && timingSafeEqual(a, b);
-};
-
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  if (!sameKey(url.searchParams.get("key") ?? "")) return new Response("Not found", { status: 404 });
-
+  const next = safeNextPath(new URL(request.url).searchParams.get("next"));
   const token = randomBytes(24).toString("base64url");
   const ctx = await auth.$context;
   await ctx.internalAdapter.createVerificationValue({
@@ -32,6 +20,6 @@ export async function GET(request: Request) {
   });
   const verify = new URL("/api/auth/magic-link/verify", ctx.baseURL);
   verify.searchParams.set("token", token);
-  verify.searchParams.set("callbackURL", "/learn");
+  verify.searchParams.set("callbackURL", next);
   return Response.redirect(verify, 302);
 }

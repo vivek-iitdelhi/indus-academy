@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { TEST_EMAIL } from "@/lib/test-login";
 import { CheckIcon } from "./ui";
 
 const inputClass =
@@ -15,6 +16,10 @@ export function SignInForm({ next, googleEnabled }: { next: string; googleEnable
 
   async function sendLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (email.trim().toLowerCase() === TEST_EMAIL) {
+      window.location.assign(`/test-login?next=${encodeURIComponent(next)}`);
+      return;
+    }
     setStatus("sending");
     const { error } = await authClient.signIn.magicLink({ email, callbackURL: next, errorCallbackURL });
     setStatus(error ? "error" : "sent");
