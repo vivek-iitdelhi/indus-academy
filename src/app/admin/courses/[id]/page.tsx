@@ -385,8 +385,9 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
           </ActionForm>
         )}
         <p className="mt-4 text-xs text-muted">
-          Recordings appear here by themselves once webinar.gg sends them. Set its webhook (Settings → Integrations) to{" "}
-          <code className="break-all font-mono">{`${site.url}/api/live/webhook?key=${webhookKey()}`}</code>
+          Recordings appear here by themselves a few hours after each class. They arrive at{" "}
+          <code className="break-all font-mono">{`${site.url}/api/live/webhook?key=${webhookKey()}`}</code>, the webhook set on
+          the webinar.gg account.
         </p>
       </section>
 
