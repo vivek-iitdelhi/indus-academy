@@ -1,8 +1,9 @@
 // Live classes run on webinar.gg: each session is a webinar on the account behind
 // WEBINAR_GG_TOKEN, and whoever opens it gets a fresh one-time join token, so the room sits in
 // an iframe on our learner page or on a partner's site. Learners go in under a placeholder
-// email made from their user id, so webinar.gg never gets (or emails) their address. The host
-// signs in at webinar.gg with that account and starts the class there.
+// email made from their user id, so webinar.gg never gets (or emails) their address. Admins
+// host from /admin/live/[id]: a token minted with the account owner's email and name
+// (WEBINAR_GG_HOST_EMAIL / _NAME) opens the host studio there, so nobody visits webinar.gg.
 // ponytail: one webinar.gg account and its 120 requests/min for everyone; move to our own
 // LiveKit (scripts/livekit-server.sh) when that or its branding limits us. Callers only see
 // joinUrl, so the switch stays inside this file.
@@ -73,22 +74,32 @@ export async function createWebinar(input: { title: string; startsAt: Date; dura
 
 export const deleteWebinar = (webinarId: string) => call("DELETE", `/webinar/${encodeURIComponent(webinarId)}`);
 
-/** The host studio; it needs the browser to be signed in to the webinar.gg account. */
-export const hostUrl = (webinarId: string) => `https://webinar.gg/webinar-page/${encodeURIComponent(webinarId)}`;
-
 /** A room URL for one person, valid for 10 minutes: fetch it when they open the page, never cache it. */
-export async function joinUrl(webinarId: string, person: { userId: string; name: string }) {
-  const [first, ...rest] = person.name.trim().split(/\s+/);
+async function tokenUrl(webinarId: string, name: string, email: string) {
+  const [first, ...rest] = name.trim().split(/\s+/);
   const joined = await call<{ token: string; expiresAt: string }>("POST", "/webinar/join-token", {
     webinarId,
     firstName: first || "Learner",
     lastName: rest.join(" ") || "-",
-    email: `${person.userId}@learners.invalid`,
+    email,
     phone: "",
     passcode: "",
   });
-  return { url: `${hostUrl(webinarId)}?token=${encodeURIComponent(joined.token)}`, expiresAt: new Date(joined.expiresAt) };
+  const room = `https://webinar.gg/webinar-page/${encodeURIComponent(webinarId)}`;
+  return { url: `${room}?token=${encodeURIComponent(joined.token)}`, expiresAt: new Date(joined.expiresAt) };
 }
+
+export const joinUrl = (webinarId: string, person: { userId: string; name: string }) =>
+  tokenUrl(webinarId, person.name, `${person.userId}@learners.invalid`);
+
+const host = () => ({ email: process.env.WEBINAR_GG_HOST_EMAIL ?? "", name: process.env.WEBINAR_GG_HOST_NAME ?? "" });
+export const hostConfigured = () => Boolean(host().email && host().name);
+
+/**
+ * The host studio, signed in as the account owner. Admin pages only: the iframe holds a
+ * session for the whole webinar.gg account.
+ */
+export const hostJoinUrl = (webinarId: string) => tokenUrl(webinarId, host().name, host().email);
 
 /** iframe `allow` list for the room. */
 export const ROOM_ALLOW = "camera; microphone; autoplay; display-capture; fullscreen";

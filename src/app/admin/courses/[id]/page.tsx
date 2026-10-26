@@ -6,7 +6,7 @@ import { site } from "@/content/site";
 import { coupons, courseFormats, courses, lessonProgress, lessons, liveSessions, payments, quizQuestions, type CourseStatus } from "@/db/schema";
 import { coursePublishProblems, formatDuration, isUuid, learnerRecordCounts } from "@/lib/admin/courses";
 import { formatDateTime } from "@/lib/admin/ops";
-import { hostUrl, liveConfigured, liveStatus, webhookKey } from "@/lib/live";
+import { liveConfigured, liveStatus, webhookKey } from "@/lib/live";
 import { discountedPaise } from "@/lib/lms/coupons";
 import { getCourseOutline, totalDurationSeconds } from "@/lib/lms/courses";
 import { formatRupees } from "@/lib/rupees";
@@ -318,8 +318,8 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
       <section className={cardClass}>
         <SectionTitle>Live classes</SectionTitle>
         <p className="mt-1 text-sm text-muted">
-          Run on webinar.gg and recorded. Enrolled learners join from the course page, partners through the API. To teach,
-          sign in at webinar.gg with the account behind the API token and open Host. Times are India time.
+          Recorded. Enrolled learners join from the course page, partners through the API. To teach, open Host from 15 minutes
+          before the start. Times are India time.
         </p>
         {!liveConfigured() && <p className="mt-3 rounded-xl bg-saffron/15 p-4 text-sm">Not set up: add WEBINAR_GG_TOKEN to the app&apos;s environment.</p>}
         {sessions.length > 0 && (
@@ -350,9 +350,9 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
                   </td>
                   <td className="flex justify-end gap-2 py-2">
                     {liveStatus(s) !== "ended" && (
-                      <a href={hostUrl(s.webinarId)} target="_blank" rel="noreferrer" className={miniButtonClass}>
+                      <Link href={`/admin/live/${s.id}`} className={miniButtonClass}>
                         Host
-                      </a>
+                      </Link>
                     )}
                     <form action={deleteLiveSession.bind(null, s.id)}>
                       <ConfirmButton message={`Cancel “${s.title}”? Learners can no longer join it.`} className={`${miniButtonClass} text-red-800`}>
