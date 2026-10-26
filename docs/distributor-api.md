@@ -201,6 +201,9 @@ The course's live classes, oldest first.
 - `status`: `upcoming`, `open` (from 15 minutes before `starts_at` until an hour after the
   planned end) or `ended`.
 - `recording_url` is set once the recording is ready, usually within a few hours of the end.
+  It is a plain link that anyone who has it can play, so show it only to your learners.
+- `status` is worked out when you call. A page left open doesn't change by itself: call again,
+  or compare the clock with `starts_at` and `duration_minutes`.
 
 ### `POST /live-sessions/{id}/join`
 
@@ -227,8 +230,14 @@ Show it in an iframe that may use the camera and microphone:
 - The link is for that one learner. It must be opened within 10 minutes and survives a few
   reloads. Fetch a new one each time the learner opens the class; don't store or share it.
 - The learner joins under the name you gave us. Their email is not passed on.
+- Any of your learners can join any class of a course licensed to you: you decide who sees
+  the Join button.
+- The room page can take several seconds to load; a "Loading class…" note next to the
+  iframe helps.
 - `409 not_open_yet` before the room opens, `409 ended` after the class; `404
-  learner_not_found` if you haven't created the learner yet.
+  learner_not_found` if you haven't created the learner yet; `503 live_unavailable` if the
+  room can't be opened just now (retry in a few seconds). The `message`s are for you, not
+  your learners.
 
 ## Learners and certificates
 
@@ -373,7 +382,7 @@ Errors share one shape:
 | ------ | ------------------------- | ----------------------------------------------------------------------- |
 | 400    | `invalid_ttl`             | `ttl` is not a whole number from 300 to 86400                           |
 | 401    | `unauthorized`            | Missing, malformed, unknown, rotated or revoked key                     |
-| 404    | `not_found`               | Unknown course or lesson, or not licensed to you, or not published      |
+| 404    | `not_found`               | Unknown course, lesson or live class, not licensed to you, or unpublished |
 | 409    | `video_not_ready`         | The lesson has no playable video yet (quiz lesson, or still processing) |
 | 503    | `video_unavailable`       | Video playback is temporarily unavailable; retry later                  |
 | 400    | `invalid_request`         | The body or learner id is invalid; `message` says what to fix           |
@@ -383,6 +392,9 @@ Errors share one shape:
 | 409    | `certificate_pending`     | The certificate has not been released yet                               |
 | 409    | `certificate_not_offered` | The course does not award certificates                                  |
 | 409    | `certificate_released`    | The completion can't be taken back: its certificate is released         |
+| 409    | `not_open_yet`            | The live class's room opens 15 minutes before `starts_at`               |
+| 409    | `ended`                   | The live class is over; use `recording_url`                             |
+| 503    | `live_unavailable`        | The live room can't be opened just now; retry in a few seconds          |
 
 ## Changelog
 

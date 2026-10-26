@@ -80,7 +80,7 @@ async function tokenUrl(webinarId: string, name: string, email: string) {
   const joined = await call<{ token: string; expiresAt: string }>("POST", "/webinar/join-token", {
     webinarId,
     firstName: first || "Learner",
-    lastName: rest.join(" ") || "-",
+    lastName: rest.join(" "),
     email,
     phone: "",
     passcode: "",
@@ -89,8 +89,10 @@ async function tokenUrl(webinarId: string, name: string, email: string) {
   return { url: `${room}?token=${encodeURIComponent(joined.token)}`, expiresAt: new Date(joined.expiresAt) };
 }
 
+// webinar.gg keys its users by email and keeps the first name it saw, so the placeholder email
+// carries a hash of the name: a renamed learner joins as a new webinar.gg user with the new name.
 export const joinUrl = (webinarId: string, person: { userId: string; name: string }) =>
-  tokenUrl(webinarId, person.name, `${person.userId}@learners.invalid`);
+  tokenUrl(webinarId, person.name, `${person.userId}.${createHash("sha256").update(person.name.trim()).digest("hex").slice(0, 8)}@learners.invalid`);
 
 const host = () => ({ email: process.env.WEBINAR_GG_HOST_EMAIL ?? "", name: process.env.WEBINAR_GG_HOST_NAME ?? "" });
 export const hostConfigured = () => Boolean(host().email && host().name);
