@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Fragment } from "react";
 import { PageHero } from "@/components/page-hero";
 import { ButtonLink, Container } from "@/components/ui";
 import { renderMarkdown } from "@/lib/blog";
@@ -45,10 +46,20 @@ export default function DevelopersPage() {
                   <a
                     href={`#${h.id}`}
                     className={`-ml-px block border-l border-transparent py-1 text-muted transition-colors hover:border-pine hover:text-ink ${
-                      h.depth === 2 ? "pl-4 font-medium" : "pl-7 font-mono text-xs"
+                      h.depth === 2 ? "pl-4 font-medium" : "pl-7 font-mono text-xs [overflow-wrap:anywhere]"
                     }`}
                   >
-                    {h.text}
+                    {/* Let long endpoint paths wrap after a slash instead of spilling out of the sidebar. */}
+                    {h.text.split("/").map((part, i) => (
+                      <Fragment key={i}>
+                        {i > 0 && (
+                          <>
+                            /<wbr />
+                          </>
+                        )}
+                        {part}
+                      </Fragment>
+                    ))}
                   </a>
                 </li>
               ))}
