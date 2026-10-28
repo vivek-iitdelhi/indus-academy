@@ -317,7 +317,7 @@ export async function undoCompletion(userId: string, courseId: string): Promise<
   // One statement, so a release cannot slip in between the certificate check and the update.
   const undone = await db
     .update(enrollments)
-    .set({ completedAt: null, batchId: null })
+    .set({ completedAt: null }) // the batch stays: the learner is still enrolled in it
     .where(
       and(
         eq(enrollments.userId, userId),

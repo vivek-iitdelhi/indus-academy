@@ -325,6 +325,10 @@ describe("partner learners", { skip: !process.env.DATABASE_URL && "DATABASE_URL 
     await recordCompletion(d.id, learner, course.id, { batch: "Agent-9", completedAt: new Date() });
     await enrolLearner(d.id, learner, course.id, "Other");
     assert.equal((await learnerCourses(learner.userId))[0].batch, "Agent-9");
+    // Undoing the completion keeps the learner enrolled in their batch.
+    assert.equal(await undoCompletion(learner.userId, course.id), "undone");
+    const [after] = await learnerCourses(learner.userId);
+    assert.deepEqual([after.batch, after.completedAt], ["Agent-9", null]);
   });
 
   test("listBatches counts, and renameLearner fixes released certificates", async () => {

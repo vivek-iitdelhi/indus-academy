@@ -2,8 +2,8 @@
 
 For partner platforms licensed to deliver our courses. You get each licensed course's
 structure, its quizzes (with answers) and a protected video player to embed, and you run
-enrolment, progress and grading on your own platform. You tell us about your learners and
-their completions, and we issue our certificate for them, co-branded with your name, when
+progress and grading on your own platform. You tell us about your learners, what they
+enrol in and what they complete, and we issue our certificate for them, co-branded with your name, when
 it is released under the terms agreed with you (for example, once the batch is paid).
 
 Base URL: `https://indusai.academy/api/v1`
@@ -383,8 +383,8 @@ curl -X POST -H "Authorization: Bearer $IAA_KEY" -H "Content-Type: application/j
 
 ### `DELETE /learners/{external_id}/completions/{course}`
 
-Takes back a completion sent by mistake. Answers 204. Once the certificate is released this
-answers `409 certificate_released`; ask us to revoke it instead.
+Takes back a completion sent by mistake. Answers 204. The learner stays enrolled, in the same
+batch. Once the certificate is released this answers `409 certificate_released`; ask us to revoke it instead.
 
 ### `GET /learners/{external_id}/certificates`
 
