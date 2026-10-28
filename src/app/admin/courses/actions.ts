@@ -7,6 +7,7 @@ import { db } from "@/db";
 import {
   chapters,
   courseFormats,
+  COURSE_LANGUAGES,
   coupons,
   courseStatuses,
   courses,
@@ -26,6 +27,7 @@ import {
   uniqueSlug,
 } from "@/lib/admin/courses";
 import { revalidateCourse } from "@/lib/catalog-cache";
+import { notifyCourseUpdated } from "@/lib/lms/partners";
 import { createWebinar, deleteWebinar, liveConfigured, parseIndiaDateTime } from "@/lib/live";
 import { normalizeCode } from "@/lib/lms/coupons";
 import { requireAdminApi } from "@/lib/session";
@@ -74,8 +76,13 @@ async function findChapter(chapterId: string) {
   return row;
 }
 
-/** Public catalogue + the admin page the action was called from. */
-function changed(slug: string) {
+/**
+ * Public catalogue + the admin page the action was called from. Also moves the course's
+ * updated_at, which partners watch to know when to re-sync (lessons, quizzes and videos too).
+ */
+async function changed(slug: string) {
+  const [course] = await db.update(courses).set({ updatedAt: new Date() }).where(eq(courses.slug, slug)).returning({ id: courses.id });
+  if (course) await notifyCourseUpdated(course.id);
   revalidateCourse(slug);
   refresh();
 }
@@ -144,6 +151,8 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
   if (coverImageUrl && !/^https?:\/\/\S+$/.test(coverImageUrl)) {
     return { error: "Cover image must be a full http(s) URL." };
   }
+  const language = text(form, "language") || course.language;
+  if (!COURSE_LANGUAGES.some(([code]) => code === language)) return { error: "Choose a language." };
 
   try {
     await db
@@ -159,6 +168,7 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
         sequential: checked(form, "sequential"),
         certificateEnabled: checked(form, "certificateEnabled"),
         coverImageUrl: coverImageUrl || null,
+        language,
       })
       .where(eq(courses.id, course.id));
   } catch (e) {
@@ -166,7 +176,7 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
     throw e;
   }
   if (slug !== course.slug) revalidateCourse(course.slug);
-  changed(slug);
+  await changed(slug);
   return { ok: "Saved." };
 }
 
@@ -187,7 +197,7 @@ export async function setCourseStatus(courseId: string, status: CourseStatus): P
     if (records.enrollments) return { error: "Learners are enrolled, so it can't go back to draft. Archive it instead." };
   }
   await db.update(courses).set({ status }).where(eq(courses.id, course.id));
-  changed(course.slug);
+  await changed(course.slug);
   return { ok: `Course is now ${status}.` };
 }
 
@@ -215,7 +225,7 @@ export async function addChapter(courseId: string, form: FormData) {
     await tx.insert(chapters).values({ courseId: course.id, title, position: 1_000_000 });
     await renumberOutline(tx, course.id);
   });
-  changed(course.slug);
+  await changed(course.slug);
 }
 
 export async function renameChapter(chapterId: string, form: FormData): Promise<ActionResult> {
@@ -224,7 +234,7 @@ export async function renameChapter(chapterId: string, form: FormData): Promise<
   const title = text(form, "title");
   if (!title) return { error: "Chapter title can't be empty." };
   await db.update(chapters).set({ title }).where(eq(chapters.id, chapter.id));
-  changed(course.slug);
+  await changed(course.slug);
   return { ok: "Saved." };
 }
 
@@ -234,7 +244,7 @@ export async function moveChapter(chapterId: string, delta: number) {
   await db.transaction((tx) =>
     renumberOutline(tx, course.id, (outline) => move(outline, outline.findIndex((c) => c.id === chapter.id), step(delta))),
   );
-  changed(course.slug);
+  await changed(course.slug);
 }
 
 export async function deleteChapter(chapterId: string) {
@@ -246,7 +256,7 @@ export async function deleteChapter(chapterId: string) {
     await renumberOutline(tx, course.id);
   });
   await deleteVideos(videos.flatMap((v) => [v.videoUid, v.pendingVideoUid]));
-  changed(course.slug);
+  await changed(course.slug);
 }
 
 // --- Lessons ---------------------------------------------------------------
@@ -274,6 +284,7 @@ export async function addLesson(chapterId: string, form: FormData) {
     await renumberOutline(tx, course.id);
     return lesson.id;
   });
+  await db.update(courses).set({ updatedAt: new Date() }).where(eq(courses.id, course.id));
   revalidateCourse(course.slug);
   redirect(`/admin/courses/${course.id}/lessons/${id}`);
 }
@@ -290,7 +301,7 @@ export async function moveLesson(lessonId: string, delta: number) {
       ),
     ),
   );
-  changed(course.slug);
+  await changed(course.slug);
 }
 
 export async function moveLessonToChapter(lessonId: string, form: FormData) {
@@ -306,7 +317,7 @@ export async function moveLessonToChapter(lessonId: string, form: FormData) {
       }));
     }),
   );
-  changed(course.slug);
+  await changed(course.slug);
 }
 
 export async function deleteLesson(lessonId: string) {
@@ -317,6 +328,7 @@ export async function deleteLesson(lessonId: string) {
     await renumberOutline(tx, course.id);
   });
   await deleteVideos([lesson.videoUid, lesson.pendingVideoUid]);
+  await db.update(courses).set({ updatedAt: new Date() }).where(eq(courses.id, course.id));
   revalidateCourse(course.slug);
   redirect(`/admin/courses/${course.id}`);
 }
@@ -334,7 +346,7 @@ export async function discardPendingVideo(lessonId: string): Promise<ActionResul
     .where(and(eq(lessons.id, lesson.id), eq(lessons.pendingVideoUid, uid)))
     .returning({ id: lessons.id });
   if (cleared.length) await deleteVideos([uid]);
-  changed(course.slug);
+  await changed(course.slug);
   return { ok: "Replacement discarded." };
 }
 
@@ -358,7 +370,7 @@ export async function updateLesson(lessonId: string, form: FormData): Promise<Ac
     if (isUniqueViolation(e)) return { error: `Another lesson in this course already uses the slug “${slug}”.` };
     throw e;
   }
-  changed(course.slug);
+  await changed(course.slug);
   return { ok: "Saved." };
 }
 
@@ -373,7 +385,7 @@ export async function setManualVideo(lessonId: string, form: FormData): Promise<
   if (!/^[\w-]{1,100}$/.test(videoUid)) return { error: "Video UID: letters, numbers, - and _ only." };
   if (!Number.isInteger(durationSeconds) || durationSeconds < 0) return { error: "Duration is whole seconds." };
   await db.update(lessons).set({ videoUid, durationSeconds }).where(eq(lessons.id, lesson.id));
-  changed(course.slug);
+  await changed(course.slug);
   return { ok: "Saved." };
 }
 
@@ -408,7 +420,7 @@ export async function saveQuestion(lessonId: string, questionId: string | null, 
     const existing = await db.select({ id: quizQuestions.id }).from(quizQuestions).where(eq(quizQuestions.lessonId, lesson.id));
     await db.insert(quizQuestions).values({ ...parsed.question, lessonId: lesson.id, position: existing.length + 1 });
   }
-  changed(course.slug);
+  await changed(course.slug);
   return { ok: questionId ? "Saved." : "Question added." };
 }
 
@@ -431,7 +443,7 @@ export async function moveQuestion(lessonId: string, questionId: string, delta: 
   await requireAdminApi();
   const { lesson, course } = await findQuizLesson(lessonId);
   await reorderQuestions(lesson.id, (ids) => move(ids, ids.indexOf(questionId), step(delta)));
-  changed(course.slug);
+  await changed(course.slug);
 }
 
 export async function deleteQuestion(lessonId: string, questionId: string) {
@@ -440,7 +452,7 @@ export async function deleteQuestion(lessonId: string, questionId: string) {
   if (!isUuid(questionId)) notFound();
   await db.delete(quizQuestions).where(and(eq(quizQuestions.id, questionId), eq(quizQuestions.lessonId, lesson.id)));
   await reorderQuestions(lesson.id, (ids) => ids);
-  changed(course.slug);
+  await changed(course.slug);
 }
 
 

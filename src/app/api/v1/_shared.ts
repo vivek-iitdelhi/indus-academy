@@ -1,7 +1,10 @@
+import { unstable_rethrow } from "next/navigation";
 import { after } from "next/server";
-import type { Course, Distributor } from "@/db/schema";
+import type { Course } from "@/db/schema";
 import { endpointOf, recordApiRequest } from "@/lib/api-usage";
-import { authenticateDistributor } from "@/lib/distributors";
+import { authenticateDistributor, type ApiDistributor } from "@/lib/distributors";
+import { claimIdempotencyKey, finishIdempotencyKey, MAX_KEY_LENGTH, releaseIdempotencyKey, requestHash } from "@/lib/idempotency";
+import { hitRateLimit, rateLimitHeaders, type RateLimit } from "@/lib/rate-limit";
 
 const NO_STORE = { "cache-control": "no-store" };
 
@@ -13,25 +16,90 @@ export const apiError = (status: number, code: string, message: string, headers?
 
 export const notFound = () => apiError(404, "not_found", "No such resource.");
 
-/** Wraps a handler so it only runs for a request carrying an active distributor's key. */
-export function withDistributor<C>(handler: (distributor: Distributor, request: Request, context: C) => Promise<Response>) {
+/**
+ * Wraps a /api/v1 or /api/v2 handler: it runs only for a request carrying an active distributor's
+ * key, within the key's rate limit, at most once per Idempotency-Key, and a crash answers
+ * `500 internal_error` in the usual error shape. `distributor.testMode` is true for iaa_test_ keys.
+ */
+export function withDistributor<C>(handler: (distributor: ApiDistributor, request: Request, context: C) => Promise<Response>) {
   return async (request: Request, context: C) => {
-    const distributor = await authenticateDistributor(request);
-    if (!distributor) {
-      return apiError(401, "unauthorized", "Missing, invalid or revoked API key.", { "www-authenticate": "Bearer" });
-    }
-    // Usage is counted after the response is sent, so it never slows the API down.
-    const count = (status: number) =>
-      after(() => recordApiRequest(distributor.id, endpointOf(request.method, request.url), status).catch((e) => console.error("[api usage]", e)));
+    let distributor: ApiDistributor | null = null;
+    let limit: RateLimit | null = null;
+    let response: Response;
     try {
-      const response = await handler(distributor, request, context);
-      count(response.status);
-      return response;
+      const d = (distributor = await authenticateDistributor(request));
+      if (!d) return apiError(401, "unauthorized", "Missing, invalid or revoked API key.", { "www-authenticate": "Bearer" });
+      // The limiter fails open: a hiccup in it should not take the API down with it.
+      limit = await hitRateLimit(d.keyId, d.rateLimitPerMinute).catch((e) => (console.error("[rate limit]", e), null));
+      response = limit && !limit.allowed ? rateLimited(limit) : await idempotent(d, request, () => handler(d, request, context));
     } catch (error) {
-      count(500);
-      throw error;
+      unstable_rethrow(error);
+      console.error("[api]", request.method, request.url, error);
+      response = apiError(500, "internal_error", "Something went wrong on our side. Retry later; tell us if it keeps happening.");
     }
+    if (distributor) {
+      // Usage is counted after the response is sent, so it never slows the API down.
+      const { id } = distributor;
+      const status = response.status;
+      after(() => recordApiRequest(id, endpointOf(request.method, request.url), status).catch((e) => console.error("[api usage]", e)));
+    }
+    if (!limit) return response;
+    const headers = new Headers(response.headers);
+    for (const [name, value] of Object.entries(rateLimitHeaders(limit))) headers.set(name, value);
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   };
+}
+
+const rateLimited = (limit: RateLimit) =>
+  json(
+    {
+      error: {
+        code: "rate_limited",
+        message: `Over the limit of ${limit.limit} requests a minute. Retry in ${limit.reset} s.`,
+        retry_after: limit.reset,
+      },
+    },
+    429,
+    { "retry-after": String(limit.reset) },
+  );
+
+/**
+ * Idempotency-Key on POST and PUT: the first response (below 500) is stored and replayed for 24 h
+ * to a repeat of the same request; the same key with a different request is a conflict.
+ */
+async function idempotent(distributor: ApiDistributor, request: Request, run: () => Promise<Response>): Promise<Response> {
+  const key = request.headers.get("idempotency-key");
+  if (key === null || (request.method !== "POST" && request.method !== "PUT")) return run();
+  if (!key || key.length > MAX_KEY_LENGTH) {
+    return apiError(400, "invalid_request", `\`Idempotency-Key\` must be 1–${MAX_KEY_LENGTH} characters.`);
+  }
+  const url = new URL(request.url);
+  const path = url.pathname + url.search;
+  const hash = requestHash(request.method, path, distributor.testMode, await request.clone().text());
+  const claim = await claimIdempotencyKey({ distributorId: distributor.id, key, method: request.method, path, requestHash: hash });
+  if (claim.kind === "conflict") {
+    return apiError(409, "idempotency_conflict", "This Idempotency-Key was already used for a different request.");
+  }
+  if (claim.kind === "in_progress") {
+    return apiError(409, "request_in_progress", "A request with this Idempotency-Key is still running. Retry in a few seconds.");
+  }
+  if (claim.kind === "replay") {
+    return new Response(claim.body, {
+      status: claim.status,
+      headers: { ...NO_STORE, "content-type": "application/json", "idempotent-replayed": "true" },
+    });
+  }
+  let response: Response;
+  try {
+    response = await run();
+  } catch (error) {
+    await releaseIdempotencyKey(distributor.id, key).catch(() => {});
+    throw error;
+  }
+  // A 5xx is not stored: the retry runs again.
+  if (response.status >= 500) await releaseIdempotencyKey(distributor.id, key);
+  else await finishIdempotencyKey(distributor.id, key, response.status, await response.clone().text());
+  return response;
 }
 
 export const courseJson = (course: Course, lessonCount: number, totalDurationSeconds: number) => ({
@@ -43,6 +111,8 @@ export const courseJson = (course: Course, lessonCount: number, totalDurationSec
   format: course.format,
   sequential: course.sequential,
   certificate_enabled: course.certificateEnabled,
+  language: course.language,
+  cover_image_url: course.coverImageUrl,
   price_paise: course.pricePaise,
   lesson_count: lessonCount,
   total_duration_seconds: totalDurationSeconds,

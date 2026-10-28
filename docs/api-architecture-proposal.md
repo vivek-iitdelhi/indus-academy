@@ -1,6 +1,12 @@
 # API architecture proposal (for discussion)
 
-Status: draft, 23 Oct 2026. Nothing here is built. Contract docs stay authoritative:
+Status: draft, 23 Oct 2026. Since built (28 Oct 2026, for large partners such as BLS): rate
+limiting, in the app (120 a minute per key, `src/lib/rate-limit.ts`) and as WAF rules on the
+ALB for floods; outbound webhooks as proposed below (`src/lib/partner-webhooks.ts`); two keys
+per partner and `iaa_test_` test keys (G8, table `distributor_keys`); `500 internal_error` in the
+v1 shape; and, against this proposal's "skip", an `Idempotency-Key` store (`src/lib/idempotency.ts`),
+because the owner asked for it. Operations: [`aws-hosting.md`](aws-hosting.md), "Partner API".
+Contract docs stay authoritative:
 [`lms-foundation.md`](lms-foundation.md), [`distributor-api.md`](distributor-api.md),
 [`aws-hosting.md`](aws-hosting.md).
 

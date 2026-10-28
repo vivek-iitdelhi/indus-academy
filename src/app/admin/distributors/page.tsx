@@ -1,8 +1,8 @@
-import { asc, desc } from "drizzle-orm";
+import { asc, desc, isNull } from "drizzle-orm";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { db } from "@/db";
-import { courses, distributorCourses, distributors } from "@/db/schema";
+import { courses, distributorCourses, distributorKeys, distributors } from "@/db/schema";
 import { ActionForm } from "@/app/admin/learners/action-form";
 import { usageByDistributor } from "@/lib/api-usage";
 import { requireAdmin } from "@/lib/session";
@@ -23,11 +23,12 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 
 export default async function AdminDistributorsPage() {
   await requireAdmin();
-  const [rows, licences, allCourses, requests7d] = await Promise.all([
-    db.select().from(distributors).orderBy(desc(distributors.createdAt)),
+  const [rows, licences, allCourses, requests7d, keys] = await Promise.all([
+    db.select().from(distributors).where(isNull(distributors.sandboxOf)).orderBy(desc(distributors.createdAt)), // not sandbox twins
     db.select().from(distributorCourses),
     db.select({ id: courses.id, title: courses.title, status: courses.status }).from(courses).orderBy(asc(courses.title)),
     usageByDistributor(7),
+    db.select().from(distributorKeys).where(isNull(distributorKeys.revokedAt)).orderBy(asc(distributorKeys.createdAt)),
   ]);
 
   return (
@@ -71,8 +72,14 @@ export default async function AdminDistributorsPage() {
               </div>
 
               <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-5">
-                <Fact label="Key">
-                  <code className="font-mono text-xs">{d.keyPrefix}…</code>
+                <Fact label="Keys">
+                  {keys
+                    .filter((k) => k.distributorId === d.id)
+                    .map((k) => (
+                      <code key={k.id} className="block font-mono text-xs">
+                        {k.prefix}…
+                      </code>
+                    ))}
                 </Fact>
                 <Fact label="Licensed courses">{d.allCourses ? "All courses" : licensed.size}</Fact>
                 <Fact label="Created">{when(d.createdAt)}</Fact>

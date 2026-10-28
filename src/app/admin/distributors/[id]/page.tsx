@@ -9,6 +9,7 @@ import { isUuid } from "@/lib/distributors";
 import { batchLearners, listBatches, waitingCertificates } from "@/lib/lms/partners";
 import { requireAdmin } from "@/lib/session";
 import { generateCertificates, renameLearnerAction, saveCertificateSettings, setBatchPayment } from "./actions";
+import { PlatformSections } from "./platform";
 
 const MODES: [CertificateReleaseMode, string][] = [
   ["on_payment", "After payment (when the batch is marked paid)"],
@@ -117,6 +118,8 @@ export default async function DistributorPage({ params, searchParams }: PageProp
           <p className="mt-4 text-sm text-muted">No requests in the last 30 days.</p>
         )}
       </section>
+
+      <PlatformSections distributor={distributor} />
 
       <section className="mt-8 rounded-2xl border border-line bg-white p-5">
         <h2 className="font-semibold">Certificates</h2>

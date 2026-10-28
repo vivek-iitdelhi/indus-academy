@@ -1,4 +1,4 @@
-import { createCipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 // AES-128 HLS encryption (RFC 8216 §4.3.2.4): segments are stored encrypted and the key is
 // served only to our player (see videoKeyFor in video.ts), so downloaded segments are useless.
@@ -20,6 +20,11 @@ export function ivFor(sequence: number): Buffer {
 export function encryptSegment(data: Buffer, key: Buffer, sequence: number): Buffer {
   const cipher = createCipheriv("aes-128-cbc", key, ivFor(sequence));
   return Buffer.concat([cipher.update(data), cipher.final()]);
+}
+
+export function decryptSegment(data: Buffer, key: Buffer, sequence: number): Buffer {
+  const decipher = createDecipheriv("aes-128-cbc", key, ivFor(sequence));
+  return Buffer.concat([decipher.update(data), decipher.final()]);
 }
 
 export type SegmentPlan = { from: string; to: string; sequence: number };

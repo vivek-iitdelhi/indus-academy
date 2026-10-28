@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { lessons, type Lesson } from "@/db/schema";
+import { courses, lessons, type Lesson } from "@/db/schema";
 import { revalidateCourse } from "@/lib/catalog-cache";
 import { deleteVideo, getVideoStatus, type VideoStatus } from "@/lib/video";
 
@@ -26,6 +26,8 @@ export async function syncLessonVideo(lesson: Lesson, courseSlug: string): Promi
     if (promoted.length) {
       const old = lesson.videoUid;
       if (old && old !== uid) await deleteVideo(old).catch((e) => console.error(`deleteVideo ${old} failed`, e));
+      // A new video is a course change partners re-sync on.
+      await db.update(courses).set({ updatedAt: new Date() }).where(eq(courses.id, lesson.courseId));
       revalidateCourse(courseSlug);
     }
   } else if (ready && status.durationSeconds !== lesson.durationSeconds) {

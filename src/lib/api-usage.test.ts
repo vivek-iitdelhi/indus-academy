@@ -20,6 +20,15 @@ test("endpointOf: method plus route pattern, ids replaced", () => {
   assert.equal(endpointOf("POST", u("/completions/bulk")), "POST /completions/bulk");
   assert.equal(endpointOf("GET", u("/batches")), "GET /batches");
   assert.equal(endpointOf("GET", u("/nope/x")), "GET other");
+  assert.equal(endpointOf("POST", u("/live-sessions/abc/join")), "POST /live-sessions/{id}/join");
+});
+
+test("endpointOf: other versions carry theirs; v1 keeps the bare form", () => {
+  const v2 = (path: string) => `https://indusai.academy/api/v2${path}`;
+  assert.equal(endpointOf("GET", v2("/courses/html-basics")), "GET /v2/courses/{slug}");
+  assert.equal(endpointOf("PUT", v2("/learners/u_1/")), "PUT /v2/learners/{id}");
+  assert.equal(endpointOf("GET", v2("/nope")), "GET /v2/other");
+  assert.equal(endpointOf("GET", "https://indusai.academy/api/v1"), "GET other");
 });
 
 test("daysInWindow: consecutive India-time days ending today", () => {

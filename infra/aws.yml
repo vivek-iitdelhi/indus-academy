@@ -305,6 +305,14 @@ Resources:
       HttpMethod: GET
       InvocationRateLimitPerSecond: 1
 
+  LiveDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      ConnectionArn: !GetAtt CronConnection.Arn
+      InvocationEndpoint: !Sub "${SiteUrl}/api/cron/live"
+      HttpMethod: GET
+      InvocationRateLimitPerSecond: 1
+
   CronRole:
     Type: AWS::IAM::Role
     Properties:
@@ -319,7 +327,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: events:InvokeApiDestination
-                Resource: [!GetAtt NewsletterDestination.Arn, !GetAtt NudgeDestination.Arn]
+                Resource: [!GetAtt NewsletterDestination.Arn, !GetAtt NudgeDestination.Arn, !GetAtt LiveDestination.Arn]
 
   # Same UTC times as vercel.json. No retries: a timed-out call may still have sent mail.
   NewsletterSchedule:
@@ -342,6 +350,124 @@ Resources:
         - Id: nudge
           Arn: !GetAtt NudgeDestination.Arn
           RoleArn: !GetAtt CronRole.Arn
+          RetryPolicy: { MaximumRetryAttempts: 0 }
+
+  # Live class attendance missed by the webinar.ended webhook; the next run is the retry.
+  LiveSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(5 minutes)
+      State: !If [CronsOn, ENABLED, DISABLED]
+      Targets:
+        - Id: live
+          Arn: !GetAtt LiveDestination.Arn
+          RoleArn: !GetAtt CronRole.Arn
+          RetryPolicy: { MaximumRetryAttempts: 0 }
+
+  # ---- Partner API: flood protection and webhook delivery (docs/aws-hosting.md, "Partner API") ----
+
+  # AWS WAF on the load balancer: floods of partner API requests (/api/v1/…, /api/v2/…) are
+  # turned away here, before they reach a container or Postgres. Partners normally meet the
+  # app's own per-key limit first (120 a minute by default, at most 5,000; src/lib/rate-limit.ts),
+  # so these ceilings sit far above it. Only the API paths are counted: the site, learner
+  # progress and /api/video are untouched.
+  ApiWebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: indus-academy
+      Scope: REGIONAL
+      DefaultAction: { Allow: {} }
+      VisibilityConfig: { SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: indus-academy }
+      CustomResponseBodies:
+        rate_limited:
+          ContentType: APPLICATION_JSON
+          Content: '{"error":{"code":"rate_limited","message":"Too many requests. Retry in 60 s.","retry_after":60}}'
+      Rules:
+        # Per API key: more than 6,000 requests in a minute with the same Authorization header.
+        - Name: api-per-key
+          Priority: 0
+          Statement:
+            RateBasedStatement:
+              Limit: 6000
+              EvaluationWindowSec: 60
+              AggregateKeyType: CUSTOM_KEYS
+              CustomKeys:
+                - Header: { Name: authorization, TextTransformations: [{ Priority: 0, Type: NONE }] }
+              ScopeDownStatement:
+                RegexMatchStatement:
+                  RegexString: "^/api/v[0-9]+/"
+                  FieldToMatch: { UriPath: {} }
+                  TextTransformations: [{ Priority: 0, Type: LOWERCASE }]
+          Action:
+            Block:
+              CustomResponse:
+                ResponseCode: 429
+                CustomResponseBodyKey: rate_limited
+                ResponseHeaders: [{ Name: retry-after, Value: "60" }]
+          VisibilityConfig: { SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: api-per-key }
+        # Per IP, as a backstop: catches requests with no key, or a new random key on each one.
+        - Name: api-per-ip
+          Priority: 1
+          Statement:
+            RateBasedStatement:
+              Limit: 12000
+              EvaluationWindowSec: 60
+              AggregateKeyType: IP
+              ScopeDownStatement:
+                RegexMatchStatement:
+                  RegexString: "^/api/v[0-9]+/"
+                  FieldToMatch: { UriPath: {} }
+                  TextTransformations: [{ Priority: 0, Type: LOWERCASE }]
+          Action:
+            Block:
+              CustomResponse:
+                ResponseCode: 429
+                CustomResponseBodyKey: rate_limited
+                ResponseHeaders: [{ Name: retry-after, Value: "60" }]
+          VisibilityConfig: { SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: api-per-ip }
+
+  ApiWebAclAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref LoadBalancer
+      WebACLArn: !GetAtt ApiWebAcl.Arn
+
+  # Partner webhooks (src/lib/partner-webhooks.ts), sent every minute. Also prunes rate-limit and
+  # idempotency rows. Its own role, so it doesn't share an edit point with the other crons.
+  PartnerWebhooksDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      ConnectionArn: !GetAtt CronConnection.Arn
+      InvocationEndpoint: !Sub "${SiteUrl}/api/cron/partner-webhooks"
+      HttpMethod: GET
+      InvocationRateLimitPerSecond: 1
+
+  PartnerWebhooksRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - { Effect: Allow, Principal: { Service: events.amazonaws.com }, Action: sts:AssumeRole }
+      Policies:
+        - PolicyName: invoke-partner-webhooks
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource: !GetAtt PartnerWebhooksDestination.Arn
+
+  # Overlapping runs are safe (events are claimed with SKIP LOCKED); no retries, the next minute is the retry.
+  PartnerWebhooksSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 minute)
+      State: !If [CronsOn, ENABLED, DISABLED]
+      Targets:
+        - Id: partner-webhooks
+          Arn: !GetAtt PartnerWebhooksDestination.Arn
+          RoleArn: !GetAtt PartnerWebhooksRole.Arn
           RetryPolicy: { MaximumRetryAttempts: 0 }
 
 Outputs:

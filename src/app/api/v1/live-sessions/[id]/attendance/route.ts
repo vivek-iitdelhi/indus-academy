@@ -2,10 +2,12 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { courses, liveAttendance, liveSessions, partnerLearners } from "@/db/schema";
 import { isUuid, licensedCourse } from "@/lib/distributors";
-import { ensureAttendance } from "@/lib/live-attendance";
 import { json, notFound, withDistributor } from "../../../_shared";
 
-/** Which of the client's learners opened the class, and (once it has ended) who got into the room. */
+/**
+ * Which of the client's learners opened the class, and (once it has ended) who got into the room.
+ * Only reads what we have: webinar.gg's list is read in the background (live-attendance.ts).
+ */
 export const GET = withDistributor(async (distributor, _request, { params }: RouteContext<"/api/v1/live-sessions/[id]/attendance">) => {
   const { id } = await params;
   if (!isUuid(id)) return notFound();
@@ -16,16 +18,17 @@ export const GET = withDistributor(async (distributor, _request, { params }: Rou
     .where(eq(liveSessions.id, id));
   if (!row || !(await licensedCourse(distributor.id, row.slug))) return notFound();
 
-  await ensureAttendance(row.session);
-  const [session] = await db.select().from(liveSessions).where(eq(liveSessions.id, id));
   const rows = await db
     .select({ a: liveAttendance, externalId: partnerLearners.externalId })
     .from(liveAttendance)
     .innerJoin(partnerLearners, and(eq(partnerLearners.userId, liveAttendance.userId), eq(partnerLearners.distributorId, distributor.id)))
     .where(eq(liveAttendance.sessionId, id))
     .orderBy(asc(liveAttendance.firstOpenedAt));
+  const syncedAt = row.session.attendanceSyncedAt;
   return json({
-    final: Boolean(session.attendanceSyncedAt),
+    status: syncedAt ? "final" : "pending",
+    synced_at: syncedAt?.toISOString() ?? null,
+    final: Boolean(syncedAt),
     attendance: rows.map(({ a, externalId }) => ({
       external_id: externalId,
       opens: a.opens,

@@ -8,11 +8,11 @@ const input =
 const button =
   "h-11 shrink-0 rounded-full bg-ink px-6 text-sm font-medium text-paper transition-colors hover:bg-pine disabled:opacity-60";
 
-function KeyReveal({ apiKey }: { apiKey: string }) {
+export function KeyReveal({ apiKey, what = "API key" }: { apiKey: string; what?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div role="status" className="mt-4 rounded-2xl border border-saffron bg-saffron/10 p-4 text-sm">
-      <p className="font-medium">Copy this API key now. It will not be shown again.</p>
+      <p className="font-medium">Copy this {what} now. It will not be shown again.</p>
       <p className="mt-1 text-muted">Send it to the partner over a secure channel. It is for server-to-server use only.</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <code className="min-w-0 break-all rounded-lg bg-white px-3 py-2 font-mono text-xs">{apiKey}</code>
@@ -64,7 +64,7 @@ export function RotateKeyForm({ id, name }: { id: string; name: string }) {
       <form
         action={action}
         onSubmit={(event) => {
-          if (!confirm(`Rotate the key for ${name}? Their current key stops working immediately.`)) event.preventDefault();
+          if (!confirm(`Rotate the key for ${name}? Every live key they have stops working immediately. To rotate without downtime, add a second key on their page instead.`)) event.preventDefault();
         }}
       >
         <input type="hidden" name="id" value={id} />

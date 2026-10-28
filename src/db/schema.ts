@@ -11,6 +11,7 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { Answers, FormItem, FormSettings } from "../lib/forms/types.ts";
@@ -29,6 +30,20 @@ const id = () => uuid("id").primaryKey().defaultRandom();
 export const courseFormats = ["interactive", "standard"] as const;
 export const courseStatuses = ["draft", "published", "archived"] as const;
 export const lessonKinds = ["video", "quiz"] as const;
+/** Teaching languages a course can have (ISO 639-1 code, name), English first. */
+export const COURSE_LANGUAGES = [
+  ["en", "English"],
+  ["hi", "Hindi"],
+  ["mr", "Marathi"],
+  ["bn", "Bengali"],
+  ["gu", "Gujarati"],
+  ["pa", "Punjabi"],
+  ["ta", "Tamil"],
+  ["te", "Telugu"],
+  ["kn", "Kannada"],
+  ["ml", "Malayalam"],
+  ["or", "Odia"],
+] as const;
 export const enrollmentSources = ["purchase", "cohort", "free", "manual", "distributor"] as const;
 export const enrollmentStatuses = ["active", "revoked"] as const;
 export const paymentStatuses = ["created", "paid", "failed", "refunded"] as const;
@@ -132,6 +147,7 @@ export const courses = pgTable("courses", {
   sequential: boolean("sequential").notNull().default(false),
   certificateEnabled: boolean("certificate_enabled").notNull().default(true),
   coverImageUrl: text("cover_image_url"),
+  language: text("language").notNull().default("en"), // ISO 639-1 of the teaching language
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -255,6 +271,16 @@ export const distributors = pgTable("distributors", {
   certificateName: text("certificate_name"),
   // When partner learners' certificates are issued (docs/distributor-api.md).
   certificateRelease: text("certificate_release", { enum: certificateReleaseModes }).notNull().default("on_payment"),
+  // Requests per minute per key (src/lib/rate-limit.ts); the admin can change it per partner.
+  rateLimitPerMinute: integer("rate_limit_per_minute").notNull().default(120),
+  // Outgoing webhooks (src/lib/partner-webhooks.ts). The secret signs them, so it is kept as is.
+  webhookUrl: text("webhook_url"),
+  webhookSecret: text("webhook_secret"),
+  // A test-key twin: the sandbox the partner's iaa_test_ keys act in. It shares the partner's
+  // licences, keeps its own learners and batches, and its certificates are revoked as issued.
+  sandboxOf: uuid("sandbox_of")
+    .unique()
+    .references((): AnyPgColumn => distributors.id, { onDelete: "cascade" }),
   createdAt: createdAt(),
   lastUsedAt: ts("last_used_at"),
 });
@@ -334,6 +360,9 @@ export const partnerLearners = pgTable(
       .unique()
       .references(() => user.id, { onDelete: "cascade" }),
     email: text("email"), // contact only; never used to sign in or to match accounts
+    phone: text("phone"), // contact only, like email
+    // Erased at the client's request: name and contact details are gone and external_id is freed.
+    deletedAt: ts("deleted_at"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -361,6 +390,12 @@ export const enrollments = pgTable(
     startedAt: ts("started_at").notNull().defaultNow(),
     expiresAt: ts("expires_at"), // null = never
     nudgedAt: ts("nudged_at"), // last "pick up where you left off" email, so it is sent once per idle spell
+    // Partner enrolments: who sold it and where (the client's own ids), and why it was cancelled.
+    soldBy: text("sold_by"),
+    centre: text("centre"),
+    cancelReason: text("cancel_reason"),
+    cancelledAt: ts("cancelled_at"),
+    lastPlayedAt: ts("last_played_at"), // partner enrolments: last playback link issued for this learner
   },
   (t) => [
     unique("enrollments_user_id_course_id_unique").on(t.userId, t.courseId),
@@ -605,3 +640,120 @@ export type Booking = typeof bookings.$inferSelect;
 export type FormResponse = typeof formResponses.$inferSelect;
 export type PartnerLearner = typeof partnerLearners.$inferSelect;
 export type DistributorBatch = typeof distributorBatches.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Live classes at scale (src/lib/live-budget.ts, src/lib/live.ts, src/lib/live-attendance.ts).
+// Added together; nothing above refers to these tables.
+
+// Shared webinar.gg request budget, one row per account ("webinar.gg"), kept as a GCRA bucket:
+// `tat` is when the bucket would be full again, so every container shares one atomic UPDATE.
+export const liveBudget = pgTable("live_budget", {
+  name: text("name").primaryKey(),
+  tat: ts("tat").notNull().defaultNow(),
+});
+
+// The last join link minted for one webinar.gg identity (webinar + placeholder email), handed out
+// again while it has time and uses left: webinar.gg honours each token 10 times in 10 minutes.
+export const liveJoinLinks = pgTable(
+  "live_join_links",
+  {
+    webinarId: text("webinar_id").notNull(),
+    email: text("email").notNull(),
+    url: text("url").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    issued: integer("issued").notNull().default(1), // times we handed this url out
+  },
+  (t) => [primaryKey({ columns: [t.webinarId, t.email] })],
+);
+
+// Where a background attendance read of webinar.gg's invite list got to, so it resumes there.
+export const liveAttendanceSyncs = pgTable("live_attendance_syncs", {
+  sessionId: uuid("session_id")
+    .primaryKey()
+    .references(() => liveSessions.id, { onDelete: "cascade" }),
+  nextPage: integer("next_page").notNull().default(0),
+  leaseUntil: ts("lease_until"), // a worker holds it until then
+  updatedAt: updatedAt(),
+});
+
+// ---- Partner API platform: keys, rate limits, idempotency, outgoing webhooks ----
+
+// A distributor's API keys: up to two live and two test keys each, so a key can be rotated
+// without downtime. distributors.key_hash/key_prefix hold the original single key; the
+// migration copies it in here (docs/pending/platform-migration.sql) and auth reads only this table.
+export const distributorKeys = pgTable(
+  "distributor_keys",
+  {
+    id: id(),
+    distributorId: uuid("distributor_id")
+      .notNull()
+      .references(() => distributors.id, { onDelete: "cascade" }),
+    prefix: text("prefix").notNull(), // "iaa_live_AbCd", for display
+    hash: text("hash").notNull().unique(), // sha256 hex of the full key
+    label: text("label"),
+    test: boolean("test").notNull().default(false), // iaa_test_…: the same partner, in test mode
+    createdAt: createdAt(),
+    lastUsedAt: ts("last_used_at"),
+    revokedAt: ts("revoked_at"),
+  },
+  (t) => [index("distributor_keys_distributor_id_idx").on(t.distributorId)],
+);
+
+// Requests per key per minute (fixed windows), shared by every container. Pruned every minute
+// by /api/cron/partner-webhooks.
+export const apiRateLimits = pgTable(
+  "api_rate_limits",
+  {
+    keyId: uuid("key_id")
+      .notNull()
+      .references(() => distributorKeys.id, { onDelete: "cascade" }),
+    windowStart: ts("window_start").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.keyId, t.windowStart] })],
+);
+
+// Idempotency-Key on partner POST/PUT: the first request's response, replayed for 24 h.
+// The row is inserted before the handler runs, so it doubles as the lock.
+export const apiIdempotencyKeys = pgTable(
+  "api_idempotency_keys",
+  {
+    distributorId: uuid("distributor_id")
+      .notNull()
+      .references(() => distributors.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    method: text("method").notNull(),
+    path: text("path").notNull(),
+    requestHash: text("request_hash").notNull(), // sha256 of method, path, mode and body
+    status: integer("status"), // null = still running
+    responseBody: text("response_body"),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.distributorId, t.key] }), index("api_idempotency_keys_created_at_idx").on(t.createdAt)],
+);
+
+// Outgoing webhook events (an outbox), delivered by /api/cron/partner-webhooks.
+// next_attempt_at null = finished: delivered (delivered_at set) or given up (failed).
+export const partnerWebhookEvents = pgTable(
+  "partner_webhook_events",
+  {
+    id: id(),
+    distributorId: uuid("distributor_id")
+      .notNull()
+      .references(() => distributors.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // "certificate.released"
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(), // the event's `data`
+    createdAt: createdAt(),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: ts("next_attempt_at").defaultNow(),
+    deliveredAt: ts("delivered_at"),
+    lastError: text("last_error"),
+  },
+  (t) => [
+    index("partner_webhook_events_due_idx").on(t.nextAttemptAt).where(sql`${t.nextAttemptAt} is not null`),
+    index("partner_webhook_events_distributor_id_created_at_idx").on(t.distributorId, t.createdAt),
+  ],
+);
+
+export type DistributorKey = typeof distributorKeys.$inferSelect;
+export type PartnerWebhookEvent = typeof partnerWebhookEvents.$inferSelect;

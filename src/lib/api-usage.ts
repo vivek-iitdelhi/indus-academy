@@ -10,7 +10,13 @@ const ROUTES: [RegExp, string][] = [
   [/^\/lessons\/[^/]+\/playback$/, "/lessons/{id}/playback"],
   [/^\/learners\/bulk$/, "/learners/bulk"], // before /learners/{id}
   [/^\/learners\/[^/]+$/, "/learners/{id}"],
+  [/^\/learners$/, "/learners"],
   [/^\/learners\/[^/]+\/enrolments$/, "/learners/{id}/enrolments"],
+  [/^\/learners\/[^/]+\/enrolments\/[^/]+$/, "/learners/{id}/enrolments/{course}"],
+  [/^\/learners\/[^/]+\/certificates\/[^/]+\/revoke$/, "/learners/{id}/certificates/{course}/revoke"],
+  [/^\/enrolments\/bulk$/, "/enrolments/bulk"],
+  [/^\/batches\/[^/]+\/learners$/, "/batches/{name}/learners"],
+  [/^\/lessons\/[^/]+\/grade$/, "/lessons/{id}/grade"],
   [/^\/learners\/[^/]+\/courses$/, "/learners/{id}/courses"],
   [/^\/learners\/[^/]+\/completions$/, "/learners/{id}/completions"],
   [/^\/learners\/[^/]+\/completions\/[^/]+$/, "/learners/{id}/completions/{course}"],
@@ -18,12 +24,23 @@ const ROUTES: [RegExp, string][] = [
   [/^\/learners\/[^/]+\/certificates\/[^/]+$/, "/learners/{id}/certificates/{course}"],
   [/^\/completions\/bulk$/, "/completions/bulk"],
   [/^\/batches$/, "/batches"],
+  [/^\/courses\/[^/]+\/live-sessions$/, "/courses/{slug}/live-sessions"],
+  [/^\/live-sessions\/[^/]+\/join$/, "/live-sessions/{id}/join"],
+  [/^\/live-sessions\/[^/]+\/attendance$/, "/live-sessions/{id}/attendance"],
+  [/^\/webhook-events$/, "/webhook-events"],
 ];
 
-/** "GET /courses/{slug}": the method and route pattern with ids replaced, so usage groups by endpoint. */
+/**
+ * "GET /courses/{slug}": the method and route pattern with ids replaced, so usage groups by
+ * endpoint. Other versions than v1 carry theirs ("GET /v2/courses/{slug}"); v1 keeps the bare
+ * form it has always been recorded under, so its history stays in one row per endpoint.
+ */
 export function endpointOf(method: string, url: string): string {
-  const path = new URL(url).pathname.replace(/^\/api\/v1/, "").replace(/\/$/, "");
-  return `${method} ${ROUTES.find(([pattern]) => pattern.test(path))?.[1] ?? "other"}`;
+  const [, version = "v1", rest = ""] = new URL(url).pathname.match(/^\/api\/(v\d+)(\/.*)?$/) ?? [];
+  const path = rest.replace(/\/$/, "");
+  const route = ROUTES.find(([pattern]) => pattern.test(path))?.[1];
+  if (version === "v1") return `${method} ${route ?? "other"}`;
+  return `${method} /${version}${route ?? "/other"}`;
 }
 
 /** "2026-10-23": the calendar date in India. */

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { coupons, courseFormats, courses, lessonProgress, lessons, liveSessions, payments, quizQuestions, type CourseStatus } from "@/db/schema";
+import { COURSE_LANGUAGES, coupons, courseFormats, courses, lessonProgress, lessons, liveSessions, payments, quizQuestions, type CourseStatus } from "@/db/schema";
 import { coursePublishProblems, formatDuration, isUuid, learnerRecordCounts } from "@/lib/admin/courses";
 import { discountedPaise } from "@/lib/lms/coupons";
 import { getCourseOutline, totalDurationSeconds } from "@/lib/lms/courses";
@@ -231,6 +231,15 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
             </Field>
             <Field label="Cover image URL">
               <input name="coverImageUrl" type="url" defaultValue={course.coverImageUrl ?? ""} placeholder="https://…" className={inputClass} />
+            </Field>
+            <Field label="Language" hint="The language it is taught in. Partners see it in the API.">
+              <select name="language" defaultValue={course.language} className={inputClass}>
+                {COURSE_LANGUAGES.map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
           <div className="space-y-3">

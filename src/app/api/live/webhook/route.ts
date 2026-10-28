@@ -33,7 +33,8 @@ export async function POST(request: Request) {
   }
   if (body?.event === "webinar.ended" && data?.webinarId) {
     const [session] = await db.select().from(liveSessions).where(eq(liveSessions.webinarId, data.webinarId));
-    if (session) after(() => syncAttendance(session).catch((e) => console.error("[live] attendance sync failed", e)));
+    // In the background at low priority; the /api/cron/live sweep finishes it if this stops.
+    if (session && !session.attendanceSyncedAt) after(() => syncAttendance(session).catch((e) => console.error("[live] attendance sync failed", e)));
   }
   // Every other event, and repeats, are fine to ignore.
   return new Response(null, { status: 204 });

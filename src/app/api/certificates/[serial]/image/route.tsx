@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ImageResponse } from "next/og";
+import sharp from "sharp";
 import { logoPath } from "@/components/logo";
 import { company, site } from "@/content/site";
+import { indicFont, latinEms, NAME_BOX, nameFontSize } from "@/lib/certificate-text";
 import { formatIssueDate, getCertificate, verifyCertificateHash } from "@/lib/lms/certificates";
 
 // A4 landscape.
@@ -34,6 +39,69 @@ function loadFonts(): Promise<Font[]> {
   return fontsPromise;
 }
 
+const indicFontFiles = new Map<string, Promise<string | null>>();
+
+/**
+ * A Noto Serif family's TTF, fetched once per instance and only for names in its script.
+ * Kept on disk because sharp (Pango) loads fonts from files.
+ */
+function loadIndicFont(family: string): Promise<string | null> {
+  let file = indicFontFiles.get(family);
+  if (!file) {
+    file = (async () => {
+      const css = await fetch(`https://fonts.googleapis.com/css2?family=${family.replaceAll(" ", "+")}`).then((r) => r.text());
+      const url = css.match(/src: url\(([^)]+)\)/)?.[1];
+      if (!url) throw new Error(`unexpected Google Fonts CSS for ${family}`);
+      const dir = join(tmpdir(), "certificate-fonts");
+      await mkdir(dir, { recursive: true });
+      const path = join(dir, `${family}.ttf`);
+      await writeFile(path, Buffer.from(await (await fetch(url)).arrayBuffer()));
+      return path;
+    })().catch((error) => {
+      console.error(`[certificate] ${family} unavailable:`, error);
+      indicFontFiles.delete(family); // retry on the next request
+      return null;
+    });
+    indicFontFiles.set(family, file);
+  }
+  return file;
+}
+
+const escapeMarkup = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
+
+/**
+ * An Indic name as a PNG set by Pango, which shapes conjuncts, matras and reph (Satori
+ * draws them unjoined and out of order). Sized by the same rule as Latin names. Null if
+ * sharp fails, so Satori sets it after all. In local dev on macOS Pango ignores `fontfile`
+ * and uses a system font; production (Linux) uses the Noto file.
+ */
+async function renderIndicName(name: string, family: string, fontfile: string, color: string) {
+  const set = (fontSize: number, width?: number) =>
+    sharp({
+      text: {
+        text: `<span foreground="${color}">${escapeMarkup(name)}</span>`,
+        font: `${family} ${fontSize}`, // points, which are px at 72 dpi
+        fontfile,
+        dpi: 72,
+        rgba: true,
+        align: "centre",
+        wrap: "word-char",
+        width,
+      },
+    })
+      .png()
+      .toBuffer({ resolveWithObject: true });
+  try {
+    const probe = await set(100);
+    const { fontSize, lines } = nameFontSize(probe.info.width / 100);
+    const { data, info } = await set(fontSize, lines === 2 ? NAME_BOX : undefined);
+    return { src: `data:image/png;base64,${data.toString("base64")}`, width: info.width, height: info.height };
+  } catch (error) {
+    console.error("[certificate] could not set the name with Pango:", error);
+    return null;
+  }
+}
+
 /**
  * The certificate as a PNG. Public: the verification page shows it. Revoked (or
  * tampered) certificates still render, stamped, so the verification page and old
@@ -45,12 +113,14 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
   if (!row) return new Response("No certificate with that serial exists.", { status: 404 });
   const { certificate: cert, courseTitle } = row;
   const stamp = cert.revokedAt ? "Revoked" : verifyCertificateHash(cert) ? null : "Not verified";
-  const fonts = await loadFonts();
+  const name = cert.holderName.trim();
+  const family = indicFont(name);
+  const [fonts, indicFontFile] = await Promise.all([loadFonts(), family && loadIndicFont(family)]);
 
   // Revalidated on every view (cheap: one query) and re-rendered only when what it shows
   // changes (revocation, a name being set, a redeploy), so a revocation shows at once.
   const etag = `"${createHash("sha1")
-    .update(JSON.stringify([cert.holderName, courseTitle, cert.partnerName, cert.issuedAt, stamp, fonts.length, site.url, process.env.VERCEL_GIT_COMMIT_SHA]))
+    .update(JSON.stringify([cert.holderName, courseTitle, cert.partnerName, cert.issuedAt, stamp, fonts.length, Boolean(indicFontFile), site.url, process.env.VERCEL_GIT_COMMIT_SHA, process.env.NEXT_DEPLOYMENT_ID]))
     .digest("base64url")}"`;
   const headers: Record<string, string> = { "Cache-Control": "public, no-cache", ETag: etag };
   if (new URL(request.url).searchParams.get("download") === "1") {
@@ -58,9 +128,9 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
   }
   if (request.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers });
 
-  const name = cert.holderName.trim();
   const verifyUrl = `${site.url.replace(/^https?:\/\//, "")}/verify/${cert.serial}`;
   const muted = "#56655f";
+  const indicName = family && indicFontFile ? await renderIndicName(name, family, indicFontFile, "#0b1916") : null;
 
   return new ImageResponse(
     (
@@ -101,19 +171,27 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
           </div>
 
           <div style={{ marginTop: 70, fontSize: 30, color: muted }}>This certifies that</div>
-          <div
-            style={{
-              marginTop: 10,
-              fontFamily: "Instrument Serif",
-              fontStyle: "italic",
-              fontSize: name ? (name.length > 30 ? 92 : 124) : 60,
-              lineHeight: 1.1,
-              color: name ? "#0b1916" : muted,
-              textAlign: "center",
-            }}
-          >
-            {name || "Name to be confirmed"}
-          </div>
+          {indicName ? (
+            // eslint-disable-next-line @next/next/no-img-element -- rendered by Satori, not a page
+            <img src={indicName.src} width={indicName.width} height={indicName.height} alt="" style={{ marginTop: 28, marginBottom: 6 }} />
+          ) : (
+            <div
+              style={{
+                marginTop: 10,
+                maxWidth: NAME_BOX,
+                fontFamily: "Instrument Serif",
+                fontStyle: "italic",
+                fontSize: name ? nameFontSize(latinEms(name)).fontSize : 60,
+                lineHeight: 1.1,
+                color: name ? "#0b1916" : muted,
+                textAlign: "center",
+                textWrap: "balance",
+                wordBreak: "break-word",
+              }}
+            >
+              {name || "Name to be confirmed"}
+            </div>
+          )}
           <div style={{ marginTop: 30, fontSize: 30, color: muted }}>has successfully completed</div>
           <div
             style={{

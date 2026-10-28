@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { courses, distributorCourses, distributors, distributorStatuses, type DistributorStatus } from "@/db/schema";
 import type { ActionState } from "@/app/admin/learners/action-form";
-import { generateApiKey, isUuid } from "@/lib/distributors";
+import { createDistributorWithKey, isUuid, replaceLiveKeys } from "@/lib/distributors";
 import { requireAdminApi } from "@/lib/session";
 
 /** `key` is the only time the full API key leaves the server. */
@@ -26,24 +26,19 @@ export async function createDistributor(_prev: KeyResult, form: FormData): Promi
   if (!name) return { error: "Enter a name." };
   if (contactEmail && !EMAIL_PATTERN.test(contactEmail)) return { error: "Enter a valid email." };
 
-  const { key, prefix, hash } = generateApiKey();
-  await db.insert(distributors).values({ name, contactEmail: contactEmail || null, keyPrefix: prefix, keyHash: hash });
+  const { key } = await createDistributorWithKey({ name, contactEmail: contactEmail || null });
   revalidatePath(PATH);
   return { key };
 }
 
-/** Replaces the key; the old one stops working at once. */
+/** Replaces every live key with one new one; the old ones stop working at once. (No-downtime rotation: the partner's page.) */
 export async function rotateDistributorKey(_prev: KeyResult, form: FormData): Promise<KeyResult> {
   await requireAdminApi();
   const id = idOf(form);
   if (!id) return { error: "Distributor not found." };
-  const { key, prefix, hash } = generateApiKey();
-  const updated = await db
-    .update(distributors)
-    .set({ keyPrefix: prefix, keyHash: hash })
-    .where(eq(distributors.id, id))
-    .returning({ id: distributors.id });
-  if (!updated.length) return { error: "Distributor not found." };
+  const [exists] = await db.select({ id: distributors.id }).from(distributors).where(eq(distributors.id, id));
+  if (!exists) return { error: "Distributor not found." };
+  const key = await replaceLiveKeys(id);
   revalidatePath(PATH);
   return { key };
 }

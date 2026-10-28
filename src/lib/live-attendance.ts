@@ -1,12 +1,15 @@
 // Live class attendance: every room link we issue is counted here (our learner page and the
 // partner API), and once the class is over webinar.gg's list says who actually got in. Opened
 // but never attended means they tried and something stopped them.
+// The list is read in the background only (webinar.ended webhook, the /api/cron/live sweep), a
+// page per request at the budget's lowest priority, and resumes where it stopped.
 // ponytail: attended is yes/no; webinar.gg gives no per-person minutes, so a 75% rule needs
 // our own room (LiveKit) or its webhooks.
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
-import { db } from "@/db";
-import { liveAttendance, liveSessions, user, type LiveSession } from "@/db/schema";
-import { attendedUserIds, liveStatus } from "@/lib/live";
+import { setTimeout as sleep } from "node:timers/promises";
+import { and, asc, eq, exists, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { db } from "../db/index.ts";
+import { liveAttendance, liveAttendanceSyncs, liveSessions, user, type LiveSession } from "../db/schema.ts";
+import { attendedOnPage, LiveBusy, liveStatus, LATE_GRACE_MS } from "./live.ts";
 
 /** Count one room link for this learner; distributorId null = our own site. */
 export async function recordOpen(sessionId: string, userId: string, distributorId: string | null) {
@@ -24,28 +27,109 @@ export async function recordOpen(sessionId: string, userId: string, distributorI
     });
 }
 
-/** Read who was in the room from webinar.gg and mark everyone else who opened it as absent. */
-export async function syncAttendance(session: LiveSession) {
-  const seen = [...(await attendedUserIds(session.webinarId))];
-  // Only our users: a deleted account can't be referenced.
+/** Marks these users (ours only: a deleted account can't be referenced) as in the room. */
+async function markAttended(sessionId: string, seen: string[]) {
   const known = seen.length ? (await db.select({ id: user.id }).from(user).where(inArray(user.id, seen))).map((u) => u.id) : [];
-  await db.transaction(async (tx) => {
-    if (known.length) {
-      await tx
-        .insert(liveAttendance)
-        .values(known.map((userId) => ({ sessionId: session.id, userId, attended: true })))
-        .onConflictDoUpdate({ target: [liveAttendance.sessionId, liveAttendance.userId], set: { attended: true } });
-    }
-    await tx
-      .update(liveAttendance)
-      .set({ attended: false })
-      .where(and(eq(liveAttendance.sessionId, session.id), known.length ? notInArray(liveAttendance.userId, known) : undefined));
-    await tx.update(liveSessions).set({ attendanceSyncedAt: new Date() }).where(eq(liveSessions.id, session.id));
-  });
+  if (!known.length) return;
+  await db
+    .insert(liveAttendance)
+    .values(known.map((userId) => ({ sessionId, userId, attended: true })))
+    .onConflictDoUpdate({ target: [liveAttendance.sessionId, liveAttendance.userId], set: { attended: true } });
 }
 
-/** For pages and the API: sync a finished class once, if the webhook hasn't already. */
+const LEASE = sql`now() + interval '1 minute'`;
+
+/**
+ * Reads who was in the room from webinar.gg, from the page the last run stopped at, until done
+ * or `until` (ms epoch); then marks everyone else who opened it as absent. One worker per class
+ * at a time (a lease on live_attendance_syncs). True once the class is final.
+ */
+export async function syncAttendance(session: LiveSession, until = Date.now() + 4 * 60_000): Promise<boolean> {
+  if (session.attendanceSyncedAt) return true;
+  await db.insert(liveAttendanceSyncs).values({ sessionId: session.id }).onConflictDoNothing();
+  const [claim] = await db
+    .update(liveAttendanceSyncs)
+    .set({ leaseUntil: LEASE })
+    .where(
+      and(
+        eq(liveAttendanceSyncs.sessionId, session.id),
+        or(isNull(liveAttendanceSyncs.leaseUntil), lt(liveAttendanceSyncs.leaseUntil, sql`now()`)),
+      ),
+    )
+    .returning();
+  if (!claim) return false; // another worker has it
+  let page = claim.nextPage;
+  try {
+    while (Date.now() < until) {
+      let result: { ids: string[]; last: boolean };
+      try {
+        result = await attendedOnPage(session.webinarId, page);
+      } catch (e) {
+        if (e instanceof LiveBusy) {
+          await sleep(Math.min(e.retryAfter * 1000, Math.max(0, until - Date.now())));
+          continue;
+        }
+        // A webinar webinar.gg doesn't know (deleted) has no list to read: final as it is.
+        if ((e as { status?: number }).status !== 404) throw e;
+        result = { ids: [], last: true };
+      }
+      await markAttended(session.id, result.ids);
+      page++;
+      if (result.last) {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(liveAttendance)
+            .set({ attended: false })
+            .where(and(eq(liveAttendance.sessionId, session.id), isNull(liveAttendance.attended)));
+          await tx.update(liveSessions).set({ attendanceSyncedAt: new Date() }).where(eq(liveSessions.id, session.id));
+          await tx.delete(liveAttendanceSyncs).where(eq(liveAttendanceSyncs.sessionId, session.id));
+        });
+        return true;
+      }
+      await db.update(liveAttendanceSyncs).set({ nextPage: page, leaseUntil: LEASE }).where(eq(liveAttendanceSyncs.sessionId, session.id));
+    }
+    return false;
+  } finally {
+    // No-op once finished (the row is gone); otherwise the next run may start right away.
+    await db.update(liveAttendanceSyncs).set({ nextPage: page, leaseUntil: null }).where(eq(liveAttendanceSyncs.sessionId, session.id));
+  }
+}
+
+/**
+ * Cron: every class that is over (or whose sync the webhook started) and isn't final yet,
+ * oldest first, until `until`. Returns how many it finished and how many are still waiting.
+ */
+export async function syncPendingAttendance(until = Date.now() + 4 * 60_000) {
+  const due = await db
+    .select()
+    .from(liveSessions)
+    .where(
+      and(
+        isNull(liveSessions.attendanceSyncedAt),
+        or(
+          lt(sql`${liveSessions.startsAt} + make_interval(mins => ${liveSessions.durationMinutes}) + make_interval(secs => ${LATE_GRACE_MS / 1000})`, sql`now()`),
+          exists(db.select().from(liveAttendanceSyncs).where(eq(liveAttendanceSyncs.sessionId, liveSessions.id))),
+        ),
+      ),
+    )
+    .orderBy(asc(liveSessions.startsAt));
+  let synced = 0;
+  for (const session of due) {
+    if (Date.now() >= until) break;
+    try {
+      if (await syncAttendance(session, until)) synced++;
+    } catch (e) {
+      console.error("[live] attendance sync failed", session.id, e);
+    }
+  }
+  return { synced, pending: due.length - synced };
+}
+
+/**
+ * For admin pages: start reading a finished class's attendance in the background if nothing
+ * has yet. Never waits for it; the page shows what is there (the cron finishes it otherwise).
+ */
 export async function ensureAttendance(session: LiveSession) {
   if (session.attendanceSyncedAt || liveStatus(session) !== "ended") return;
-  await syncAttendance(session).catch((e) => console.error("[live] attendance sync failed", e));
+  void syncAttendance(session, Date.now() + 60_000).catch((e) => console.error("[live] attendance sync failed", e));
 }
