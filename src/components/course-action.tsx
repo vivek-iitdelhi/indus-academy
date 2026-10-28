@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { liveStatus } from "@/lib/live-times";
 import { openCheckout, takeReturnedOrder } from "./enroll-button";
+import { useNow, type ClassTime } from "./live-schedule";
 import { formatRupees } from "@/lib/rupees";
 import { ButtonLink } from "./ui";
 
@@ -23,7 +25,22 @@ async function postJson(url: string, body: unknown) {
  * visitor is comes from /api/learn/ownership after load. Until then (and without JS) it
  * is the signed-out link, which comes back here with ?buy=1 and carries on.
  */
-export function CourseAction({ slug, pricePaise }: { slug: string; pricePaise: number }) {
+export function CourseAction({
+  slug,
+  pricePaise,
+  liveClasses = [],
+}: {
+  slug: string;
+  pricePaise: number;
+  /** A live course's classes: an enrolled learner gets a Join button while one is open. */
+  liveClasses?: ClassTime[];
+}) {
+  const now = useNow();
+  const joinable = liveClasses.find((c) => {
+    if (now === null) return false;
+    const durationMinutes = (Date.parse(c.endsAt) - Date.parse(c.startsAt)) / 60_000;
+    return liveStatus({ startsAt: new Date(c.startsAt), durationMinutes }, new Date(now)) === "open";
+  });
   const phoneId = useId();
   const couponId = useId();
   const free = pricePaise <= 0;
@@ -135,9 +152,13 @@ export function CourseAction({ slug, pricePaise }: { slug: string; pricePaise: n
   );
 
   if (me?.owned) {
-    return (
+    return joinable ? (
+      <ButtonLink href={`/learn/${slug}/live/${joinable.id}`} variant="dark" className="w-full">
+        Join the live class
+      </ButtonLink>
+    ) : (
       <ButtonLink href={`/learn/${slug}`} variant="dark" className="w-full">
-        Continue learning
+        {liveClasses.length ? "Go to your course" : "Continue learning"}
       </ButtonLink>
     );
   }

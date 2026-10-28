@@ -2,10 +2,10 @@ import Link from "next/link";
 import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { courses, liveAttendance, liveSessions } from "@/db/schema";
-import { formatDateTime } from "@/lib/admin/ops";
+import { formatDate, formatDateTime } from "@/lib/admin/ops";
 import { liveConfigured, liveStatus } from "@/lib/live";
 import { requireAdmin } from "@/lib/session";
-import { deleteLiveSession, scheduleLiveClass } from "../courses/actions";
+import { deleteLiveSession, deleteSessionRecording, scheduleLiveClass } from "../courses/actions";
 import { ActionForm, ConfirmButton } from "../courses/client";
 import { cardClass, Field, inputClass, miniButtonClass, SectionTitle, secondaryButtonClass } from "../courses/form-ui";
 
@@ -38,7 +38,9 @@ export default async function LiveClassesPage() {
         <h1 className="text-3xl font-semibold tracking-[-0.03em]">Live classes</h1>
         <p className="mt-2 text-sm text-muted">
           Learners enrolled in the course join from their course page; partners&apos; learners through the API. Every class is
-          recorded, and the recording appears here a few hours after it ends. Times are India time.
+          recorded: the recording is copied into our storage, plays in the protected player for enrolled learners, and is
+          deleted after the course&apos;s &ldquo;Keep class recordings&rdquo; days (course settings). A live course is listed on
+          the site as upcoming until its last class ends. Times are India time.
         </p>
       </div>
 
@@ -126,7 +128,18 @@ function Sessions({ title, rows, attendance, empty, host = false }: { title: str
                   <Link href={`/admin/live/${s.id}`} className={host && liveStatus(s) === "open" ? secondaryButtonClass : miniButtonClass}>
                     {host ? "Host" : "Attendance"}
                   </Link>
-                  {host ? null : s.recordingUrl ? (
+                  {host ? null : s.recordingVideoUid ? (
+                    <>
+                      <span className="self-center text-xs text-muted">Learners can watch until {formatDate(s.recordingUntil)}</span>
+                      <form action={deleteSessionRecording.bind(null, s.id)}>
+                        <ConfirmButton message={`Delete the recording of “${s.title}” now? Learners can no longer watch it.`} className={miniButtonClass}>
+                          Delete recording
+                        </ConfirmButton>
+                      </form>
+                    </>
+                  ) : s.recordingUntil ? (
+                    <span className="self-center text-xs text-muted">Recording deleted {formatDate(s.recordingUntil)}</span>
+                  ) : s.recordingUrl ? (
                     <a href={s.recordingUrl} target="_blank" rel="noreferrer" className={miniButtonClass}>
                       Recording
                     </a>

@@ -3,7 +3,7 @@ import type { ChapterItems, LessonItem } from "@/app/learn/data";
 import { CheckIcon } from "@/components/ui";
 import { formatDuration } from "./playback";
 
-export const formatLabel = { interactive: "Interactive course", standard: "Recorded course" } as const;
+export const formatLabel = { interactive: "Interactive course", standard: "Recorded course", live: "Live course" } as const;
 
 export function ProgressBar({ percent, className = "" }: { percent: number; className?: string }) {
   return (

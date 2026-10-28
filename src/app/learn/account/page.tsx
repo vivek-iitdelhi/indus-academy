@@ -7,8 +7,12 @@ import { AccountForm } from "./account-form";
 
 export default async function AccountPage({ searchParams }: PageProps<"/learn/account">) {
   const user = await requireUser("/learn/account");
-  const { next } = await searchParams;
+  const { next, welcome } = await searchParams;
   const nextPath = typeof next === "string" ? safeNextPath(next, "") || null : null;
+  // Accounts from before first/last names were asked for: start from the full name.
+  const [first = "", ...rest] = user.name.trim().split(/\s+/);
+  const firstName = user.firstName ?? first;
+  const lastName = user.lastName ?? rest.join(" ");
 
   return (
     <Container className="max-w-xl! py-10 sm:py-16">
@@ -18,17 +22,24 @@ export default async function AccountPage({ searchParams }: PageProps<"/learn/ac
         Your <Accent>details</Accent>
       </h1>
 
-      {nextPath && !user.name.trim() && (
+      {welcome ? (
         <p role="status" className="mt-6 rounded-2xl border border-saffron/50 bg-saffron/10 p-4 text-sm leading-relaxed">
-          Before you start, tell us your name. It goes on your certificate when you finish the course.
+          Welcome! To finish signing up, tell us your name (and a phone number, if you like).
         </p>
+      ) : (
+        nextPath &&
+        !user.name.trim() && (
+          <p role="status" className="mt-6 rounded-2xl border border-saffron/50 bg-saffron/10 p-4 text-sm leading-relaxed">
+            Before you start, tell us your name. It goes on your certificate when you finish the course.
+          </p>
+        )
       )}
 
       <div className="mt-8 rounded-3xl border border-line bg-white p-5 sm:p-7">
         <p className="text-sm font-medium">Email</p>
         <p className="mt-1 break-all text-muted">{user.email}</p>
         <hr className="my-6 border-line" />
-        <AccountForm name={user.name} phone={user.phone ?? ""} next={nextPath} />
+        <AccountForm firstName={firstName} lastName={lastName} phone={user.phone ?? ""} next={nextPath ?? (welcome ? "/learn" : null)} />
       </div>
 
       <p className="mt-6 text-sm leading-relaxed text-muted">

@@ -13,6 +13,8 @@ export function SignInForm({ next, googleEnabled }: { next: string; googleEnable
   const [email, setEmail] = useState("");
   // Failed links land back here with ?error=, keeping the destination.
   const errorCallbackURL = `/signin?error=link&next=${encodeURIComponent(next)}`;
+  // A new account goes to its details first (first and last name, optional phone), then on to `next`.
+  const newUserCallbackURL = `/learn/account?welcome=1&next=${encodeURIComponent(next)}`;
 
   async function sendLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -21,7 +23,7 @@ export function SignInForm({ next, googleEnabled }: { next: string; googleEnable
       return;
     }
     setStatus("sending");
-    const { error } = await authClient.signIn.magicLink({ email, callbackURL: next, errorCallbackURL });
+    const { error } = await authClient.signIn.magicLink({ email, callbackURL: next, newUserCallbackURL, errorCallbackURL });
     setStatus(error ? "error" : "sent");
   }
 
@@ -84,7 +86,7 @@ export function SignInForm({ next, googleEnabled }: { next: string; googleEnable
           </p>
           <button
             type="button"
-            onClick={() => authClient.signIn.social({ provider: "google", callbackURL: next, errorCallbackURL })}
+            onClick={() => authClient.signIn.social({ provider: "google", callbackURL: next, newUserCallbackURL, errorCallbackURL })}
             className="h-12 w-full rounded-full border border-ink/15 px-6 text-sm font-medium text-ink transition-colors hover:border-ink/40 hover:bg-ink/[0.03]"
           >
             Continue with Google

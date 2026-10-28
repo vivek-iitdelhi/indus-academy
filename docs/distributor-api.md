@@ -140,7 +140,8 @@ curl -H "Authorization: Bearer $IAA_KEY" https://indusai.academy/api/v1/courses
 
 - `description` is Markdown. `price_paise` is our list price (GST-inclusive), for
   information only.
-- `format`: `interactive` (short videos with quizzes) or `standard` (long recordings).
+- `format`: `interactive` (short videos with quizzes), `standard` (long recordings) or `live`
+  (taught in the course's scheduled [live classes](#live-classes)).
 - `sequential: true` means a learner should finish each lesson before the next unlocks;
   enforcing that on your platform is up to you.
 - `language`: the ISO 639-1 code of the teaching language (`en`, `hi`, …). `cover_image_url`

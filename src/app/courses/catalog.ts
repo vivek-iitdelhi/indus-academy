@@ -1,15 +1,17 @@
-import { asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import { cache } from "react";
 import { db } from "@/db";
 import { courses, lessons, type Course, type CourseFormat } from "@/db/schema";
 import { getCourseBySlug, getCourseOutline } from "@/lib/lms/courses";
+import { liveClasses, listedNow, stillRunning, type LiveClass } from "@/lib/lms/live-courses";
 import { formatRupees } from "@/lib/rupees";
 
 // The catalogue is prerendered from the database at build time. A build without
 // DATABASE_URL (CI, a fresh preview) renders no courses and fills in on demand / on revalidate.
 const dbAvailable = () => Boolean(process.env.DATABASE_URL);
 
-export type CatalogCourse = Course & { lessonCount: number; totalSeconds: number };
+// liveClasses: a live course's classes (empty for other courses), for "Upcoming" and "Live now".
+export type CatalogCourse = Course & { lessonCount: number; totalSeconds: number; liveClasses: LiveClass[] };
 
 export async function listPublishedCourses(): Promise<CatalogCourse[]> {
   if (!dbAvailable()) return [];
@@ -21,23 +23,38 @@ export async function listPublishedCourses(): Promise<CatalogCourse[]> {
     })
     .from(courses)
     .leftJoin(lessons, eq(lessons.courseId, courses.id))
-    .where(eq(courses.status, "published"))
+    // A live course drops off the catalogue once its last class ends (enrolled learners keep it in /learn).
+    .where(and(eq(courses.status, "published"), listedNow))
     .groupBy(courses.id)
     .orderBy(asc(courses.createdAt));
-  return rows.map(({ course, lessonCount, totalSeconds }) => ({ ...course, lessonCount, totalSeconds }));
+  return Promise.all(
+    rows.map(async ({ course, lessonCount, totalSeconds }) => ({
+      ...course,
+      lessonCount,
+      totalSeconds,
+      liveClasses: course.format === "live" ? await liveClasses(course.id) : [],
+    })),
+  );
 }
 
-/** A published course and its outline, or null. Only published courses are on sale. */
+/**
+ * A published course with its outline and live classes, or null. Only published courses are on
+ * sale, and a live course only until its last class ends: after that its page is gone for everyone
+ * (enrolled learners reach it through /learn).
+ */
 export const getCatalogCourse = cache(async (slug: string) => {
   if (!dbAvailable()) return null;
   const course = await getCourseBySlug(slug);
   if (!course || course.status !== "published") return null;
-  return { course, outline: await getCourseOutline(course.id) };
+  const classes = course.format === "live" ? await liveClasses(course.id) : [];
+  if (!stillRunning(course, classes)) return null;
+  return { course, outline: await getCourseOutline(course.id), liveClasses: classes };
 });
 
 export const formatLabels: Record<CourseFormat, string> = {
   interactive: "Interactive: short videos with quizzes",
   standard: "Standard: full-length course",
+  live: "Live: taught in scheduled live classes",
 };
 
 export { formatRupees } from "@/lib/rupees";
@@ -57,3 +74,7 @@ export function formatDuration(seconds: number) {
   if (hours) return `${hours} h`;
   return `${Math.max(minutes, 1)} min`;
 }
+
+/** Live classes as plain strings, for the client components that tick over to "Live now". */
+export const classTimes = (classes: LiveClass[]) =>
+  classes.map((c) => ({ id: c.id, title: c.title, startsAt: c.startsAt.toISOString(), endsAt: c.endsAt.toISOString() }));

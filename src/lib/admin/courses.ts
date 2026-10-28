@@ -6,6 +6,7 @@ import {
   courses,
   enrollments,
   lessons,
+  liveSessions,
   payments,
   quizQuestions,
   type LessonKind,
@@ -161,5 +162,12 @@ export async function coursePublishProblems(courseId: string): Promise<string[]>
         .innerJoin(lessons, eq(quizQuestions.lessonId, lessons.id))
         .where(eq(lessons.courseId, courseId))
     : [];
-  return publishProblems(courseLessons, questions);
+  const [course] = await db.select({ format: courses.format }).from(courses).where(eq(courses.id, courseId));
+  if (course?.format !== "live") return publishProblems(courseLessons, questions);
+  // A live course is taught in its classes: lessons are optional, but checked like any others.
+  const classes = await db.select({ id: liveSessions.id }).from(liveSessions).where(eq(liveSessions.courseId, courseId)).limit(1);
+  return [
+    ...(classes.length ? [] : ["Schedule at least one live class (Admin → Live classes)."]),
+    ...(courseLessons.length ? publishProblems(courseLessons, questions) : []),
+  ];
 }

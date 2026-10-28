@@ -29,6 +29,7 @@ import {
 import { revalidateCourse } from "@/lib/catalog-cache";
 import { notifyCourseUpdated } from "@/lib/lms/partners";
 import { createWebinar, deleteWebinar, liveConfigured, parseIndiaDateTime } from "@/lib/live";
+import { deleteRecording } from "@/lib/live-recordings";
 import { normalizeCode } from "@/lib/lms/coupons";
 import { requireAdminApi } from "@/lib/session";
 import { deleteVideo, videoConfigured } from "@/lib/video";
@@ -153,6 +154,10 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
   }
   const language = text(form, "language") || course.language;
   if (!COURSE_LANGUAGES.some(([code]) => code === language)) return { error: "Choose a language." };
+  const recordingDays = Number(text(form, "recordingDays") || course.recordingDays);
+  if (!Number.isInteger(recordingDays) || recordingDays < 1 || recordingDays > 365) {
+    return { error: "Keep recordings for a whole number of days, 1 to 365." };
+  }
 
   try {
     await db
@@ -169,6 +174,7 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
         certificateEnabled: checked(form, "certificateEnabled"),
         coverImageUrl: coverImageUrl || null,
         language,
+        recordingDays,
       })
       .where(eq(courses.id, course.id));
   } catch (e) {
@@ -209,8 +215,9 @@ export async function deleteCourse(courseId: string) {
     throw new Error("This course has enrolments, payments or certificates; archive it instead.");
   }
   const videos = await db.select(videoColumns).from(lessons).where(eq(lessons.courseId, course.id));
-  await db.delete(courses).where(eq(courses.id, course.id)); // chapters, lessons, questions cascade
-  await deleteVideos(videos.flatMap((v) => [v.videoUid, v.pendingVideoUid]));
+  const recordings = await db.select({ uid: liveSessions.recordingVideoUid }).from(liveSessions).where(eq(liveSessions.courseId, course.id));
+  await db.delete(courses).where(eq(courses.id, course.id)); // chapters, lessons, questions, live classes cascade
+  await deleteVideos([...videos.flatMap((v) => [v.videoUid, v.pendingVideoUid]), ...recordings.map((r) => r.uid)]);
   revalidateCourse(course.slug);
   redirect("/admin/courses");
 }
@@ -529,5 +536,14 @@ export async function deleteLiveSession(sessionId: string) {
   const [session] = await db.delete(liveSessions).where(eq(liveSessions.id, sessionId)).returning();
   // Best effort: a webinar left behind on webinar.gg is harmless; nobody can get a token for it.
   if (session) await deleteWebinar(session.webinarId).catch((e) => console.error(`[live] deleteWebinar ${session.webinarId} failed`, e));
+  if (session?.recordingVideoUid) await deleteVideo(session.recordingVideoUid).catch((e) => console.error("[live] recording delete failed", e));
+  refresh();
+}
+
+/** Deletes our copy of a class recording before its time is up. */
+export async function deleteSessionRecording(sessionId: string) {
+  await requireAdminApi();
+  if (!isUuid(sessionId)) notFound();
+  await deleteRecording(sessionId);
   refresh();
 }

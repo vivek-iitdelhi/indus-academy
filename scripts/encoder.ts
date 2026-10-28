@@ -177,9 +177,21 @@ async function reject(uid: string, e: unknown) {
   log(uid, "failed", e);
   await put(`videos/${uid}/error.txt`, String(e instanceof Error ? e.message : e));
   await remove(`uploads/${uid}`);
+  await remove(`imports/${uid}`);
 }
 
-async function encode(uid: string) {
+/**
+ * The source to encode: the admin's upload (uploads/<uid>), or for an import (imports/<uid>,
+ * whose body is an https URL: a live class recording) the file at that URL.
+ */
+async function download(uid: string, from: "uploads" | "imports") {
+  if (from === "uploads") return ok(await request("GET", `uploads/${uid}`, { timeoutMs: 6 * 3_600_000 }), "download");
+  const url = (await (await ok(await request("GET", `imports/${uid}`), "read import")).text()).trim();
+  if (!url.startsWith("https://")) throw new Error(`imports/${uid} is not an https URL`);
+  return ok(await fetch(url, { signal: AbortSignal.timeout(6 * 3_600_000) }), "download import");
+}
+
+async function encode(uid: string, from: "uploads" | "imports" = "uploads") {
   const work = join(WORK_DIR, uid);
   const source = join(work, "source");
   const out = join(work, "out");
@@ -187,7 +199,7 @@ async function encode(uid: string) {
   await mkdir(out, { recursive: true });
   try {
     log(uid, "downloading");
-    const res = await ok(await request("GET", `uploads/${uid}`, { timeoutMs: 6 * 3_600_000 }), "download");
+    const res = await download(uid, from);
     await pipeline(Readable.fromWeb(res.body as import("node:stream/web").ReadableStream), createWriteStream(source));
 
     // A file ffprobe can't read is the upload's fault: tell the admin and drop it.
@@ -221,7 +233,7 @@ async function encode(uid: string) {
       await put(`videos/${uid}/${relative(out, path).split("\\").join("/")}`, new Blob([await readFile(path)]));
     });
     await put(`videos/${uid}/meta.json`, JSON.stringify({ durationSeconds })); // last: marks it ready
-    await remove(`uploads/${uid}`);
+    await remove(`${from}/${uid}`);
     log(uid, "ready");
   } finally {
     await rm(work, { recursive: true, force: true });
@@ -248,7 +260,7 @@ async function encryptOutput(out: string, key = newVideoKey()) {
 async function purge(uid: string) {
   const keys = (await list(`videos/${uid}/`)).map((o) => o.key);
   log(uid, `deleting ${keys.length} files`);
-  await each([...keys, `uploads/${uid}`], remove);
+  await each([...keys, `uploads/${uid}`, `imports/${uid}`], remove);
   await remove(`trash/${uid}`);
 }
 
@@ -351,9 +363,11 @@ async function pass() {
     const uid = uidOf(key);
     if (uid && Date.now() - lastModified.getTime() > PURGE_AFTER_MS) await attempt("delete", uid, () => purge(uid));
   }
-  for (const { key } of await list("uploads/")) {
-    const uid = uidOf(key);
-    if (uid && !trashed.has(uid)) await attempt("encode", uid, () => encode(uid));
+  for (const from of ["uploads", "imports"] as const) {
+    for (const { key } of await list(`${from}/`)) {
+      const uid = uidOf(key);
+      if (uid && !trashed.has(uid)) await attempt("encode", uid, () => encode(uid, from));
+    }
   }
 }
 

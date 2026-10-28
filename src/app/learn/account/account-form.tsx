@@ -7,29 +7,57 @@ import { saveAccount, type AccountState } from "./actions";
 const inputClass =
   "h-12 w-full rounded-full border border-line bg-white px-5 text-[0.95rem] text-ink transition-colors placeholder:text-muted/60 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20";
 
-export function AccountForm({ name, phone, next }: { name: string; phone: string; next: string | null }) {
+export function AccountForm({
+  firstName,
+  lastName,
+  phone,
+  next,
+}: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  next: string | null;
+}) {
   const [state, action, pending] = useActionState<AccountState, FormData>(saveAccount, {});
   return (
     <form action={action} className="space-y-5">
       {next && <input type="hidden" name="next" value={next} />}
       <div>
-        <label htmlFor="account-name" className="text-sm font-medium">
-          Full name
-        </label>
-        <p id="account-name-help" className="mt-1 text-sm leading-relaxed text-muted">
-          Printed on your certificates exactly as you type it here. Check the spelling before you finish a course.
+        <p id="account-name-help" className="text-sm leading-relaxed text-muted">
+          Your name is printed on your certificates exactly as you type it here. Check the spelling before you finish a course.
         </p>
-        <input
-          id="account-name"
-          name="name"
-          required
-          minLength={2}
-          maxLength={100}
-          autoComplete="name"
-          defaultValue={name}
-          aria-describedby="account-name-help"
-          className={`${inputClass} mt-3`}
-        />
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="account-first-name" className="text-sm font-medium">
+              First name
+            </label>
+            <input
+              id="account-first-name"
+              name="firstName"
+              required
+              maxLength={50}
+              autoComplete="given-name"
+              defaultValue={firstName}
+              aria-describedby="account-name-help"
+              className={`${inputClass} mt-3`}
+            />
+          </div>
+          <div>
+            <label htmlFor="account-last-name" className="text-sm font-medium">
+              Last name
+            </label>
+            <input
+              id="account-last-name"
+              name="lastName"
+              required
+              maxLength={50}
+              autoComplete="family-name"
+              defaultValue={lastName}
+              aria-describedby="account-name-help"
+              className={`${inputClass} mt-3`}
+            />
+          </div>
+        </div>
       </div>
       <div>
         <label htmlFor="account-phone" className="text-sm font-medium">

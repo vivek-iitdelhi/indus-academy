@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { formatDuration, formatLabels, formatRupees, percentOff, priceLabel, type CatalogCourse } from "@/app/courses/catalog";
+import { classTimes, formatDuration, formatLabels, formatRupees, percentOff, priceLabel, type CatalogCourse } from "@/app/courses/catalog";
 import type { Course } from "@/db/schema";
+import { NextClass } from "./live-schedule";
 import { ButtonLink } from "./ui";
 
 export function CourseCard({ course }: { course: CatalogCourse }) {
@@ -14,11 +15,20 @@ export function CourseCard({ course }: { course: CatalogCourse }) {
         </Link>
       </h2>
       {course.subtitle && <p className="mt-3 font-serif text-xl italic text-pine">{course.subtitle}</p>}
+      {course.format === "live" && (
+        <NextClass classes={classTimes(course.liveClasses)} className="mt-6 text-sm font-medium" />
+      )}
       <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line text-sm">
-        {[
-          ["Length", formatDuration(course.totalSeconds)],
-          ["Lessons", String(course.lessonCount)],
-        ].map(([term, detail]) => (
+        {(course.format === "live"
+          ? [
+              ["Live classes", String(course.liveClasses.length)],
+              ["Recordings", `Kept ${course.recordingDays} days`],
+            ]
+          : [
+              ["Length", formatDuration(course.totalSeconds)],
+              ["Lessons", String(course.lessonCount)],
+            ]
+        ).map(([term, detail]) => (
           <div key={term} className="bg-paper p-5">
             <dt className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted">{term}</dt>
             <dd className="mt-2 font-medium leading-snug">{detail}</dd>

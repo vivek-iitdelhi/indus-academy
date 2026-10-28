@@ -241,6 +241,17 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
                 ))}
               </select>
             </Field>
+            <Field label="Keep class recordings (days)" hint="Live classes: each recording is deleted this many days after it arrives.">
+              <input
+                name="recordingDays"
+                type="number"
+                min="1"
+                max="365"
+                required
+                defaultValue={course.recordingDays}
+                className={`${inputClass} tabular-nums`}
+              />
+            </Field>
           </div>
           <div className="space-y-3">
             <CheckField

@@ -6,6 +6,7 @@ import { enrollments, payments, user as userTable } from "@/db/schema";
 import { hasAccess } from "@/lib/lms/access";
 import { discountedPaise, findCoupon, INVALID_COUPON } from "@/lib/lms/coupons";
 import { getCourseBySlug } from "@/lib/lms/courses";
+import { onSale } from "@/lib/lms/live-courses";
 import { cashfreeConfigured, cashfreeMode, createOrder } from "@/lib/cashfree";
 import { site } from "@/content/site";
 import { isGstin, withGstPaise } from "@/lib/gst";
@@ -103,7 +104,8 @@ async function courseCheckout(body: { courseSlug?: unknown; phone?: unknown; cou
   if (!user) return Response.json({ error: "Please sign in to buy this course" }, { status: 401 });
 
   const course = typeof body.courseSlug === "string" ? await getCourseBySlug(body.courseSlug) : null;
-  if (!course || course.status !== "published") return Response.json({ error: "Unknown course" }, { status: 404 });
+  // onSale: published, and a live course only until its last class ends.
+  if (!course || !(await onSale(course))) return Response.json({ error: "Unknown course" }, { status: 404 });
   if (course.pricePaise <= 0) return Response.json({ error: "This course is free" }, { status: 409 });
   if (await hasAccess(user.id, course.id)) {
     return Response.json({ error: "You already own this course" }, { status: 409 });

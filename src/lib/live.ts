@@ -22,18 +22,7 @@ const API = "https://webinar-api.webinar.gg/api/v1";
 const token = () => process.env.WEBINAR_GG_TOKEN ?? "";
 export const liveConfigured = () => Boolean(token());
 
-/** Join opens this long before the start, and stays open this long after the planned end. */
-export const OPENS_EARLY_MS = 15 * 60_000;
-export const LATE_GRACE_MS = 60 * 60_000;
-
-export type LiveStatus = "upcoming" | "open" | "ended";
-
-export function liveStatus(session: { startsAt: Date; durationMinutes: number }, now = new Date()): LiveStatus {
-  const start = session.startsAt.getTime();
-  if (now.getTime() < start - OPENS_EARLY_MS) return "upcoming";
-  if (now.getTime() <= start + session.durationMinutes * 60_000 + LATE_GRACE_MS) return "open";
-  return "ended";
-}
+export { LATE_GRACE_MS, liveStatus, OPENS_EARLY_MS, type LiveStatus } from "./live-times.ts";
 
 /** webinar.gg takes a wall-clock date and 12-hour time; we schedule in India time (no DST). */
 export function indiaParts(at: Date) {

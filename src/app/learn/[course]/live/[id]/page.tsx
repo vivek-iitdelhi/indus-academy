@@ -3,14 +3,16 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { and, eq } from "drizzle-orm";
 import { Container } from "@/components/ui";
+import { VideoPlayer } from "@/components/video-player";
 import { db } from "@/db";
 import { courses, liveSessions, type LiveSession } from "@/db/schema";
-import { formatDateTime } from "@/lib/admin/ops";
+import { formatDate, formatDateTime } from "@/lib/admin/ops";
 import { isUuid } from "@/lib/distributors";
 import { joinUrl, LiveBusy, liveStatus, ROOM_ALLOW } from "@/lib/live";
 import { recordOpen } from "@/lib/live-attendance";
 import { hasAccess } from "@/lib/lms/access";
 import { requireUser } from "@/lib/session";
+import { getVideoStatus, hlsManifestUrl, keyProof, signPlaybackToken, videoConfigured } from "@/lib/video";
 import { JoinRetry } from "./join-retry";
 
 const NOTE = "mt-6 rounded-2xl border border-line bg-white p-6";
@@ -41,7 +43,35 @@ async function Room({ session, user }: { session: LiveSession; user: { id: strin
   );
 }
 
-/** One live class: the webinar.gg room in an iframe, with this learner's join link. */
+/** Our protected copy of the recording, once the encoder has it ready. */
+async function Recording({ session }: { session: LiveSession }) {
+  const uid = session.recordingVideoUid!;
+  const status = videoConfigured() ? await getVideoStatus(uid).catch(() => null) : null;
+  if (!status?.ready) {
+    return <p className={NOTE}>The recording is being prepared. It usually takes about an hour after the class; check back soon.</p>;
+  }
+  const token = signPlaybackToken(uid);
+  return (
+    <div className="mt-6 -mx-5 sm:mx-0">
+      <VideoPlayer
+        src={hlsManifestUrl(uid, token)}
+        keyProof={keyProof(token)}
+        lessonId={session.id}
+        title={session.title}
+        durationSeconds={status.durationSeconds}
+        furthestSeconds={0}
+        completed={false}
+        track={false}
+        nextHref={null}
+      />
+      {session.recordingUntil && (
+        <p className="mt-3 px-5 text-sm text-muted sm:px-0">Available until {formatDate(session.recordingUntil)}.</p>
+      )}
+    </div>
+  );
+}
+
+/** One live class: the webinar.gg room in an iframe, with this learner's join link; afterwards, its recording. */
 export default async function LiveClassPage({ params }: PageProps<"/learn/[course]/live/[id]">) {
   const { course: slug, id } = await params;
   const path = `/learn/${slug}/live/${id}`;
@@ -75,6 +105,12 @@ export default async function LiveClassPage({ params }: PageProps<"/learn/[cours
         <Suspense fallback={<p role="status" className={NOTE}>{JOINING}</p>}>
           <Room session={session} user={{ id: user.id, name: user.name }} />
         </Suspense>
+      ) : status === "ended" && session.recordingVideoUid ? (
+        <Suspense fallback={<p className={NOTE}>Loading the recording…</p>}>
+          <Recording session={session} />
+        </Suspense>
+      ) : status === "ended" && session.recordingUntil ? (
+        <p className={NOTE}>This class&apos;s recording was available until {formatDate(session.recordingUntil)} and has been removed.</p>
       ) : status === "ended" && session.recordingUrl ? (
         <p className="mt-6">
           <a href={session.recordingUrl} target="_blank" rel="noreferrer" className="font-medium text-pine underline underline-offset-4">

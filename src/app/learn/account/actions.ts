@@ -17,12 +17,17 @@ export async function saveAccount(_prev: AccountState, form: FormData): Promise<
   if (!user) redirect("/signin?next=/learn/account");
 
   // Collapse whitespace (including newlines and tabs) so the certificate prints one clean line.
-  const name = String(form.get("name") ?? "").replace(/\s+/g, " ").trim();
-  if (name.length < 2 || name.length > 100) return { error: "Enter your full name (2 to 100 characters)." };
+  const clean = (field: string) => String(form.get(field) ?? "").replace(/\s+/g, " ").trim();
+  const firstName = clean("firstName");
+  const lastName = clean("lastName");
+  if (!firstName || firstName.length > 50) return { error: "Enter your first name (up to 50 characters)." };
+  if (!lastName || lastName.length > 50) return { error: "Enter your last name (up to 50 characters)." };
   const phone = String(form.get("phone") ?? "").trim();
   if (phone && !PHONE.test(phone)) return { error: "Enter a valid phone number, or leave it blank." };
 
-  await db.update(users).set({ name, phone: phone || null }).where(eq(users.id, user.id));
+  // name, printed on certificates, is always "first last".
+  const name = `${firstName} ${lastName}`;
+  await db.update(users).set({ name, firstName, lastName, phone: phone || null }).where(eq(users.id, user.id));
 
   const next = form.get("next");
   if (typeof next === "string" && next) redirect(safeNextPath(next));

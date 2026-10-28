@@ -7,7 +7,7 @@ import { formatDuration, percentComplete } from "@/components/learn/playback";
 import { Accent, ButtonLink, Container, Eyebrow } from "@/components/ui";
 import { db } from "@/db";
 import { liveSessions, type LiveSession } from "@/db/schema";
-import { formatDateTime } from "@/lib/admin/ops";
+import { formatDate, formatDateTime } from "@/lib/admin/ops";
 import { liveStatus } from "@/lib/live";
 import { getCourseBySlug, totalDurationSeconds } from "@/lib/lms/courses";
 import { requireUser } from "@/lib/session";
@@ -37,12 +37,14 @@ export default async function CoursePage({ params }: PageProps<"/learn/[course]"
         {course.title}
       </h1>
       {course.subtitle && <p className="mt-3 text-lg text-muted">{course.subtitle}</p>}
-      <p className="mt-3 text-sm text-muted">
-        {state.total} lessons{hours && ` · ${hours}`}
-        {course.sequential && " · Lessons unlock in order"}
-      </p>
+      {state.total > 0 && (
+        <p className="mt-3 text-sm text-muted">
+          {state.total} lessons{hours && ` · ${hours}`}
+          {course.sequential && " · Lessons unlock in order"}
+        </p>
+      )}
 
-      {state.enrolled ? (
+      {state.enrolled && state.total === 0 ? null : state.enrolled ? (
         <div className="mt-8 rounded-3xl border border-line bg-white p-5 sm:p-6">
           <div className="flex items-baseline justify-between gap-4">
             <p className="font-medium">
@@ -73,10 +75,14 @@ export default async function CoursePage({ params }: PageProps<"/learn/[course]"
 
       {sessions.length > 0 && <LiveClasses courseSlug={course.slug} sessions={sessions} />}
 
-      <h2 className="mt-12 text-xl font-semibold tracking-[-0.01em]">Course outline</h2>
-      <div className="mt-5">
-        <CourseOutlineList chapters={state.chapters} courseSlug={course.slug} />
-      </div>
+      {state.total > 0 && (
+        <>
+          <h2 className="mt-12 text-xl font-semibold tracking-[-0.01em]">Course outline</h2>
+          <div className="mt-5">
+            <CourseOutlineList chapters={state.chapters} courseSlug={course.slug} />
+          </div>
+        </>
+      )}
     </Container>
   );
 }
@@ -121,6 +127,12 @@ function LiveClasses({ courseSlug, sessions }: { courseSlug: string; sessions: L
                 </ButtonLink>
               ) : status === "upcoming" ? (
                 <p className="text-sm text-muted">Opens 15 minutes before the start</p>
+              ) : s.recordingVideoUid ? (
+                <Link href={`/learn/${courseSlug}/live/${s.id}`} className="text-sm font-medium text-pine underline underline-offset-4">
+                  Watch recording{s.recordingUntil && ` · until ${formatDate(s.recordingUntil)}`}
+                </Link>
+              ) : s.recordingUntil ? (
+                <p className="text-sm text-muted">Recording removed {formatDate(s.recordingUntil)}</p>
               ) : s.recordingUrl ? (
                 <a href={s.recordingUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-pine underline underline-offset-4">
                   Watch recording

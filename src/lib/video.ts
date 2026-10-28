@@ -5,6 +5,7 @@ import { KEY_FILE, KEY_URI_PLACEHOLDER } from "./hls-crypto.ts";
 // over the S3 API. Everything else deals in opaque video UIDs and the URLs returned here.
 // Encoding runs on our own machine (scripts/encoder.ts). Bucket layout, shared with it:
 //   uploads/<uid>                 the admin's upload, waiting for the encoder
+//   imports/<uid>                 an https URL for the encoder to fetch and encode (live class recordings)
 //   videos/<uid>/master.m3u8      HLS master; <rung>/index.m3u8 and <rung>/[e_]seg_NNNN.ts per quality
 //   videos/<uid>/enc.key          AES-128 key of the (e_) segments; served only by videoKeyFor
 //   videos/<uid>/thumb.jpg
@@ -186,7 +187,18 @@ export async function getVideoStatus(uid: string): Promise<VideoStatus> {
   }
   if (meta.status !== 404) throw new Error(`R2 GET meta.json responded ${meta.status}`);
   if (await exists(`videos/${uid}/error.txt`)) return { ready: false, durationSeconds: 0, state: "error" };
-  return { ready: false, durationSeconds: 0, state: (await exists(`uploads/${uid}`)) ? "processing" : "pendingupload" };
+  const queued = (await exists(`uploads/${uid}`)) || (await exists(`imports/${uid}`));
+  return { ready: false, durationSeconds: 0, state: queued ? "processing" : "pendingupload" };
+}
+
+/**
+ * Queues a video at an https URL (a live class recording) for the encoder, under a new uid. The
+ * encoder downloads it itself, so the file never passes through the app.
+ */
+export async function importVideo(url: string): Promise<string> {
+  const uid = randomUUID();
+  await check(await r2Fetch("PUT", `imports/${uid}`, { body: url, headers: { "content-type": "text/plain" } }), "PUT import");
+  return uid;
 }
 
 /** Queues the video (and any upload of it) for deletion; the encoder removes the files. */

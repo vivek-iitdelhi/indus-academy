@@ -50,6 +50,7 @@ export function SectionTitle({ children }: { children: ReactNode }) {
 export const formatLabels = {
   interactive: "Short 4–5 minute videos with quizzes in between, grouped into chapters.",
   standard: "The full-length course video(s) as recorded, then a certificate.",
+  live: "Taught in live classes you schedule under Live classes. Listed as upcoming, then live, and gone from the site for non-learners once the last class ends.",
 } as const;
 
 const statusTones = {

@@ -5,10 +5,11 @@ import { db } from "@/db";
 import { liveSessions } from "@/db/schema";
 import { liveConfigured, webhookKey } from "@/lib/live";
 import { syncAttendance } from "@/lib/live-attendance";
+import { importRecording } from "@/lib/live-recordings";
 
 // webinar.gg posts its events here (URL with ?key=, set once through the owner session). Two
-// matter: the recording, whose link goes on the session, and the end, when we read attendance.
-// ponytail: links to webinar.gg's copy; import it into R2 + the encoder if it must be ours.
+// matter: the recording, whose link goes on the session and which we import into our storage
+// for the protected player (src/lib/live-recordings.ts), and the end, when we read attendance.
 
 const sameKey = (given: string) => {
   const a = Buffer.from(given);
@@ -28,7 +29,15 @@ export async function POST(request: Request) {
   if (body?.event === "webinar.recording.created" && data?.webinarId) {
     const url = data.mp4Url || data.m3u8Url || data.mainUrl;
     if (url?.startsWith("https://")) {
-      await db.update(liveSessions).set({ recordingUrl: url }).where(eq(liveSessions.webinarId, data.webinarId));
+      const [session] = await db
+        .update(liveSessions)
+        .set({ recordingUrl: url })
+        .where(eq(liveSessions.webinarId, data.webinarId))
+        .returning({ id: liveSessions.id });
+      // The encoder downloads one file, so only the MP4 can be imported (a playlist can't).
+      if (session && data.mp4Url?.startsWith("https://")) {
+        await importRecording(session.id, data.mp4Url).catch((e) => console.error("[live] recording import failed", e));
+      }
     }
   }
   if (body?.event === "webinar.ended" && data?.webinarId) {

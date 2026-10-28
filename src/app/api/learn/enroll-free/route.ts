@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { enrollments } from "@/db/schema";
 import { hasAccess } from "@/lib/lms/access";
 import { getCourseBySlug } from "@/lib/lms/courses";
+import { onSale } from "@/lib/lms/live-courses";
 import { getUser } from "@/lib/session";
 
 /** Enrols the signed-in user in a free, published course. Safe to call twice. */
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as { courseSlug?: unknown } | null;
   const course = typeof body?.courseSlug === "string" ? await getCourseBySlug(body.courseSlug) : null;
-  if (!course || course.status !== "published") return Response.json({ error: "Unknown course" }, { status: 404 });
+  if (!course || !(await onSale(course))) return Response.json({ error: "Unknown course" }, { status: 404 });
   if (course.pricePaise > 0) return Response.json({ error: "This course is not free" }, { status: 409 });
 
   // An existing row is left alone: a revoked enrolment stays revoked (an admin decided that).

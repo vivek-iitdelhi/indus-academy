@@ -11,7 +11,8 @@ import { company, site } from "@/content/site";
 import { flattenOutline, totalDurationSeconds } from "@/lib/lms/courses";
 import { pageMetadata } from "@/lib/metadata";
 import { breadcrumbSchema, ORGANIZATION_ID } from "@/lib/schema";
-import { formatDuration, formatLabels, getCatalogCourse, listPublishedCourses } from "../catalog";
+import { ClassList, NextClass } from "@/components/live-schedule";
+import { classTimes, formatDuration, formatLabels, getCatalogCourse, listPublishedCourses } from "../catalog";
 
 // Static per course, built from the database. Courses published after the build render on
 // first request and are cached; revalidateCourse() refreshes them, and every minute on all servers.
@@ -37,6 +38,8 @@ export default async function CoursePage({ params }: PageProps<"/courses/[slug]"
   const found = await getCatalogCourse((await params).slug);
   if (!found) notFound();
   const { course, outline } = found;
+  const live = course.format === "live";
+  const classes = classTimes(found.liveClasses);
 
   const lessons = flattenOutline(outline);
   const quizCount = lessons.filter((lesson) => lesson.kind === "quiz").length;
@@ -48,14 +51,20 @@ export default async function CoursePage({ params }: PageProps<"/courses/[slug]"
     { name: "Courses", path: "/courses" },
     { name: course.title, path },
   ];
-  const youGet = [
-    `${videoCount} video lesson${videoCount === 1 ? "" : "s"}, ${total} in total`,
-    ...(quizCount ? [`${quizCount} quiz${quizCount === 1 ? "" : "zes"} to check your understanding`] : []),
-    "Lifetime access: learn at your own pace, on phone or laptop",
-    ...(course.certificateEnabled
-      ? [`A certificate from ${company.legalName} when you complete every lesson and pass every quiz`]
-      : []),
-  ];
+  const youGet = live
+    ? [
+        `${classes.length} live class${classes.length === 1 ? "" : "es"} with the instructor, joined from your phone or laptop`,
+        `A recording of each class, to watch again for ${course.recordingDays} days`,
+        ...(lessons.length ? [`${lessons.length} lesson${lessons.length === 1 ? "" : "s"} to go with the classes`] : []),
+      ]
+    : [
+        `${videoCount} video lesson${videoCount === 1 ? "" : "s"}, ${total} in total`,
+        ...(quizCount ? [`${quizCount} quiz${quizCount === 1 ? "" : "zes"} to check your understanding`] : []),
+        "Lifetime access: learn at your own pace, on phone or laptop",
+        ...(course.certificateEnabled
+          ? [`A certificate from ${company.legalName} when you complete every lesson and pass every quiz`]
+          : []),
+      ];
 
   return (
     <>
@@ -108,8 +117,9 @@ export default async function CoursePage({ params }: PageProps<"/courses/[slug]"
               <p className="mt-2 text-3xl font-semibold tracking-tight">
                 <CoursePrice course={course} />
               </p>
+              {live && <NextClass classes={classes} className="mt-4 text-sm font-medium" />}
               <div className="mt-5">
-                <CourseAction slug={course.slug} pricePaise={course.pricePaise} />
+                <CourseAction slug={course.slug} pricePaise={course.pricePaise} liveClasses={classes} />
               </div>
             </div>
             <div>
@@ -122,46 +132,64 @@ export default async function CoursePage({ params }: PageProps<"/courses/[slug]"
         </Container>
       </Section>
 
-      <Section id="curriculum" className="bg-paper-2">
-        <Container>
-          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-6">
-            <SectionHeading eyebrow="Curriculum" title="What's inside" />
-            <p className="font-mono text-sm text-muted">
-              {lessons.length} lessons · {total}
-            </p>
-          </div>
-          <div className="divide-y divide-line">
-            {outline.map((chapter, i) => (
-              <div key={chapter.id} className="grid gap-5 py-8 md:grid-cols-[6rem_1fr]">
-                <span className="font-mono text-sm text-pine">{String(i + 1).padStart(2, "0")}</span>
-                <div>
-                  <h3 className="text-xl font-semibold tracking-tight">{chapter.title}</h3>
-                  <ol className="mt-4 space-y-2.5">
-                    {chapter.lessons.length === 0 && <li className="text-muted">Coming soon</li>}
-                    {chapter.lessons.map((lesson) => (
-                      <li key={lesson.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="mt-2.5 size-1 shrink-0 self-start rounded-full bg-saffron" aria-hidden="true" />
-                        <span className="text-ink/80">{lesson.title}</span>
-                        {lesson.isPreview && (
-                          <Link
-                            href={`/learn/${course.slug}/${lesson.slug}`}
-                            className="rounded-full bg-mint/60 px-2.5 py-0.5 text-xs font-medium text-pine hover:bg-mint"
-                          >
-                            Free preview
-                          </Link>
-                        )}
-                        <span className="ml-auto font-mono text-xs text-muted">
-                          {lesson.kind === "quiz" ? "Quiz" : formatDuration(lesson.durationSeconds)}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
+      {live && (
+        <Section id="schedule" className="bg-paper-2">
+          <Container>
+            <div className="border-b border-line pb-6">
+              <SectionHeading eyebrow="Schedule" title="Live classes" />
+              <p className="mt-3 text-sm text-muted">
+                India time. Enrolled learners get a Join button here and in My learning from 15 minutes before each class.
+              </p>
+            </div>
+            <div className="mt-8">
+              <ClassList classes={classes} />
+            </div>
+          </Container>
+        </Section>
+      )}
+
+      {lessons.length > 0 && (
+        <Section id="curriculum" className="bg-paper-2">
+          <Container>
+            <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-6">
+              <SectionHeading eyebrow="Curriculum" title="What's inside" />
+              <p className="font-mono text-sm text-muted">
+                {lessons.length} lessons · {total}
+              </p>
+            </div>
+            <div className="divide-y divide-line">
+              {outline.map((chapter, i) => (
+                <div key={chapter.id} className="grid gap-5 py-8 md:grid-cols-[6rem_1fr]">
+                  <span className="font-mono text-sm text-pine">{String(i + 1).padStart(2, "0")}</span>
+                  <div>
+                    <h3 className="text-xl font-semibold tracking-tight">{chapter.title}</h3>
+                    <ol className="mt-4 space-y-2.5">
+                      {chapter.lessons.length === 0 && <li className="text-muted">Coming soon</li>}
+                      {chapter.lessons.map((lesson) => (
+                        <li key={lesson.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <span className="mt-2.5 size-1 shrink-0 self-start rounded-full bg-saffron" aria-hidden="true" />
+                          <span className="text-ink/80">{lesson.title}</span>
+                          {lesson.isPreview && (
+                            <Link
+                              href={`/learn/${course.slug}/${lesson.slug}`}
+                              className="rounded-full bg-mint/60 px-2.5 py-0.5 text-xs font-medium text-pine hover:bg-mint"
+                            >
+                              Free preview
+                            </Link>
+                          )}
+                          <span className="ml-auto font-mono text-xs text-muted">
+                            {lesson.kind === "quiz" ? "Quiz" : formatDuration(lesson.durationSeconds)}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Container>
-      </Section>
+              ))}
+            </div>
+          </Container>
+        </Section>
+      )}
     </>
   );
 }

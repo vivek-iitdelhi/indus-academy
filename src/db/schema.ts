@@ -27,7 +27,8 @@ const updatedAt = () =>
 const id = () => uuid("id").primaryKey().defaultRandom();
 
 // Text enums: the arrays are the source of truth for the TS unions below.
-export const courseFormats = ["interactive", "standard"] as const;
+// live: taught in scheduled live classes (live_sessions); listed only until the last class ends.
+export const courseFormats = ["interactive", "standard", "live"] as const;
 export const courseStatuses = ["draft", "published", "archived"] as const;
 export const lessonKinds = ["video", "quiz"] as const;
 /** Teaching languages a course can have (ISO 639-1 code, name), English first. */
@@ -65,8 +66,11 @@ export type CertificateReleaseMode = (typeof certificateReleaseModes)[number];
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
-  // The name printed on certificates.
+  // The name printed on certificates: "first last", kept in step by the account form.
   name: text("name").notNull(),
+  // Asked at sign-up (src/app/learn/account). Null for accounts made before they were asked for.
+  firstName: text("first_name"),
+  lastName: text("last_name"),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
@@ -148,6 +152,7 @@ export const courses = pgTable("courses", {
   certificateEnabled: boolean("certificate_enabled").notNull().default(true),
   coverImageUrl: text("cover_image_url"),
   language: text("language").notNull().default("en"), // ISO 639-1 of the teaching language
+  recordingDays: integer("recording_days").notNull().default(15), // live classes: how long recordings stay
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -597,6 +602,10 @@ export const liveSessions = pgTable(
     durationMinutes: integer("duration_minutes").notNull(),
     webinarId: text("webinar_id").notNull().unique(),
     recordingUrl: text("recording_url"), // set by the webinar.gg webhook once the recording is ready
+    // Our protected copy of the recording (src/lib/video.ts uid, imported by the encoder), and when
+    // it is deleted: course.recording_days after the recording arrived. Null uid once deleted.
+    recordingVideoUid: text("recording_video_uid"),
+    recordingUntil: ts("recording_until"),
     attendanceSyncedAt: ts("attendance_synced_at"), // when live_attendance.attended was read from webinar.gg
     createdAt: createdAt(),
   },
