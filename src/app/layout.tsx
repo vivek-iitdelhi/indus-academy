@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { MarketingChrome } from "@/components/marketing-chrome";
 import { company, founder, site } from "@/content/site";
 import { siteGraph } from "@/lib/schema";
 import "./globals.css";
@@ -69,11 +70,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           Skip to content
         </a>
-        <SiteHeader />
+        <MarketingChrome>
+          <SiteHeader />
+        </MarketingChrome>
         <main id="main" className="flex-1">
           {children}
         </main>
-        <SiteFooter />
+        <MarketingChrome>
+          <SiteFooter />
+        </MarketingChrome>
       </body>
     </html>
   );

@@ -60,7 +60,6 @@ export function SiteHeader() {
   const navRef = useRef<HTMLElement>(null);
   // Read in the browser so pages stay static; until it loads, visitors see "Sign in".
   const { data: session } = authClient.useSession();
-  const accountLabel = session ? "My learning" : "Sign in";
 
   const closeAll = () => {
     setOpenMenu(null);
@@ -185,13 +184,21 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
-          {/* /learn sends signed-out visitors to /signin and back. */}
-          <Link href="/learn" onClick={closeAll} className="rounded-full px-4 py-2 text-sm text-muted transition-colors hover:text-ink">
-            {accountLabel}
-          </Link>
-          <ButtonLink href="/contact?interest=enterprise" variant="dark" className="h-10 px-5 text-sm">
-            Talk to us
-          </ButtonLink>
+          {/* Signed in: just the way back to their courses. /learn sends signed-out visitors to /signin and back. */}
+          {session ? (
+            <ButtonLink href="/learn" variant="dark" className="h-10 px-5 text-sm">
+              My learning
+            </ButtonLink>
+          ) : (
+            <>
+              <Link href="/learn" onClick={closeAll} className="rounded-full px-4 py-2 text-sm text-muted transition-colors hover:text-ink">
+                Sign in
+              </Link>
+              <ButtonLink href="/contact?interest=enterprise" variant="dark" className="h-10 px-5 text-sm">
+                Talk to us
+              </ButtonLink>
+            </>
+          )}
         </div>
 
         <button
@@ -267,14 +274,24 @@ export function SiteHeader() {
               </div>
             );
           })}
-          <Link href="/learn" onClick={closeAll} className="rounded-xl px-3 py-3 text-lg font-medium hover:bg-ink/[0.04]">
-            {accountLabel}
-          </Link>
-          <div className="mt-3" onClick={closeAll}>
-            <ButtonLink href="/contact?interest=enterprise" variant="dark" className="w-full">
-              Talk to us
-            </ButtonLink>
-          </div>
+          {session ? (
+            <div className="mt-3" onClick={closeAll}>
+              <ButtonLink href="/learn" variant="dark" className="w-full">
+                My learning
+              </ButtonLink>
+            </div>
+          ) : (
+            <>
+              <Link href="/learn" onClick={closeAll} className="rounded-xl px-3 py-3 text-lg font-medium hover:bg-ink/[0.04]">
+                Sign in
+              </Link>
+              <div className="mt-3" onClick={closeAll}>
+                <ButtonLink href="/contact?interest=enterprise" variant="dark" className="w-full">
+                  Talk to us
+                </ButtonLink>
+              </div>
+            </>
+          )}
         </Container>
       </div>
     </header>
