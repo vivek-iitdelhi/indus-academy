@@ -83,8 +83,10 @@ export default async function LiveClassPage({ params }: PageProps<"/learn/[cours
     .from(liveSessions)
     .innerJoin(courses, eq(liveSessions.courseId, courses.id))
     .where(and(eq(liveSessions.id, id), eq(courses.slug, slug)));
-  // 404, not 403, like lessons: no access means nothing to see.
-  if (!row || !(await hasAccess(user.id, row.course.id))) notFound();
+  if (!row) notFound();
+  // Not enrolled (a class link passed on, or another account): the join link enrols them in a
+  // free course, or sends them to buy a paid one, then brings them back here.
+  if (!(await hasAccess(user.id, row.course.id))) redirect(`/join/${id}`);
   if (!user.name.trim()) redirect(`/learn/account?next=${encodeURIComponent(path)}`);
 
   const { session, course } = row;
