@@ -10,6 +10,8 @@ const ROOM_ORIGIN = "https://webinar.gg";
 // done with the room, so we take them back to the course.
 const DONE = new Set(["webinar-user-left", "webinar-user-kicked", "webinar-tab-duplicate", "webinar-ended"]);
 
+const ENDED_POLL_MS = 20_000;
+
 const noSubscribe = () => () => {};
 /**
  * Null on the server and while hydrating; then whether this browser blocks the room's cookies:
@@ -37,7 +39,19 @@ const useBlockedRoom = () =>
  * iPhone/iPad one tap reopens this page in Chrome (its googlechromes:// scheme); on a Mac,
  * where a web page can't launch Chrome, they copy the link.
  */
-export function LiveRoom({ src, title, allow, leaveHref }: { src: string; title: string; allow: string; leaveHref: string }) {
+export function LiveRoom({
+  src,
+  title,
+  allow,
+  leaveHref,
+  sessionId,
+}: {
+  src: string;
+  title: string;
+  allow: string;
+  leaveHref: string;
+  sessionId: string;
+}) {
   const router = useRouter();
   const box = useRef<HTMLDivElement>(null);
   const [fullScreen, setFullScreen] = useState(false);
@@ -47,11 +61,21 @@ export function LiveRoom({ src, title, allow, leaveHref }: { src: string; title:
     const goFull = () => {
       if (!document.fullscreenElement) box.current?.requestFullscreen?.().catch(() => {});
     };
-    const onMessage = (e: MessageEvent) => {
-      if (e.origin !== ROOM_ORIGIN || !DONE.has(e.data?.type)) return;
+    const leave = () => {
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       router.replace(leaveHref);
     };
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin === ROOM_ORIGIN && DONE.has(e.data?.type)) leave();
+    };
+    // When the host ends the class, webinar.gg's room only shows "Webinar has ended" (it posts
+    // nothing), so ask our server, which hears it from webinar.gg's webhook.
+    const poll = setInterval(() => {
+      fetch(`/api/live/${sessionId}/status`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((s: { ended?: boolean } | null) => s?.ended && leave())
+        .catch(() => {});
+    }, ENDED_POLL_MS);
     // A click inside the room moves focus into the iframe: the window blurs, with the click's user
     // activation, which is what the browser needs to allow full screen.
     const onBlur = () => {
@@ -62,11 +86,12 @@ export function LiveRoom({ src, title, allow, leaveHref }: { src: string; title:
     window.addEventListener("blur", onBlur);
     document.addEventListener("fullscreenchange", onFullScreen);
     return () => {
+      clearInterval(poll);
       window.removeEventListener("message", onMessage);
       window.removeEventListener("blur", onBlur);
       document.removeEventListener("fullscreenchange", onFullScreen);
     };
-  }, [router, leaveHref]);
+  }, [router, leaveHref, sessionId]);
 
   if (blocked === null) return <p className="fixed inset-0 z-50 grid place-items-center bg-black text-sm text-white/70">Opening the class…</p>;
   if (blocked === "phone") {

@@ -607,6 +607,7 @@ export const liveSessions = pgTable(
     recordingVideoUid: text("recording_video_uid"),
     recordingUntil: ts("recording_until"),
     attendanceSyncedAt: ts("attendance_synced_at"), // when live_attendance.attended was read from webinar.gg
+    endedAt: ts("ended_at"), // when the host ended it (webinar.gg's webinar.ended webhook); may be before the scheduled end
     createdAt: createdAt(),
   },
   (t) => [index("live_sessions_course_id_starts_at_idx").on(t.courseId, t.startsAt)],
@@ -627,6 +628,25 @@ export const liveAttendance = pgTable(
     firstOpenedAt: ts("first_opened_at"),
     lastOpenedAt: ts("last_opened_at"),
     attended: boolean("attended"), // from webinar.gg once the class ends; null = not known yet
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
+);
+
+// How much of a live class's recording each learner watched: watching it (to 90%, the lesson rule
+// in src/lib/lms/progress.ts) counts like attending, for the certificate.
+export const liveRecordingProgress = pgTable(
+  "live_recording_progress",
+  {
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => liveSessions.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    secondsWatched: integer("seconds_watched").notNull().default(0),
+    furthestSeconds: integer("furthest_seconds").notNull().default(0),
+    completedAt: ts("completed_at"),
+    updatedAt: updatedAt(),
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
 );

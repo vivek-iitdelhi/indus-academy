@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { lessonProgress, lessons, type Certificate, type LessonProgress } from "../../db/schema.ts";
+import { lessonProgress, lessons, liveRecordingProgress, liveSessions, type Certificate, type LessonProgress } from "../../db/schema.ts";
 import { hasAccess } from "./access.ts";
 import { onLessonCompleted } from "./completion.ts";
 
@@ -90,6 +90,42 @@ export async function recordProgress(
 
   const newlyCompleted = !prev?.completedAt && Boolean(next.completedAt);
   const certificate = newlyCompleted ? await onLessonCompleted(userId, lesson.courseId) : null;
+  return { progress: next, newlyCompleted, certificate };
+}
+
+/**
+ * recordProgress for a live class's recording (live_recording_progress): the same anti-scrub
+ * and 90% rules. Watching it counts like attending the class, which may finish the course.
+ */
+export async function recordRecordingProgress(
+  userId: string,
+  sessionId: string,
+  report: ProgressReport,
+  durationSeconds: number,
+): Promise<{ progress: ProgressState; newlyCompleted: boolean; certificate: Certificate | null } | null> {
+  const [session] = await db.select({ courseId: liveSessions.courseId }).from(liveSessions).where(eq(liveSessions.id, sessionId));
+  if (!session || !(await hasAccess(userId, session.courseId))) return null;
+
+  const [prev] = await db
+    .select()
+    .from(liveRecordingProgress)
+    .where(and(eq(liveRecordingProgress.userId, userId), eq(liveRecordingProgress.sessionId, sessionId)));
+  const next = applyProgressReport(prev, report, durationSeconds, new Date());
+  await db
+    .insert(liveRecordingProgress)
+    .values({ userId, sessionId, ...next })
+    .onConflictDoUpdate({
+      target: [liveRecordingProgress.sessionId, liveRecordingProgress.userId],
+      set: {
+        secondsWatched: sql`${liveRecordingProgress.secondsWatched} + ${next.secondsWatched - (prev?.secondsWatched ?? 0)}`,
+        furthestSeconds: sql`greatest(${liveRecordingProgress.furthestSeconds}, excluded.furthest_seconds)`,
+        completedAt: sql`coalesce(${liveRecordingProgress.completedAt}, excluded.completed_at)`,
+        updatedAt: new Date(),
+      },
+    });
+
+  const newlyCompleted = !prev?.completedAt && Boolean(next.completedAt);
+  const certificate = newlyCompleted ? await onLessonCompleted(userId, session.courseId) : null;
   return { progress: next, newlyCompleted, certificate };
 }
 

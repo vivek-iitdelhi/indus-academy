@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { after, describe, test } from "node:test";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { courses, liveSessions } from "../../db/schema.ts";
+import { courses, liveAttendance, liveRecordingProgress, liveSessions, user } from "../../db/schema.ts";
+import { isCourseComplete } from "./completion.ts";
 import { liveClasses, listedNow, onSale, stillRunning } from "./live-courses.ts";
 import { liveStatus } from "../live-times.ts";
 
@@ -25,13 +26,16 @@ test("liveStatus: joinable from 15 min before the start until an hour after the 
   assert.equal(liveStatus(s, at("2026-11-01T13:15:00Z")), "open");
   assert.equal(liveStatus(s, at("2026-11-01T15:30:00Z")), "open");
   assert.equal(liveStatus(s, at("2026-11-01T15:30:01Z")), "ended");
+  assert.equal(liveStatus({ ...s, endedAt: at("2026-11-01T14:05:00Z") }, at("2026-11-01T14:05:00Z")), "ended"); // host ended it early
 });
 
 describe("live courses in the database", { skip: !process.env.DATABASE_URL && "DATABASE_URL not set" }, () => {
   const tag = randomUUID().slice(0, 8);
   const ids: string[] = [];
+  const learner = `live-test-${tag}`;
   after(async () => {
     if (ids.length) await db.delete(courses).where(inArray(courses.id, ids)); // live sessions cascade
+    await db.delete(user).where(eq(user.id, learner));
     await db.$client.end();
   });
 
@@ -70,5 +74,34 @@ describe("live courses in the database", { skip: !process.env.DATABASE_URL && "D
     const classes = await liveClasses(over.id);
     assert.deepEqual(classes.map((c) => c.title), ["Class 1", "Class 2"]);
     assert.equal(classes[0].endsAt.getTime() - classes[0].startsAt.getTime(), hour);
+  });
+
+  test("complete only once every class is over and attended or its recording watched", async () => {
+    const hour = 3_600_000;
+    const now = Date.now();
+    await db.insert(user).values({ id: learner, name: "Live Learner", email: `${learner}@example.test` });
+    const c = await course("live", [
+      { startsAt: new Date(now - 5 * hour), minutes: 60 },
+      { startsAt: new Date(now - 4 * hour), minutes: 60 },
+      { startsAt: new Date(now + 2 * hour), minutes: 60 },
+    ]);
+    const [first, second, third] = await liveClasses(c.id);
+    const done = () => isCourseComplete(learner, c.id);
+
+    await db.insert(liveAttendance).values({ sessionId: first.id, userId: learner, attended: true });
+    await db.insert(liveAttendance).values({ sessionId: second.id, userId: learner, attended: false });
+    assert.equal(await done(), false); // missed the second, and the third is to come
+
+    await db.insert(liveRecordingProgress).values({ sessionId: second.id, userId: learner, furthestSeconds: 3000 }); // part-watched
+    assert.equal(await done(), false);
+    await db.update(liveRecordingProgress).set({ completedAt: new Date() }).where(eq(liveRecordingProgress.sessionId, second.id));
+    assert.equal(await done(), false); // the third hasn't happened: no certificate beforehand
+
+    await db.insert(liveAttendance).values({ sessionId: third.id, userId: learner, attended: true });
+    assert.equal(await done(), false); // attended, but not over yet
+    await db.update(liveSessions).set({ endedAt: new Date(now - 1000) }).where(eq(liveSessions.id, third.id)); // host ended it
+    assert.equal(await done(), true);
+
+    assert.equal(await isCourseComplete(learner, (await course("live")).id), false); // nothing to complete
   });
 });

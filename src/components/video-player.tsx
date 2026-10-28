@@ -41,13 +41,15 @@ type Props = {
   /** False for preview viewers without an enrolment: nothing is reported. */
   track: boolean;
   nextHref: string | null;
+  /** Where progress goes: lessons by default; a live class's recording has its own. */
+  progressUrl?: string;
 };
 
 export function VideoPlayer(props: Props) {
   // Completion refreshes the page, which re-mints the URL and updates the progress props.
   // Keep what playback started with so a refresh never restarts the video.
   const [initial] = useState(props);
-  const { lessonId, track } = initial;
+  const { lessonId, track, progressUrl = "/api/learn/progress" } = initial;
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastPosition = useRef<number | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -154,10 +156,10 @@ export function VideoPlayer(props: Props) {
       pending = keep;
       lastReport = Date.now();
       const body = JSON.stringify({ lessonId, position: video.currentTime, watchedDelta: send });
-      if (beacon && navigator.sendBeacon("/api/learn/progress", new Blob([body], { type: "application/json" }))) {
+      if (beacon && navigator.sendBeacon(progressUrl, new Blob([body], { type: "application/json" }))) {
         return;
       }
-      fetch("/api/learn/progress", {
+      fetch(progressUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body,
@@ -212,7 +214,7 @@ export function VideoPlayer(props: Props) {
       if (video.currentTime > 0) save();
       if (pending > 0) report(true);
     };
-  }, [lessonId, track, router]);
+  }, [lessonId, track, progressUrl, router]);
 
   return (
     <div className="space-y-4">

@@ -10,6 +10,7 @@ import { and, asc, eq, exists, inArray, isNull, lt, or, sql } from "drizzle-orm"
 import { db } from "../db/index.ts";
 import { liveAttendance, liveAttendanceSyncs, liveSessions, user, type LiveSession } from "../db/schema.ts";
 import { attendedOnPage, LiveBusy, liveStatus, LATE_GRACE_MS } from "./live.ts";
+import { onLessonCompleted } from "./lms/completion.ts";
 
 /** Count one room link for this learner; distributorId null = our own site. */
 export async function recordOpen(sessionId: string, userId: string, distributorId: string | null) {
@@ -84,6 +85,7 @@ export async function syncAttendance(session: LiveSession, until = Date.now() + 
           await tx.update(liveSessions).set({ attendanceSyncedAt: new Date() }).where(eq(liveSessions.id, session.id));
           await tx.delete(liveAttendanceSyncs).where(eq(liveAttendanceSyncs.sessionId, session.id));
         });
+        await certifyAttendees(session);
         return true;
       }
       await db.update(liveAttendanceSyncs).set({ nextPage: page, leaseUntil: LEASE }).where(eq(liveAttendanceSyncs.sessionId, session.id));
@@ -92,6 +94,21 @@ export async function syncAttendance(session: LiveSession, until = Date.now() + 
   } finally {
     // No-op once finished (the row is gone); otherwise the next run may start right away.
     await db.update(liveAttendanceSyncs).set({ nextPage: page, leaseUntil: null }).where(eq(liveAttendanceSyncs.sessionId, session.id));
+  }
+}
+
+/**
+ * Attending may have finished the course: certificates for this class's attendees who came
+ * through our site. Partner learners' certificates go through the partner's completion
+ * (partners.ts), co-branded, so they are left to that.
+ */
+async function certifyAttendees(session: LiveSession) {
+  const attendees = await db
+    .select({ userId: liveAttendance.userId })
+    .from(liveAttendance)
+    .where(and(eq(liveAttendance.sessionId, session.id), eq(liveAttendance.attended, true), isNull(liveAttendance.distributorId)));
+  for (const { userId } of attendees) {
+    await onLessonCompleted(userId, session.courseId).catch((e) => console.error("[live] certificate check failed", userId, e));
   }
 }
 

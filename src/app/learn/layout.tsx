@@ -16,7 +16,7 @@ const LONGEST_CLASS_MS = 10 * 60 * 60_000; // 8 h max length + the hour of grace
 async function openClasses(userId: string) {
   const now = Date.now();
   const rows = await db
-    .select({ id: liveSessions.id, title: liveSessions.title, startsAt: liveSessions.startsAt, durationMinutes: liveSessions.durationMinutes, courseId: courses.id, slug: courses.slug })
+    .select({ id: liveSessions.id, title: liveSessions.title, startsAt: liveSessions.startsAt, durationMinutes: liveSessions.durationMinutes, endedAt: liveSessions.endedAt, courseId: courses.id, slug: courses.slug })
     .from(liveSessions)
     .innerJoin(courses, eq(liveSessions.courseId, courses.id))
     .innerJoin(enrollments, and(eq(enrollments.courseId, courses.id), eq(enrollments.userId, userId)))

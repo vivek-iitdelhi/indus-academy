@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { db } from "@/db";
 import { liveSessions } from "@/db/schema";
@@ -41,7 +41,12 @@ export async function POST(request: Request) {
     }
   }
   if (body?.event === "webinar.ended" && data?.webinarId) {
-    const [session] = await db.select().from(liveSessions).where(eq(liveSessions.webinarId, data.webinarId));
+    // The host may end it early: from now on it is over, and open rooms send people on (live-room.tsx).
+    const [session] = await db
+      .update(liveSessions)
+      .set({ endedAt: sql`coalesce(${liveSessions.endedAt}, now())` })
+      .where(eq(liveSessions.webinarId, data.webinarId))
+      .returning();
     // In the background at low priority; the /api/cron/live sweep finishes it if this stops.
     if (session && !session.attendanceSyncedAt) after(() => syncAttendance(session).catch((e) => console.error("[live] attendance sync failed", e)));
   }

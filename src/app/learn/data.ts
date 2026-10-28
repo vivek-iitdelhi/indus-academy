@@ -54,9 +54,11 @@ export async function loadCourseState(userId: string, course: Course) {
   }));
   const all = flattenOutline(outline);
   const done = all.filter((l) => doneIds.has(l.id)).length;
-  // Finished, but no certificate: the course changed after they finished (see onLessonCompleted).
+  // Finished, but no certificate: the course changed after they finished, or a class has since
+  // ended (see onLessonCompleted).
   let held: { serial: string; revokedAt: Date | null } | null = certificate ?? null;
-  if (!held && enrolled && course.certificateEnabled && all.length > 0 && done === all.length) {
+  // Also a live course with no lessons: onLessonCompleted checks its classes.
+  if (!held && enrolled && course.certificateEnabled && done === all.length) {
     const issued = await onLessonCompleted(userId, course.id);
     if (issued) held = { serial: issued.serial, revokedAt: issued.revokedAt };
   }
