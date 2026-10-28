@@ -12,10 +12,10 @@ const UA = {
   androidChrome: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
 };
 
-test("Safari and every iPhone/iPad browser get the room in its own tab; Chrome, Edge, Firefox, Android embed it", () => {
+test("Safari and iPhone/iPad browsers other than Chrome are blocked; Chrome (iPhone too), Edge, Firefox, Android embed it", () => {
   assert.equal(blocksEmbeddedRoom(UA.macSafari), true);
   assert.equal(blocksEmbeddedRoom(UA.iphoneSafari), true);
-  assert.equal(blocksEmbeddedRoom(UA.iphoneChrome), true); // WebKit underneath
+  assert.equal(blocksEmbeddedRoom(UA.iphoneChrome), false); // where "Open in Chrome" lands; it gets to try
   assert.equal(blocksEmbeddedRoom(UA.macSafari.replace("Version/18.1 ", ""), 5), true); // iPadOS as a Mac, with touch
   assert.equal(blocksEmbeddedRoom(UA.macChrome), false);
   assert.equal(blocksEmbeddedRoom(UA.winEdge), false);

@@ -13,15 +13,15 @@ const DONE = new Set(["webinar-user-left", "webinar-user-kicked", "webinar-tab-d
 const noSubscribe = () => () => {};
 /**
  * Null on the server and while hydrating; then whether this browser blocks the room's cookies:
- * "phone" on iPhone/iPad (no browser there works), "browser" for Safari, else false.
+ * "phone" on iPhone/iPad (other than in Chrome), "browser" for Safari on a computer, else false.
  */
 const useBlockedRoom = () =>
   useSyncExternalStore(
     noSubscribe,
     () => {
       const { userAgent, maxTouchPoints } = navigator;
-      if (isAppleMobile(userAgent, maxTouchPoints)) return "phone";
-      return blocksEmbeddedRoom(userAgent, maxTouchPoints) ? "browser" : false;
+      if (!blocksEmbeddedRoom(userAgent, maxTouchPoints)) return false;
+      return isAppleMobile(userAgent, maxTouchPoints) ? "phone" : "browser";
     },
     () => null,
   );
@@ -32,9 +32,10 @@ const useBlockedRoom = () =>
  * nothing), but the room first posts "webinar-user-left", and that is what sends the viewer back
  * to `leaveHref`. The first click into the room also turns on true full screen.
  *
- * Safari and every iPhone/iPad browser block an embedded site's cookies, so the room can't
- * run there; webinar.gg's answer is "use Chrome", and nobody should land on webinar.gg itself, so
- * those browsers get a "use Chrome" screen with this page's link to copy.
+ * Safari and the other iPhone/iPad browsers block an embedded site's cookies, so the room can't
+ * run there; webinar.gg's answer is "use Chrome", and nobody should land on webinar.gg itself. On
+ * iPhone/iPad one tap reopens this page in Chrome (its googlechromes:// scheme); on a Mac,
+ * where a web page can't launch Chrome, they copy the link.
  */
 export function LiveRoom({ src, title, allow, leaveHref }: { src: string; title: string; allow: string; leaveHref: string }) {
   const router = useRouter();
@@ -68,16 +69,33 @@ export function LiveRoom({ src, title, allow, leaveHref }: { src: string; title:
   }, [router, leaveHref]);
 
   if (blocked === null) return <p className="fixed inset-0 z-50 grid place-items-center bg-black text-sm text-white/70">Opening the class…</p>;
+  if (blocked === "phone") {
+    return (
+      <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-line bg-white p-6 sm:p-8">
+        <p className="text-xl font-semibold tracking-[-0.01em]">Open this class in Chrome</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">This browser can&apos;t run the live class. Chrome can: tap below and this page opens in Chrome.</p>
+        <a
+          href={`googlechromes://${location.host}${location.pathname}${location.search}`}
+          className="mt-6 inline-block rounded-full bg-ink px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-pine"
+        >
+          Open in Chrome
+        </a>
+        <p className="mt-4 text-sm text-muted">
+          No Chrome?{" "}
+          <a href="https://apps.apple.com/app/google-chrome/id535886823" className="font-medium text-pine underline underline-offset-4">
+            Get it from the App Store
+          </a>
+          , then tap Open in Chrome again.
+        </p>
+      </div>
+    );
+  }
   if (blocked) {
     return (
       <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-line bg-white p-6 sm:p-8">
-        <p className="text-xl font-semibold tracking-[-0.01em]">
-          {blocked === "phone" ? "Join this class from a computer or an Android phone" : "Open this class in Google Chrome"}
-        </p>
+        <p className="text-xl font-semibold tracking-[-0.01em]">Open this class in Google Chrome</p>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          {blocked === "phone"
-            ? "Browsers on iPhone and iPad, Chrome included, block what the live class needs. Copy this link and open it in Chrome on a laptop, desktop or Android phone."
-            : "This browser blocks what the live class needs. Copy this link, open it in Chrome, and you'll go straight into the class."}
+          This browser blocks what the live class needs. Copy this link, open it in Chrome, and you&apos;ll go straight into the class.
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
           <CopyButton
@@ -85,11 +103,9 @@ export function LiveRoom({ src, title, allow, leaveHref }: { src: string; title:
             label="Copy class link"
             className="rounded-full bg-ink px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-pine"
           />
-          {blocked === "browser" && (
-            <a href="https://www.google.com/chrome/" target="_blank" rel="noreferrer" className="text-sm font-medium text-pine underline underline-offset-4">
-              Get Chrome
-            </a>
-          )}
+          <a href="https://www.google.com/chrome/" target="_blank" rel="noreferrer" className="text-sm font-medium text-pine underline underline-offset-4">
+            Get Chrome
+          </a>
         </div>
       </div>
     );
