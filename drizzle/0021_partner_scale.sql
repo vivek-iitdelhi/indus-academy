@@ -64,7 +64,7 @@ CREATE TABLE "partner_webhook_events" (
 );
 --> statement-breakpoint
 ALTER TABLE "courses" ADD COLUMN "language" text DEFAULT 'en' NOT NULL;--> statement-breakpoint
-ALTER TABLE "distributors" ADD COLUMN "rate_limit_per_minute" integer DEFAULT 120 NOT NULL;--> statement-breakpoint
+ALTER TABLE "distributors" ADD COLUMN "rate_limit_per_minute" integer DEFAULT 3000 NOT NULL;--> statement-breakpoint
 ALTER TABLE "distributors" ADD COLUMN "webhook_url" text;--> statement-breakpoint
 ALTER TABLE "distributors" ADD COLUMN "webhook_secret" text;--> statement-breakpoint
 ALTER TABLE "distributors" ADD COLUMN "sandbox_of" uuid;--> statement-breakpoint

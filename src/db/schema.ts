@@ -272,7 +272,7 @@ export const distributors = pgTable("distributors", {
   // When partner learners' certificates are issued (docs/distributor-api.md).
   certificateRelease: text("certificate_release", { enum: certificateReleaseModes }).notNull().default("on_payment"),
   // Requests per minute per key (src/lib/rate-limit.ts); the admin can change it per partner.
-  rateLimitPerMinute: integer("rate_limit_per_minute").notNull().default(120),
+  rateLimitPerMinute: integer("rate_limit_per_minute").notNull().default(3000),
   // Outgoing webhooks (src/lib/partner-webhooks.ts). The secret signs them, so it is kept as is.
   webhookUrl: text("webhook_url"),
   webhookSecret: text("webhook_secret"),

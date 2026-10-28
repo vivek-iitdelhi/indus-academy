@@ -78,7 +78,7 @@ export async function PlatformSections({ distributor }: { distributor: Distribut
             aria-label="Requests per minute per key"
             className="h-10 w-28 rounded-xl border border-line px-3"
           />
-          <span className="text-muted">requests a minute, per key (default 120). Over it, they get 429 rate_limited.</span>
+          <span className="text-muted">requests a minute, per key (default 3000). Over it, they get 429 rate_limited.</span>
           <button className={button}>Save</button>
         </ActionForm>
       </section>

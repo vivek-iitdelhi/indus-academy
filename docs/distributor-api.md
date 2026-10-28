@@ -38,12 +38,12 @@ exists.
 
 ## Rate limits
 
-Each key may make **120 requests a minute** unless we've agreed another limit with you. Every
+Each key may make **3,000 requests a minute** unless we've agreed another limit with you. Every
 response (after authentication) says where you stand:
 
 ```
-ratelimit-policy: 120;w=60
-ratelimit: limit=120, remaining=87, reset=23
+ratelimit-policy: 3000;w=60
+ratelimit: limit=3000, remaining=2987, reset=23
 ```
 
 `remaining` is what's left in the current one-minute window, and `reset` is the number of
@@ -53,7 +53,7 @@ seconds until the window starts over. Over the limit, you get `429`:
 HTTP/1.1 429 Too Many Requests
 Retry-After: 23
 
-{ "error": { "code": "rate_limited", "message": "Over the limit of 120 requests a minute. Retry in 23 s.", "retry_after": 23 } }
+{ "error": { "code": "rate_limited", "message": "Over the limit of 3000 requests a minute. Retry in 23 s.", "retry_after": 23 } }
 ```
 
 Wait `retry_after` seconds (the same value as `Retry-After`), then carry on. For large imports,
@@ -922,7 +922,7 @@ A `429` and a `503 live_busy` also carry `retry_after` (seconds) in the `error` 
   `retry_after` when the line is full. Attendance gains `status` and `synced_at` and answers
   at once.
 - Certificates print names in Indian scripts correctly, and fit long names on up to two lines.
-- **Rate limits**: 120 requests a minute per key unless agreed otherwise, with `ratelimit`
+- **Rate limits**: 3,000 requests a minute per key unless agreed otherwise, with `ratelimit`
   headers and `429 rate_limited`. This is new behaviour: if you send bursts, handle `429` by
   waiting `retry_after` seconds.
 - Errors on our side now come as `500 internal_error` in the usual error shape.

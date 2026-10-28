@@ -1359,7 +1359,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": 120
+          "default": 3000
         },
         "webhook_url": {
           "name": "webhook_url",
