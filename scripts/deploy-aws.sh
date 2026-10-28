@@ -32,7 +32,10 @@ if [[ -n "$db_sg" ]]; then
   # here and from Docker, and allow every IP seen.
   echo_urls="https://checkip.amazonaws.com https://api.ipify.org https://icanhazip.com https://ifconfig.me/ip https://ipinfo.io/ip"
   build_ips=$( { for _ in 1 2 3; do for u in $echo_urls; do curl -s --max-time 5 "$u"; echo; done; done
-    docker run --rm node:24-slim node -e 'for (const u of process.argv.slice(1)) fetch(u).then(r=>r.text()).then(t=>console.log(t.trim())).catch(()=>{})' $echo_urls
+    # Docker's own way out matters most (the build connects from there): ask from it several times.
+    for _ in 1 2 3; do
+      docker run --rm node:24-slim node -e 'for (const u of process.argv.slice(1)) fetch(u).then(r=>r.text()).then(t=>console.log(t.trim())).catch(()=>{})' $echo_urls
+    done
   } | grep -E '^[0-9]+(\.[0-9]+){3}$' | sort -u)
   echo "Database open to the build machine: $(echo $build_ips)"
   for ip in $build_ips; do
