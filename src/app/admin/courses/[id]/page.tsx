@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { COURSE_LANGUAGES, coupons, courseFormats, courses, lessonProgress, lessons, liveSessions, payments, quizQuestions, type CourseStatus, type LiveSession } from "@/db/schema";
+import { CopyButton } from "@/components/copy-button";
+import { site } from "@/content/site";
 import { formatDateTime } from "@/lib/admin/ops";
 import { liveStatus } from "@/lib/live-times";
 import { coursePublishProblems, formatDuration, isUuid, learnerRecordCounts } from "@/lib/admin/courses";
@@ -501,6 +503,7 @@ function LiveClassesPanel({ courseId, sessions, classFailed = false }: { courseI
                   </span>
                 </span>
                 <span className="flex gap-2">
+                  {status !== "ended" && <CopyButton text={`${site.url}/join/${s.id}`} label="Copy join link" className={miniButtonClass} />}
                   <Link href={`/admin/live/${s.id}`} className={status === "open" ? secondaryButtonClass : miniButtonClass}>
                     {status === "ended" ? "Attendance" : "Host"}
                   </Link>

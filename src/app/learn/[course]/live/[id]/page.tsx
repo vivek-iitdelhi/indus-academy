@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { and, eq } from "drizzle-orm";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { LiveRoom } from "@/components/live-room";
 import { Container } from "@/components/ui";
 import { VideoPlayer } from "@/components/video-player";
@@ -34,7 +35,7 @@ async function Room({ session, user, courseSlug }: { session: LiveSession; user:
   }
   await recordOpen(session.id, user.id, null);
   return (
-    <LiveRoom src={room} title={session.title} allow={ROOM_ALLOW} leaveHref={`/learn/${courseSlug}`} className="h-[78vh] min-h-[480px] w-full rounded-2xl border border-line bg-white" />
+    <LiveRoom src={room} title={session.title} allow={ROOM_ALLOW} leaveHref={`/learn/${courseSlug}?left=1`} />
   );
 }
 
@@ -85,7 +86,7 @@ export default async function LiveClassPage({ params }: PageProps<"/learn/[cours
   const status = liveStatus(session);
   const problem =
     status === "upcoming"
-      ? `This class starts ${formatDateTime(session.startsAt)} (India time). The room opens 15 minutes before.`
+      ? `This class starts ${formatDateTime(session.startsAt)} (India time). Keep this page open: it lets you in when the room opens, 15 minutes before.`
       : "This class has ended. Its recording will appear on the course page shortly.";
 
   return (
@@ -113,7 +114,11 @@ export default async function LiveClassPage({ params }: PageProps<"/learn/[cours
           </a>
         </p>
       ) : (
-        <p className={NOTE}>{problem}</p>
+        <>
+          <p className={NOTE}>{problem}</p>
+          {/* Waiting for the room to open: check again every 30 s, so they're let in on time. */}
+          {status === "upcoming" && <AutoRefresh />}
+        </>
       )}
     </Container>
   );

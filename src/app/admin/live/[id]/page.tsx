@@ -59,7 +59,7 @@ export default async function HostLivePage({ params }: PageProps<"/admin/live/[i
         {course.title} · {formatDateTime(session.startsAt)} · {session.durationMinutes} minutes · {ended ? "Ended." : "You are the host: start the class, share your screen and end it here."}
       </p>
       {studio ? (
-        <LiveRoom src={studio} title={`Host ${session.title}`} allow={ROOM_ALLOW} leaveHref="/admin/live" className="h-[82vh] min-h-[560px] w-full rounded-2xl border border-line bg-white" />
+        <LiveRoom src={studio} title={`Host ${session.title}`} allow={ROOM_ALLOW} leaveHref="/admin/live" />
       ) : (
         <p className="mt-6 rounded-2xl border border-line bg-white p-6 text-sm">{problem}</p>
       )}

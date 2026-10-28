@@ -2,6 +2,8 @@ import Link from "next/link";
 import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { courses, liveAttendance, liveSessions } from "@/db/schema";
+import { CopyButton } from "@/components/copy-button";
+import { site } from "@/content/site";
 import { formatDate, formatDateTime } from "@/lib/admin/ops";
 import { liveConfigured, liveStatus } from "@/lib/live";
 import { requireAdmin } from "@/lib/session";
@@ -117,6 +119,7 @@ function Sessions({ title, rows, attendance, empty, host = false }: { title: str
                       : "—"}
                 </td>
                 <td className="flex justify-end gap-2 py-2">
+                  {host && <CopyButton text={`${site.url}/join/${s.id}`} label="Copy join link" className={miniButtonClass} />}
                   <Link href={`/admin/live/${s.id}`} className={host && liveStatus(s) === "open" ? secondaryButtonClass : miniButtonClass}>
                     {host ? "Host" : "Attendance"}
                   </Link>
