@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { chromeHandoffLink } from "@/components/chrome-handoff";
 import { CopyButton } from "@/components/copy-button";
 import { blocksEmbeddedRoom, isAppleMobile } from "@/lib/embedded-room";
 
@@ -11,6 +12,9 @@ const ROOM_ORIGIN = "https://webinar.gg";
 const DONE = new Set(["webinar-user-left", "webinar-user-kicked", "webinar-tab-duplicate", "webinar-ended"]);
 
 const ENDED_POLL_MS = 20_000;
+// Handoff links live 15 minutes; fetch a fresh one well before that, and whenever the page is back.
+const HANDOFF_REFRESH_MS = 10 * 60_000;
+const APP_STORE_CHROME = "https://apps.apple.com/app/google-chrome/id535886823";
 
 const noSubscribe = () => () => {};
 /**
@@ -94,27 +98,7 @@ export function LiveRoom({
   }, [router, leaveHref, sessionId]);
 
   if (blocked === null) return <p className="fixed inset-0 z-50 grid place-items-center bg-black text-sm text-white/70">Opening the class…</p>;
-  if (blocked === "phone") {
-    return (
-      <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-line bg-white p-6 sm:p-8">
-        <p className="text-xl font-semibold tracking-[-0.01em]">Open this class in Chrome</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted">This browser can&apos;t run the live class. Chrome can: tap below and this page opens in Chrome.</p>
-        <a
-          href={`googlechromes://${location.host}${location.pathname}${location.search}`}
-          className="mt-6 inline-block rounded-full bg-ink px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-pine"
-        >
-          Open in Chrome
-        </a>
-        <p className="mt-4 text-sm text-muted">
-          No Chrome?{" "}
-          <a href="https://apps.apple.com/app/google-chrome/id535886823" className="font-medium text-pine underline underline-offset-4">
-            Get it from the App Store
-          </a>
-          , then tap Open in Chrome again.
-        </p>
-      </div>
-    );
-  }
+  if (blocked === "phone") return <OpenInChrome />;
   if (blocked) {
     return (
       <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-line bg-white p-6 sm:p-8">
@@ -147,6 +131,62 @@ export function LiveRoom({
           Full screen
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * iPhone/iPad: reopen this class in Chrome (its googlechromes:// scheme), through a one-time
+ * sign-in link so Chrome opens it signed in as the same account. Each link works once, so a fresh
+ * one is fetched whenever the page comes back. Safari can't tell whether Chrome is installed (it
+ * just says the address is invalid), so after a tap we point at the App Store too.
+ */
+function OpenInChrome() {
+  const [link, setLink] = useState<string | null>(null);
+  const [tried, setTried] = useState(false);
+
+  useEffect(() => {
+    const here = location.pathname + location.search;
+    const refresh = () => {
+      if (document.visibilityState === "visible") chromeHandoffLink(here).then(setLink, () => setLink(null));
+    };
+    refresh();
+    const timer = setInterval(refresh, HANDOFF_REFRESH_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+
+  // Without a handoff link (signed out, or it failed), Chrome opens the page itself and asks to sign in.
+  const target = link ?? location.pathname + location.search;
+  return (
+    <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-line bg-white p-6 sm:p-8">
+      <p className="text-xl font-semibold tracking-[-0.01em]">Open this class in Chrome</p>
+      <p className="mt-2 text-sm leading-relaxed text-muted">
+        This browser can&apos;t run the live class. Chrome can: tap below and the class opens in Chrome, already signed in.
+      </p>
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <a
+          href={`googlechromes://${location.host}${target}`}
+          onClick={() => setTried(true)}
+          className="inline-block rounded-full bg-ink px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-pine"
+        >
+          Open in Chrome
+        </a>
+        <a
+          href={APP_STORE_CHROME}
+          className="inline-block rounded-full border border-line px-6 py-3 text-sm font-medium transition-colors hover:border-ink/30"
+        >
+          Install Chrome
+        </a>
+      </div>
+      <p className={`mt-4 text-sm leading-relaxed ${tried ? "font-medium text-ink" : "text-muted"}`}>
+        {tried
+          ? "Safari said the address is invalid? Chrome isn't installed yet. Install it, come back here, and tap Open in Chrome again."
+          : "No Chrome on this phone? Install it first, then come back and tap Open in Chrome."}
+      </p>
     </div>
   );
 }
