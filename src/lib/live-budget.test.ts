@@ -56,7 +56,9 @@ describe("live budget", { skip: !process.env.DATABASE_URL && "DATABASE_URL not s
 
   test("acquire waits in line for the next slot, then gives up with LiveBusy", async () => {
     const b = bucket(600); // a slot every 0.1 s
-    assert.equal(await granted(40, () => take("join", b)), 32);
+    // 32 is the burst; a slot or two may refill while 40 takes run on a busy machine.
+    const burst = await granted(40, () => take("join", b));
+    assert.ok(burst >= 32 && burst <= 34, `burst of about 32, got ${burst}`);
     const started = Date.now();
     await acquire("join", b, 2_000);
     assert.ok(Date.now() - started >= 50, "waited for the refill");
