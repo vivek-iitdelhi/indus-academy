@@ -69,6 +69,20 @@ export function StatusBadge({ status }: { status: keyof typeof statusTones }) {
 
 const LENGTHS = [30, 45, 60, 90, 120];
 
+/** Every 15 minutes of the day: value "17:30" (what the action reads), label "5:30 pm". */
+const TIMES = Array.from({ length: 96 }, (_, i) => {
+  const h = Math.floor(i / 4);
+  const m = String((i % 4) * 15).padStart(2, "0");
+  return { value: `${String(h).padStart(2, "0")}:${m}`, label: `${h % 12 || 12}:${m} ${h < 12 ? "am" : "pm"}` };
+});
+/** The menu's sections, by hour [from, to). */
+const TIME_GROUPS: [string, number, number][] = [
+  ["Morning", 6, 12],
+  ["Afternoon", 12, 17],
+  ["Evening", 17, 24],
+  ["Night", 0, 6],
+];
+
 /**
  * A live class's title, date, start time and length (India time). `required` is off where the
  * fields only apply to one choice (the new-course form shows them for Live only); the action
@@ -85,7 +99,25 @@ export function LiveClassFields({ required = true, defaultTitle = "" }: { requir
           <input name="date" type="date" required={required} className={inputClass} />
         </Field>
         <Field label="Starts (India time)">
-          <input name="time" type="time" step={300} required={required} className={`${inputClass} tabular-nums`} />
+          <div className="relative">
+            <select name="time" required={required} defaultValue="" className={`${inputClass} appearance-none pr-9 tabular-nums`}>
+              <option value="" disabled>
+                Pick a time
+              </option>
+              {TIME_GROUPS.map(([label, from, to]) => (
+                <optgroup key={label} label={label}>
+                  {TIMES.slice(from * 4, to * 4).map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <svg viewBox="0 0 20 20" aria-hidden className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted">
+              <path d="m5 8 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
         </Field>
       </div>
       <fieldset>
