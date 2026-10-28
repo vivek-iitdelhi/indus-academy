@@ -23,7 +23,7 @@ const JOINING = "Getting you into the class…";
  * The room, with a join link for this learner. Streams in behind JOINING: when many learners
  * join at once the link waits up to ~8 s in line, and past that JoinRetry keeps trying.
  */
-async function Room({ session, user }: { session: LiveSession; user: { id: string; name: string } }) {
+async function Room({ session, user, courseSlug }: { session: LiveSession; user: { id: string; name: string }; courseSlug: string }) {
   let room: string;
   try {
     room = (await joinUrl(session.webinarId, { userId: user.id, name: user.name })).url;
@@ -34,7 +34,7 @@ async function Room({ session, user }: { session: LiveSession; user: { id: strin
   }
   await recordOpen(session.id, user.id, null);
   return (
-    <LiveRoom src={room} title={session.title} allow={ROOM_ALLOW} className="h-[78vh] min-h-[480px] w-full rounded-2xl border border-line bg-white" />
+    <LiveRoom src={room} title={session.title} allow={ROOM_ALLOW} leaveHref={`/learn/${courseSlug}`} className="h-[78vh] min-h-[480px] w-full rounded-2xl border border-line bg-white" />
   );
 }
 
@@ -98,7 +98,7 @@ export default async function LiveClassPage({ params }: PageProps<"/learn/[cours
       <p className="mt-1 text-sm text-muted">Live class · {formatDateTime(session.startsAt)} · {session.durationMinutes} minutes</p>
       {status === "open" ? (
         <Suspense fallback={<p role="status" className={NOTE}>{JOINING}</p>}>
-          <Room session={session} user={{ id: user.id, name: user.name }} />
+          <Room session={session} user={{ id: user.id, name: user.name }} courseSlug={course.slug} />
         </Suspense>
       ) : status === "ended" && session.recordingVideoUid ? (
         <Suspense fallback={<p className={NOTE}>Loading the recording…</p>}>
