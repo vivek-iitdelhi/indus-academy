@@ -66,3 +66,23 @@ export function StatusBadge({ status }: { status: keyof typeof statusTones }) {
     </span>
   );
 }
+
+/**
+ * A live class's title, start and length (India time). `required` is off where the fields only
+ * apply to one choice (the new-course form shows them for Live only); the action validates them.
+ */
+export function LiveClassFields({ required = true, defaultTitle = "" }: { required?: boolean; defaultTitle?: string }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      <Field label="Class title">
+        <input name="classTitle" required={required} defaultValue={defaultTitle} placeholder="Live class" className={inputClass} />
+      </Field>
+      <Field label="Starts (India time)">
+        <input name="startsAt" type="datetime-local" required={required} className={inputClass} />
+      </Field>
+      <Field label="Length (minutes)">
+        <input name="durationMinutes" type="number" min="15" max="480" step="5" required={required} defaultValue={60} className={`${inputClass} tabular-nums`} />
+      </Field>
+    </div>
+  );
+}

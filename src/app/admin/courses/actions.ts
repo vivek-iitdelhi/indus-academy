@@ -108,6 +108,10 @@ export async function createCourse(form: FormData): Promise<ActionResult> {
   if (!title) return { error: "Give the course a title." };
   if (!SLUG_PATTERN.test(slug)) return { error: "Slug: lowercase letters, numbers and hyphens only." };
   if (!courseFormats.includes(format as never)) return { error: "Choose a format." };
+  // A live course comes with its first class, so it can be published straight away.
+  const firstClass = format === "live" ? readClass(form) : null;
+  if (firstClass && "error" in firstClass) return firstClass;
+  if (firstClass && !liveConfigured()) return { error: "Live classes aren't set up: WEBINAR_GG_TOKEN is missing." };
 
   let id: string;
   try {
@@ -124,7 +128,9 @@ export async function createCourse(form: FormData): Promise<ActionResult> {
     if (isUniqueViolation(e)) return { error: `Another course already uses the slug “${slug}”.` };
     throw e;
   }
-  redirect(`/admin/courses/${id}`);
+  // The course exists either way; if webinar.gg refused the class, its page says so and offers the form again.
+  const failed = firstClass && (await scheduleClass({ id, title }, firstClass));
+  redirect(`/admin/courses/${id}${failed ? "?class=failed" : ""}`);
 }
 
 export async function updateCourse(courseId: string, form: FormData): Promise<ActionResult> {
@@ -500,29 +506,44 @@ export async function deleteCoupon(couponId: string) {
 
 const MAX_LIVE_MINUTES = 8 * 60;
 
+type ClassInput = { title: string; startsAt: Date; durationMinutes: number };
+
+/** The class fields of LiveClassFields (form-ui.tsx), checked; `title` falls back to "Live class". */
+function readClass(form: FormData): ClassInput | { error: string } {
+  const title = text(form, "classTitle") || "Live class";
+  const startsAt = parseIndiaDateTime(text(form, "startsAt"));
+  const durationMinutes = Number(text(form, "durationMinutes"));
+  if (!startsAt) return { error: "Pick the class's start date and time." };
+  if (startsAt.getTime() < Date.now() - 5 * 60_000) return { error: "The class's start time is in the past." };
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > MAX_LIVE_MINUTES) {
+    return { error: `Class length must be a whole number of minutes from 15 to ${MAX_LIVE_MINUTES}.` };
+  }
+  return { title, startsAt, durationMinutes };
+}
+
+/** Creates the class on webinar.gg and here. An error message, or null when scheduled. */
+async function scheduleClass(course: { id: string; title: string }, input: ClassInput): Promise<string | null> {
+  let webinarId: string;
+  try {
+    webinarId = await createWebinar({ title: `${course.title}: ${input.title}`, startsAt: input.startsAt, durationMinutes: input.durationMinutes });
+  } catch (e) {
+    console.error("[live] createWebinar failed", e);
+    return "webinar.gg didn't accept the class. Try again in a minute.";
+  }
+  await db.insert(liveSessions).values({ courseId: course.id, ...input, webinarId });
+  return null;
+}
+
 export async function scheduleLiveSession(courseId: string, form: FormData): Promise<ActionResult> {
   await requireAdminApi();
   const course = await findCourse(courseId);
   if (!liveConfigured()) return { error: "Live classes aren't set up: WEBINAR_GG_TOKEN is missing." };
-  const title = text(form, "title");
-  const startsAt = parseIndiaDateTime(text(form, "startsAt"));
-  const durationMinutes = Number(text(form, "durationMinutes"));
-  if (!title) return { error: "Give the class a title." };
-  if (!startsAt) return { error: "Pick a start date and time." };
-  if (startsAt.getTime() < Date.now() - 5 * 60_000) return { error: "The start time is in the past." };
-  if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > MAX_LIVE_MINUTES) {
-    return { error: `Length must be a whole number of minutes from 15 to ${MAX_LIVE_MINUTES}.` };
-  }
-  let webinarId: string;
-  try {
-    webinarId = await createWebinar({ title: `${course.title}: ${title}`, startsAt, durationMinutes });
-  } catch (e) {
-    console.error("[live] createWebinar failed", e);
-    return { error: "webinar.gg didn't accept the class. Try again in a minute." };
-  }
-  await db.insert(liveSessions).values({ courseId: course.id, title, startsAt, durationMinutes, webinarId });
-  refresh();
-  return { ok: `${title} scheduled.` };
+  const input = readClass(form);
+  if ("error" in input) return input;
+  const failed = await scheduleClass(course, input);
+  if (failed) return { error: failed };
+  await changed(course.slug); // a live course's listing depends on its classes
+  return { ok: `${input.title} scheduled.` };
 }
 
 /** The /admin/live form, where the course comes from a dropdown. */

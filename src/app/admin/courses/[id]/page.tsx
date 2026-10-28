@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { COURSE_LANGUAGES, coupons, courseFormats, courses, lessonProgress, lessons, liveSessions, payments, quizQuestions, type CourseStatus } from "@/db/schema";
+import { COURSE_LANGUAGES, coupons, courseFormats, courses, lessonProgress, lessons, liveSessions, payments, quizQuestions, type CourseStatus, type LiveSession } from "@/db/schema";
+import { formatDateTime } from "@/lib/admin/ops";
+import { liveStatus } from "@/lib/live-times";
 import { coursePublishProblems, formatDuration, isUuid, learnerRecordCounts } from "@/lib/admin/courses";
 import { discountedPaise } from "@/lib/lms/coupons";
 import { getCourseOutline, totalDurationSeconds } from "@/lib/lms/courses";
@@ -22,6 +24,8 @@ import {
   renameChapter,
   setCouponActive,
   setCourseStatus,
+  deleteLiveSession,
+  scheduleLiveSession,
   updateCourse,
 } from "../actions";
 import { ActionForm, ConfirmButton } from "../client";
@@ -35,6 +39,7 @@ import {
   formatLabels,
   inputBaseClass,
   inputClass,
+  LiveClassFields,
   miniButtonClass,
   secondaryButtonClass,
   SectionTitle,
@@ -55,9 +60,10 @@ const statusActions: Record<CourseStatus, { to: CourseStatus; label: string }[]>
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-export default async function CourseEditorPage({ params }: PageProps<"/admin/courses/[id]">) {
+export default async function CourseEditorPage({ params, searchParams }: PageProps<"/admin/courses/[id]">) {
   await requireAdmin();
   const { id } = await params;
+  const classFailed = (await searchParams).class === "failed";
   if (!isUuid(id)) notFound();
   const [course] = await db.select().from(courses).where(eq(courses.id, id));
   if (!course) notFound();
@@ -87,7 +93,7 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
       .from(coupons)
       .where(eq(coupons.courseId, course.id))
       .orderBy(asc(coupons.code)),
-    db.select({ id: liveSessions.id }).from(liveSessions).where(eq(liveSessions.courseId, course.id)),
+    db.select().from(liveSessions).where(eq(liveSessions.courseId, course.id)).orderBy(asc(liveSessions.startsAt)),
   ]);
   const learnersOn = new Map(progressRows.map((r) => [r.lessonId, r.n]));
   const questionsOn = new Map(questionRows.map((r) => [r.lessonId, r.n]));
@@ -168,6 +174,8 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
           )}
         </div>
       </section>
+
+      {course.format === "live" && <LiveClassesPanel courseId={course.id} sessions={sessions} classFailed={classFailed} />}
 
       <section className={cardClass}>
         <SectionTitle>Details</SectionTitle>
@@ -330,15 +338,7 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
         </ActionForm>
       </section>
 
-      <section className={cardClass}>
-        <SectionTitle>Live classes</SectionTitle>
-        <p className="mt-1 text-sm text-muted">
-          {sessions.length} {sessions.length === 1 ? "class" : "classes"} for this course.{" "}
-          <Link href="/admin/live" className="text-pine hover:underline">
-            Schedule and host live classes
-          </Link>
-        </p>
-      </section>
+      {course.format !== "live" && <LiveClassesPanel courseId={course.id} sessions={sessions} />}
 
       <section className="space-y-4">
         <SectionTitle>Outline</SectionTitle>
@@ -475,5 +475,58 @@ export default async function CourseEditorPage({ params }: PageProps<"/admin/cou
         </form>
       </section>
     </div>
+  );
+}
+
+/** The course's live classes, with the form to schedule another: everything for a live course in one place. */
+function LiveClassesPanel({ courseId, sessions, classFailed = false }: { courseId: string; sessions: LiveSession[]; classFailed?: boolean }) {
+  return (
+    <section id="live-classes" className={cardClass}>
+      <SectionTitle>Live classes</SectionTitle>
+      {classFailed && (
+        <p className="mt-3 rounded-xl bg-saffron/15 p-4 text-sm">
+          The course was created, but webinar.gg didn&apos;t accept its first class. Schedule it again below.
+        </p>
+      )}
+      {sessions.length > 0 && (
+        <ul className="mt-4 divide-y divide-line rounded-xl border border-line text-sm">
+          {sessions.map((s) => {
+            const status = liveStatus(s);
+            return (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                <span>
+                  <span className="font-medium">{s.title}</span>
+                  <span className="ml-2 text-muted">
+                    {formatDateTime(s.startsAt)} · {s.durationMinutes} min{status === "ended" ? " · over" : ""}
+                  </span>
+                </span>
+                <span className="flex gap-2">
+                  <Link href={`/admin/live/${s.id}`} className={status === "open" ? secondaryButtonClass : miniButtonClass}>
+                    {status === "ended" ? "Attendance" : "Host"}
+                  </Link>
+                  {status !== "ended" && (
+                    <form action={deleteLiveSession.bind(null, s.id)}>
+                      <ConfirmButton message={`Cancel “${s.title}”? Learners can no longer join it.`} className={`${miniButtonClass} text-red-800`}>
+                        Cancel
+                      </ConfirmButton>
+                    </form>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <ActionForm action={scheduleLiveSession.bind(null, courseId)} submitLabel="Schedule class" resetOnSuccess className="mt-4 space-y-4">
+        <LiveClassFields />
+      </ActionForm>
+      <p className="mt-3 text-sm text-muted">
+        India time. Recordings and past classes are also under{" "}
+        <Link href="/admin/live" className="text-pine hover:underline">
+          Live classes
+        </Link>
+        .
+      </p>
+    </section>
   );
 }

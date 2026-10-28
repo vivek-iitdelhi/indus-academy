@@ -2,8 +2,8 @@ import Link from "next/link";
 import { courseFormats } from "@/db/schema";
 import { requireAdmin } from "@/lib/session";
 import { createCourse } from "../actions";
-import { ActionForm, NewCourseFields } from "../client";
-import { cardClass, formatLabels } from "../form-ui";
+import { ActionForm, FormatChoice, NewCourseFields } from "../client";
+import { cardClass, formatLabels, LiveClassFields } from "../form-ui";
 
 export default async function NewCoursePage() {
   await requireAdmin();
@@ -18,20 +18,7 @@ export default async function NewCoursePage() {
       <div className={`mt-8 ${cardClass}`}>
         <ActionForm action={createCourse} submitLabel="Create draft">
           <NewCourseFields />
-          <fieldset>
-            <legend className="text-sm font-medium">Format</legend>
-            <div className="mt-2 space-y-2">
-              {courseFormats.map((format, i) => (
-                <label key={format} className="flex gap-3 rounded-xl border border-line p-3 has-checked:border-pine has-checked:bg-mint/30">
-                  <input type="radio" name="format" value={format} defaultChecked={i === 0} className="mt-1 accent-pine" />
-                  <span>
-                    <span className="text-sm font-medium capitalize">{format}</span>
-                    <span className="block text-sm text-muted">{formatLabels[format]}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <FormatChoice formats={courseFormats} labels={formatLabels} liveFields={<LiveClassFields />} />
         </ActionForm>
       </div>
     </div>

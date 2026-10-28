@@ -97,3 +97,35 @@ export function NewCourseFields() {
     </>
   );
 }
+
+/**
+ * The new-course format choice. Picking Live also asks for the first class, so the course can be
+ * published without visiting the Live classes page.
+ */
+export function FormatChoice({ formats, labels, liveFields }: { formats: readonly string[]; labels: Record<string, string>; liveFields: ReactNode }) {
+  const [format, setFormat] = useState(formats[0]);
+  return (
+    <>
+      <fieldset>
+        <legend className="text-sm font-medium">Format</legend>
+        <div className="mt-2 space-y-2">
+          {formats.map((f) => (
+            <label key={f} className="flex gap-3 rounded-xl border border-line p-3 has-checked:border-pine has-checked:bg-mint/30">
+              <input type="radio" name="format" value={f} checked={format === f} onChange={() => setFormat(f)} className="mt-1 accent-pine" />
+              <span>
+                <span className="text-sm font-medium capitalize">{f}</span>
+                <span className="block text-sm text-muted">{labels[f]}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {format === "live" && (
+        <fieldset className="space-y-3 rounded-xl border border-line p-4">
+          <legend className="px-1 text-sm font-medium">First live class</legend>
+          {liveFields}
+        </fieldset>
+      )}
+    </>
+  );
+}

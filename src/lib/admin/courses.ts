@@ -167,7 +167,7 @@ export async function coursePublishProblems(courseId: string): Promise<string[]>
   // A live course is taught in its classes: lessons are optional, but checked like any others.
   const classes = await db.select({ id: liveSessions.id }).from(liveSessions).where(eq(liveSessions.courseId, courseId)).limit(1);
   return [
-    ...(classes.length ? [] : ["Schedule at least one live class (Admin → Live classes)."]),
+    ...(classes.length ? [] : ["Schedule at least one live class (Live classes, below)."]),
     ...(courseLessons.length ? publishProblems(courseLessons, questions) : []),
   ];
 }

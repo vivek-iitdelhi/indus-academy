@@ -7,7 +7,7 @@ import { liveConfigured, liveStatus } from "@/lib/live";
 import { requireAdmin } from "@/lib/session";
 import { deleteLiveSession, deleteSessionRecording, scheduleLiveClass } from "../courses/actions";
 import { ActionForm, ConfirmButton } from "../courses/client";
-import { cardClass, Field, inputClass, miniButtonClass, SectionTitle, secondaryButtonClass } from "../courses/form-ui";
+import { cardClass, Field, inputClass, LiveClassFields, miniButtonClass, SectionTitle, secondaryButtonClass } from "../courses/form-ui";
 
 /** Every live class: schedule one, host the next, find past recordings. */
 export default async function LiveClassesPage() {
@@ -48,7 +48,7 @@ export default async function LiveClassesPage() {
         <SectionTitle>Schedule a class</SectionTitle>
         {liveConfigured() ? (
           <ActionForm action={scheduleLiveClass} submitLabel="Schedule class" resetOnSuccess className="mt-4 space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4">
               <Field label="Course">
                 <select name="courseId" required defaultValue="" className={inputClass}>
                   <option value="" disabled>
@@ -62,16 +62,8 @@ export default async function LiveClassesPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Title">
-                <input name="title" required placeholder="Week 1: Prompting basics" className={inputClass} />
-              </Field>
-              <Field label="Starts (India time)">
-                <input name="startsAt" type="datetime-local" required className={inputClass} />
-              </Field>
-              <Field label="Length (minutes)">
-                <input name="durationMinutes" type="number" min="15" max="480" step="5" required defaultValue={120} className={`${inputClass} tabular-nums`} />
-              </Field>
             </div>
+            <LiveClassFields />
           </ActionForm>
         ) : (
           <p className="mt-3 rounded-xl bg-saffron/15 p-4 text-sm">Not set up: add WEBINAR_GG_TOKEN to the app&apos;s environment.</p>
