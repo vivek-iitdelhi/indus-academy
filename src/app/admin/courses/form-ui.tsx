@@ -67,22 +67,41 @@ export function StatusBadge({ status }: { status: keyof typeof statusTones }) {
   );
 }
 
+const LENGTHS = [30, 45, 60, 90, 120];
+
 /**
- * A live class's title, start and length (India time). `required` is off where the fields only
- * apply to one choice (the new-course form shows them for Live only); the action validates them.
+ * A live class's title, date, start time and length (India time). `required` is off where the
+ * fields only apply to one choice (the new-course form shows them for Live only); the action
+ * validates them.
  */
 export function LiveClassFields({ required = true, defaultTitle = "" }: { required?: boolean; defaultTitle?: string }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <Field label="Class title">
-        <input name="classTitle" required={required} defaultValue={defaultTitle} placeholder="Live class" className={inputClass} />
-      </Field>
-      <Field label="Starts (India time)">
-        <input name="startsAt" type="datetime-local" required={required} className={inputClass} />
-      </Field>
-      <Field label="Length (minutes)">
-        <input name="durationMinutes" type="number" min="15" max="480" step="5" required={required} defaultValue={60} className={`${inputClass} tabular-nums`} />
-      </Field>
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+        <Field label="Class title (optional)">
+          <input name="classTitle" defaultValue={defaultTitle} placeholder="Live class" className={inputClass} />
+        </Field>
+        <Field label="Date">
+          <input name="date" type="date" required={required} className={inputClass} />
+        </Field>
+        <Field label="Starts (India time)">
+          <input name="time" type="time" step={300} required={required} className={`${inputClass} tabular-nums`} />
+        </Field>
+      </div>
+      <fieldset>
+        <legend className="text-sm font-medium">Length</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {LENGTHS.map((m) => (
+            <label
+              key={m}
+              className="cursor-pointer rounded-full border border-line px-4 py-1.5 text-sm tabular-nums transition-colors hover:border-ink/30 has-checked:border-ink has-checked:bg-ink has-checked:text-paper"
+            >
+              <input type="radio" name="durationMinutes" value={m} defaultChecked={m === 60} className="sr-only" />
+              {m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`}
+            </label>
+          ))}
+        </div>
+      </fieldset>
     </div>
   );
 }

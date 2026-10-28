@@ -480,8 +480,15 @@ export default async function CourseEditorPage({ params, searchParams }: PagePro
   );
 }
 
+const dark = "inline-flex h-8 items-center justify-center rounded-lg bg-ink px-3 text-sm font-medium text-paper transition-colors hover:bg-pine";
+
 /** The course's live classes, with the form to schedule another: everything for a live course in one place. */
 function LiveClassesPanel({ courseId, sessions, classFailed = false }: { courseId: string; sessions: LiveSession[]; classFailed?: boolean }) {
+  const form = (
+    <ActionForm action={scheduleLiveSession.bind(null, courseId)} submitLabel="Schedule class" resetOnSuccess className="space-y-4">
+      <LiveClassFields />
+    </ActionForm>
+  );
   return (
     <section id="live-classes" className={cardClass}>
       <SectionTitle>Live classes</SectionTitle>
@@ -494,17 +501,27 @@ function LiveClassesPanel({ courseId, sessions, classFailed = false }: { courseI
         <ul className="mt-4 divide-y divide-line rounded-xl border border-line text-sm">
           {sessions.map((s) => {
             const status = liveStatus(s);
+            const ends = new Date(s.startsAt.getTime() + s.durationMinutes * 60_000);
             return (
               <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
-                <span>
-                  <span className="font-medium">{s.title}</span>
-                  <span className="ml-2 text-muted">
-                    {formatDateTime(s.startsAt)} · {s.durationMinutes} min{status === "ended" ? " · over" : ""}
-                  </span>
-                </span>
-                <span className="flex gap-2">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 font-medium">
+                    {s.title}
+                    {status === "open" ? (
+                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-[0.7rem] font-medium text-white">Live now</span>
+                    ) : status === "upcoming" ? (
+                      <span className="rounded-full bg-saffron/25 px-2 py-0.5 text-[0.7rem] font-medium">Upcoming</span>
+                    ) : (
+                      <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[0.7rem] font-medium text-muted">Over</span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-muted">
+                    {formatDateTime(s.startsAt)} – {formatDateTime(ends).split(", ").pop()} · {s.durationMinutes} min
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
                   {status !== "ended" && <CopyButton text={`${site.url}/join/${s.id}`} label="Copy join link" className={miniButtonClass} />}
-                  <Link href={`/admin/live/${s.id}`} className={status === "open" ? secondaryButtonClass : miniButtonClass}>
+                  <Link href={`/admin/live/${s.id}`} className={status === "open" ? dark : miniButtonClass}>
                     {status === "ended" ? "Attendance" : "Host"}
                   </Link>
                   {status !== "ended" && (
@@ -514,17 +531,25 @@ function LiveClassesPanel({ courseId, sessions, classFailed = false }: { courseI
                       </ConfirmButton>
                     </form>
                   )}
-                </span>
+                </div>
               </li>
             );
           })}
         </ul>
       )}
-      <ActionForm action={scheduleLiveSession.bind(null, courseId)} submitLabel="Schedule class" resetOnSuccess className="mt-4 space-y-4">
-        <LiveClassFields />
-      </ActionForm>
-      <p className="mt-3 text-sm text-muted">
-        India time. Recordings and past classes are also under{" "}
+      {sessions.length === 0 ? (
+        <div className="mt-4">{form}</div>
+      ) : (
+        <details className="group mt-4">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-sm font-medium text-pine hover:underline">
+            <span className="group-open:hidden">+ Schedule another class</span>
+            <span className="hidden group-open:inline">− Close</span>
+          </summary>
+          <div className="mt-4">{form}</div>
+        </details>
+      )}
+      <p className="mt-4 text-sm text-muted">
+        Times are India time. Recordings and past classes are also under{" "}
         <Link href="/admin/live" className="text-pine hover:underline">
           Live classes
         </Link>

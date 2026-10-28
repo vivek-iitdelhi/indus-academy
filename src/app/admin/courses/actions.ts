@@ -511,7 +511,8 @@ type ClassInput = { title: string; startsAt: Date; durationMinutes: number };
 /** The class fields of LiveClassFields (form-ui.tsx), checked; `title` falls back to "Live class". */
 function readClass(form: FormData): ClassInput | { error: string } {
   const title = text(form, "classTitle") || "Live class";
-  const startsAt = parseIndiaDateTime(text(form, "startsAt"));
+  // A date and a time field (LiveClassFields); one datetime-local "startsAt" still works.
+  const startsAt = parseIndiaDateTime(text(form, "startsAt") || `${text(form, "date")}T${text(form, "time").slice(0, 5)}`);
   const durationMinutes = Number(text(form, "durationMinutes"));
   if (!startsAt) return { error: "Pick the class's start date and time." };
   if (startsAt.getTime() < Date.now() - 5 * 60_000) return { error: "The class's start time is in the past." };
