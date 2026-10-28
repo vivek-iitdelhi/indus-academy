@@ -7,10 +7,13 @@ import { certificates, courses, distributorCourses, distributors, enrollments, u
 import {
   batchEnrollmentIds,
   certificateStatus,
+  enrolLearner,
   findLearner,
   learnerCertificates,
+  learnerCourses,
   listBatches,
   parseCompletionInput,
+  parseEnrolmentInput,
   parseLearnerInput,
   recordCompletion,
   releasable,
@@ -64,6 +67,14 @@ test("parseCompletionInput: course and batch required, completed_at optional, no
   assert.equal(parseCompletionInput({ course: "c", batch: "x".repeat(101) }, now).ok, false);
   assert.equal(parseCompletionInput({ course: "c", batch: "b", completed_at: "soon" }, now).ok, false);
   assert.equal(parseCompletionInput({ course: "c", batch: "b", completed_at: "2026-10-24T00:00:00Z" }, now).ok, false);
+});
+
+test("parseEnrolmentInput: course required, batch optional", () => {
+  assert.deepEqual(parseEnrolmentInput({ course: " c " }), { ok: true, value: { courseSlug: "c", batch: null } });
+  assert.deepEqual(parseEnrolmentInput({ course: "c", batch: " Jan " }), { ok: true, value: { courseSlug: "c", batch: "Jan" } });
+  assert.equal(parseEnrolmentInput({}).ok, false);
+  assert.equal(parseEnrolmentInput({ course: "c", batch: "" }).ok, false);
+  assert.equal(parseEnrolmentInput({ course: "c", batch: "x".repeat(101) }).ok, false);
 });
 
 test("releasable: on_completion always, on_payment when paid, manual never", () => {
@@ -287,6 +298,33 @@ describe("partner learners", { skip: !process.env.DATABASE_URL && "DATABASE_URL 
     const [{ batch }] = await listBatches(d.id);
     await setBatchPaid(batch.id, true, "admin@x.com");
     assert.deepEqual((await partnerStats()).get(d.id), { learners: 1, completions: 1, released: 1, waiting: 0, unpaidBatches: 0 });
+  });
+
+  test("enrol: listed as enrolled, repeat is a no-op, completion turns it completed", async () => {
+    const { d, course, learner } = await setup();
+    assert.deepEqual(await learnerCourses(learner.userId), []);
+    assert.equal(await enrolLearner(d.id, learner, course.id, null), true);
+    assert.equal(await enrolLearner(d.id, learner, course.id, null), false);
+    const [enrolled] = await learnerCourses(learner.userId);
+    assert.deepEqual([enrolled.courseSlug, enrolled.batch, enrolled.completedAt], [course.slug, null, null]);
+    assert.deepEqual(await learnerCertificates(learner.userId), []); // not completed: no certificate entry
+    await recordCompletion(d.id, learner, course.id, { batch: "Nov", completedAt: new Date() });
+    const [done] = await learnerCourses(learner.userId);
+    assert.equal(done.batch, "Nov");
+    assert.ok(done.completedAt);
+    assert.equal(done.enrolledAt.getTime(), enrolled.enrolledAt.getTime());
+  });
+
+  test("enrol with a batch counts in the batch; a repeat moves it until completed", async () => {
+    const { d, course, learner } = await setup();
+    await enrolLearner(d.id, learner, course.id, "Agent-7");
+    const [row] = await listBatches(d.id);
+    assert.deepEqual([row.batch.name, row.learners, row.completed], ["Agent-7", 1, 0]);
+    await enrolLearner(d.id, learner, course.id, "Agent-9");
+    assert.equal((await learnerCourses(learner.userId))[0].batch, "Agent-9");
+    await recordCompletion(d.id, learner, course.id, { batch: "Agent-9", completedAt: new Date() });
+    await enrolLearner(d.id, learner, course.id, "Other");
+    assert.equal((await learnerCourses(learner.userId))[0].batch, "Agent-9");
   });
 
   test("listBatches counts, and renameLearner fixes released certificates", async () => {

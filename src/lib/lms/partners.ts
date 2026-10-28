@@ -23,6 +23,7 @@ import { issueOrGetCertificate } from "./certificates.ts";
 export type Parsed<T> = { ok: true; value: T } | { ok: false; message: string };
 export type LearnerInput = { name: string; email: string | null };
 export type CompletionInput = { courseSlug: string; batch: string; completedAt: Date };
+export type EnrolmentInput = { courseSlug: string; batch: string | null };
 export type Learner = PartnerLearner & { name: string };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -56,6 +57,16 @@ export function parseCompletionInput(body: unknown, now = new Date()): Parsed<Co
   if (Number.isNaN(completedAt.getTime())) return { ok: false, message: "`completed_at` must be an ISO 8601 timestamp." };
   if (completedAt.getTime() > now.getTime() + FUTURE_SLACK_MS) return { ok: false, message: "`completed_at` cannot be in the future." };
   return { ok: true, value: { courseSlug, batch, completedAt } };
+}
+
+export function parseEnrolmentInput(body: unknown): Parsed<EnrolmentInput> {
+  const b = record(body);
+  const courseSlug = text(b.course);
+  if (!courseSlug) return { ok: false, message: "`course` is required: the course slug." };
+  if (b.batch == null) return { ok: true, value: { courseSlug, batch: null } };
+  const batch = text(b.batch);
+  if (!batch || batch.length > 100) return { ok: false, message: "`batch` must be 1–100 characters when given." };
+  return { ok: true, value: { courseSlug, batch } };
 }
 
 export async function findLearner(distributorId: string, externalId: string): Promise<Learner | null> {
@@ -167,15 +178,17 @@ async function releaseWhere(which: SQL, force = false): Promise<number> {
   return issued;
 }
 
-/** The learner's completed partner courses (or one course) with batch and certificate status. */
-export async function learnerCertificates(userId: string, courseId?: string): Promise<LearnerCertificate[]> {
-  const rows = await db
+export type LearnerCourse = Omit<LearnerCertificate, "completedAt"> & { enrolledAt: Date; completedAt: Date | null };
+
+const partnerEnrollmentRows = (userId: string, where: SQL | undefined, orderBy: SQL) =>
+  db
     .select({
       courseSlug: courses.slug,
       courseTitle: courses.title,
       certificateEnabled: courses.certificateEnabled,
       batch: distributorBatches.name,
       paidAt: distributorBatches.paidAt,
+      enrolledAt: enrollments.startedAt,
       completedAt: enrollments.completedAt,
       mode: distributors.certificateRelease,
       certificate: certificates,
@@ -185,8 +198,30 @@ export async function learnerCertificates(userId: string, courseId?: string): Pr
     .innerJoin(distributors, eq(distributors.id, enrollments.distributorId))
     .leftJoin(distributorBatches, eq(distributorBatches.id, enrollments.batchId))
     .leftJoin(certificates, certificateOfEnrollment)
-    .where(and(eq(enrollments.userId, userId), completedPartnerEnrollment, courseId ? eq(enrollments.courseId, courseId) : undefined))
-    .orderBy(asc(enrollments.completedAt));
+    .where(and(eq(enrollments.userId, userId), eq(enrollments.source, "distributor"), where))
+    .orderBy(orderBy);
+
+/** Every course the learner is enrolled in, completed or not, oldest enrolment first. */
+export async function learnerCourses(userId: string): Promise<LearnerCourse[]> {
+  const rows = await partnerEnrollmentRows(userId, undefined, asc(enrollments.startedAt));
+  return rows.map((r) => ({
+    courseSlug: r.courseSlug,
+    courseTitle: r.courseTitle,
+    batch: r.batch,
+    enrolledAt: r.enrolledAt,
+    completedAt: r.completedAt,
+    certificate: r.certificate,
+    status: certificateStatus(r),
+  }));
+}
+
+/** The learner's completed partner courses (or one course) with batch and certificate status. */
+export async function learnerCertificates(userId: string, courseId?: string): Promise<LearnerCertificate[]> {
+  const rows = await partnerEnrollmentRows(
+    userId,
+    and(isNotNull(enrollments.completedAt), courseId ? eq(enrollments.courseId, courseId) : undefined),
+    asc(enrollments.completedAt),
+  );
   return rows.map((r) => ({
     courseSlug: r.courseSlug,
     courseTitle: r.courseTitle,
@@ -247,6 +282,34 @@ export async function recordCompletion(
     if (!certified) await releaseCertificates([enrollment.id]);
   }
   return (await learnerCertificates(learner.userId, courseId))[0];
+}
+
+/**
+ * Enrols the client's learner in the course, optionally in a batch (created on first use). Safe
+ * to repeat. A repeat with a batch moves the enrolment there until it is completed or certified;
+ * after that the batch belongs to the completion. Returns whether the enrolment is new.
+ */
+export async function enrolLearner(distributorId: string, learner: Learner, courseId: string, batch: string | null): Promise<boolean> {
+  const batchId = batch ? (await batchNamed(distributorId, batch)).id : null;
+  const [created] = await db
+    .insert(enrollments)
+    .values({ userId: learner.userId, courseId, source: "distributor", distributorId, batchId })
+    .onConflictDoNothing({ target: [enrollments.userId, enrollments.courseId] })
+    .returning({ id: enrollments.id });
+  if (!created && batchId) {
+    await db
+      .update(enrollments)
+      .set({ batchId })
+      .where(
+        and(
+          eq(enrollments.userId, learner.userId),
+          eq(enrollments.courseId, courseId),
+          isNull(enrollments.completedAt),
+          notExists(db.select({ one: sql`1` }).from(certificates).where(certificateOfEnrollment)),
+        ),
+      );
+  }
+  return Boolean(created);
 }
 
 /** Takes back a mistaken completion. Refused once the certificate is out (revoke it instead). */

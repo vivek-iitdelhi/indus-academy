@@ -2,14 +2,17 @@ import { site } from "@/content/site";
 import type { Course } from "@/db/schema";
 import { licensedCourse } from "@/lib/distributors";
 import {
+  enrolLearner,
   findLearner,
   parseCompletionInput,
+  parseEnrolmentInput,
   parseLearnerInput,
   recordCompletion,
   upsertLearner,
   validExternalId,
   type Learner,
   type LearnerCertificate,
+  type LearnerCourse,
 } from "@/lib/lms/partners";
 import { apiError } from "./_shared";
 
@@ -38,23 +41,36 @@ export const learnerJson = (l: Learner) => ({
   created_at: l.createdAt.toISOString(),
 });
 
-export function completionJson(row: LearnerCertificate) {
+const certificateJson = (row: Pick<LearnerCertificate, "certificate" | "status">) => {
   const cert = row.certificate;
   return {
-    course: row.courseSlug,
-    batch: row.batch,
-    completed_at: row.completedAt.toISOString(),
-    certificate: {
-      status: row.status,
-      ...(cert && {
-        serial: cert.serial,
-        issued_at: cert.issuedAt.toISOString(),
-        image_url: `${site.url}/api/certificates/${cert.serial}/image`,
-        verify_url: `${site.url}/verify/${cert.serial}`,
-      }),
-    },
+    status: row.status,
+    ...(cert && {
+      serial: cert.serial,
+      issued_at: cert.issuedAt.toISOString(),
+      image_url: `${site.url}/api/certificates/${cert.serial}/image`,
+      verify_url: `${site.url}/verify/${cert.serial}`,
+    }),
   };
-}
+};
+
+export const completionJson = (row: LearnerCertificate) => ({
+  course: row.courseSlug,
+  batch: row.batch,
+  completed_at: row.completedAt.toISOString(),
+  certificate: certificateJson(row),
+});
+
+export const learnerCourseJson = (row: LearnerCourse) => ({
+  course: row.courseSlug,
+  title: row.courseTitle,
+  status: row.completedAt ? ("completed" as const) : ("enrolled" as const),
+  batch: row.batch,
+  enrolled_at: row.enrolledAt.toISOString(),
+  completed_at: row.completedAt?.toISOString() ?? null,
+  // Certificate status only means something once the course is completed (or a certificate exists).
+  certificate: row.completedAt || row.certificate ? certificateJson(row) : null,
+});
 
 const invalidId = () => fail(400, "invalid_request", "The learner id must be 1–200 characters, without leading or trailing spaces.");
 
@@ -82,4 +98,20 @@ export async function completeOne(
   const course = courseCache.get(slug);
   if (!course) return fail(404, "not_found", "No such resource.");
   return { ok: true, value: await recordCompletion(distributorId, learner, course.id, parsed.value) };
+}
+
+/** Enrols the learner; `created` is false when they were already enrolled. */
+export async function enrolOne(
+  distributorId: string,
+  externalId: string,
+  body: unknown,
+): Promise<Outcome<{ learner: Learner; course: Course; created: boolean }>> {
+  if (!validExternalId(externalId)) return invalidId();
+  const parsed = parseEnrolmentInput(body);
+  if (!parsed.ok) return fail(400, "invalid_request", parsed.message);
+  const learner = await findLearner(distributorId, externalId);
+  if (!learner) return fail(404, "learner_not_found", "No learner with that id.");
+  const course = await licensedCourse(distributorId, parsed.value.courseSlug);
+  if (!course) return fail(404, "not_found", "No such resource.");
+  return { ok: true, value: { learner, course, created: await enrolLearner(distributorId, learner, course.id, parsed.value.batch) } };
 }

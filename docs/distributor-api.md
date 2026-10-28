@@ -268,8 +268,12 @@ Which of your learners opened the class, and whether they got into the room.
 The lifecycle:
 
 1. A learner signs up or signs in on your platform → `PUT /learners/{your_user_id}`.
-2. They finish a course → `POST /learners/{your_user_id}/completions` with the course and the batch.
-3. You show their certificate → `GET /learners/{your_user_id}/certificates/{course}`. Until it is
+2. They start a course → `POST /learners/{your_user_id}/enrolments` with the course (and the batch,
+   if you know it). Optional, but it lets you list what they are taking with
+   `GET /learners/{your_user_id}/courses`.
+3. They finish a course → `POST /learners/{your_user_id}/completions` with the course and the batch.
+   This enrols them too, if you skipped step 2.
+4. You show their certificate → `GET /learners/{your_user_id}/certificates/{course}`. Until it is
    released (for example, until the batch is paid) this answers `402 payment_pending`.
 
 `{your_user_id}` is your own id for the learner, URL-encoded: 1–200 characters, no leading
@@ -294,6 +298,60 @@ curl -X PUT -H "Authorization: Bearer $IAA_KEY" -H "Content-Type: application/js
 - `email` is optional. It is kept for contact only and never used to sign in.
 - A later `PUT` replaces both fields. Certificates already released keep the name they were issued
   with; ask us to correct one.
+
+### `POST /learners/{external_id}/enrolments`
+
+```sh
+curl -X POST -H "Authorization: Bearer $IAA_KEY" -H "Content-Type: application/json" \
+  -d '{"course":"ai-at-work-essentials","batch":"TCS-Jan-2027"}' \
+  https://indusai.academy/api/v1/learners/u_123/enrolments
+```
+
+```json
+{
+  "enrolment": {
+    "course": "ai-at-work-essentials",
+    "title": "AI at Work: Essentials",
+    "status": "enrolled",
+    "batch": "TCS-Jan-2027",
+    "enrolled_at": "2026-10-28T05:38:50.480Z",
+    "completed_at": null,
+    "certificate": null
+  }
+}
+```
+
+- `course`: the slug of a course licensed to you.
+- `batch` (optional, 1–100 characters): as for completions. New names create a batch, and the
+  learner counts in that batch in `GET /batches` from now on.
+- Answers 201 on a new enrolment and 200 if the learner was already enrolled. Safe to repeat.
+  Until the course is completed, a repeat with a `batch` moves the learner to that batch; after
+  that, the completion's batch stands.
+
+### `GET /learners/{external_id}/courses`
+
+Every course the learner is enrolled in, oldest first, completed or not, in the shape above:
+
+```json
+{
+  "courses": [
+    {
+      "course": "ai-at-work-essentials",
+      "title": "AI at Work: Essentials",
+      "status": "completed",
+      "batch": "TCS-Jan-2027",
+      "enrolled_at": "2026-10-28T05:38:50.480Z",
+      "completed_at": "2026-11-02T10:00:00.000Z",
+      "certificate": { "status": "pending_payment" }
+    }
+  ]
+}
+```
+
+- `status`: `enrolled` or `completed`.
+- `certificate` is `null` until the course is completed. After that it is the same object as in
+  [`GET /learners/{external_id}/certificates`](#get-learnersexternalidcertificates).
+- We don't track lesson progress for your learners; your platform does.
 
 ### `POST /learners/{external_id}/completions`
 
@@ -320,6 +378,7 @@ curl -X POST -H "Authorization: Bearer $IAA_KEY" -H "Content-Type: application/j
 - `completed_at`: optional, defaults to now. It can't be in the future.
 - Safe to repeat. Until the certificate is released, a repeat can move the learner to another
   batch. After release it changes nothing.
+- A learner who was not enrolled in the course is enrolled by this call.
 - If the certificate can be released straight away, the response already shows it as `released`.
 
 ### `DELETE /learners/{external_id}/completions/{course}`
@@ -422,9 +481,15 @@ Errors share one shape:
 
 ## Changelog
 
+### 28 Oct 2026: enrolments
+
+New: [`POST /learners/{external_id}/enrolments`](#post-learnersexternalidenrolments) and
+[`GET /learners/{external_id}/courses`](#get-learnersexternalidcourses). `GET /batches` now also
+counts learners enrolled in a batch who haven't completed yet. Nothing else changed.
+
 ### 26 Oct 2026: live classes
 
-New: [`GET /courses/{slug}/live-sessions`](#get-coursesslug-live-sessions),
+New: [`GET /courses/{slug}/live-sessions`](#get-coursessluglive-sessions),
 [`POST /live-sessions/{id}/join`](#post-live-sessionsidjoin) and
 [`GET /live-sessions/{id}/attendance`](#get-live-sessionsidattendance). Nothing existing changed.
 

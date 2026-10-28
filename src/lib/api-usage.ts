@@ -10,6 +10,8 @@ const ROUTES: [RegExp, string][] = [
   [/^\/lessons\/[^/]+\/playback$/, "/lessons/{id}/playback"],
   [/^\/learners\/bulk$/, "/learners/bulk"], // before /learners/{id}
   [/^\/learners\/[^/]+$/, "/learners/{id}"],
+  [/^\/learners\/[^/]+\/enrolments$/, "/learners/{id}/enrolments"],
+  [/^\/learners\/[^/]+\/courses$/, "/learners/{id}/courses"],
   [/^\/learners\/[^/]+\/completions$/, "/learners/{id}/completions"],
   [/^\/learners\/[^/]+\/completions\/[^/]+$/, "/learners/{id}/completions/{course}"],
   [/^\/learners\/[^/]+\/certificates$/, "/learners/{id}/certificates"],
