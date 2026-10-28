@@ -13,7 +13,7 @@ const DONE = new Set(["webinar-user-left", "webinar-user-kicked", "webinar-tab-d
 const noSubscribe = () => () => {};
 /**
  * Null on the server and while hydrating; then whether this browser blocks the room's cookies:
- * "phone" on iPhone/iPad (no browser there works), "browser" for Safari or Brave, else false.
+ * "phone" on iPhone/iPad (no browser there works), "browser" for Safari, else false.
  */
 const useBlockedRoom = () =>
   useSyncExternalStore(
@@ -21,7 +21,7 @@ const useBlockedRoom = () =>
     () => {
       const { userAgent, maxTouchPoints } = navigator;
       if (isAppleMobile(userAgent, maxTouchPoints)) return "phone";
-      return blocksEmbeddedRoom(userAgent, maxTouchPoints) || "brave" in navigator ? "browser" : false;
+      return blocksEmbeddedRoom(userAgent, maxTouchPoints) ? "browser" : false;
     },
     () => null,
   );
@@ -32,7 +32,7 @@ const useBlockedRoom = () =>
  * nothing), but the room first posts "webinar-user-left", and that is what sends the viewer back
  * to `leaveHref`. The first click into the room also turns on true full screen.
  *
- * Safari, Brave and every iPhone/iPad browser block an embedded site's cookies, so the room can't
+ * Safari and every iPhone/iPad browser block an embedded site's cookies, so the room can't
  * run there; webinar.gg's answer is "use Chrome", and nobody should land on webinar.gg itself, so
  * those browsers get a "use Chrome" screen with this page's link to copy.
  */
