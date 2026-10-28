@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRoom } from "@/components/live-room";
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -58,7 +59,7 @@ export default async function HostLivePage({ params }: PageProps<"/admin/live/[i
         {course.title} · {formatDateTime(session.startsAt)} · {session.durationMinutes} minutes · {ended ? "Ended." : "You are the host: start the class, share your screen and end it here."}
       </p>
       {studio ? (
-        <iframe src={studio} title={`Host ${session.title}`} allow={ROOM_ALLOW} allowFullScreen className="mt-6 h-[82vh] min-h-[560px] w-full rounded-2xl border border-line bg-white" />
+        <LiveRoom src={studio} title={`Host ${session.title}`} allow={ROOM_ALLOW} className="h-[82vh] min-h-[560px] w-full rounded-2xl border border-line bg-white" />
       ) : (
         <p className="mt-6 rounded-2xl border border-line bg-white p-6 text-sm">{problem}</p>
       )}

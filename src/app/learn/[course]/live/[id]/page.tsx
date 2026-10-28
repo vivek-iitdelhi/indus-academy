@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { and, eq } from "drizzle-orm";
+import { LiveRoom } from "@/components/live-room";
 import { Container } from "@/components/ui";
 import { VideoPlayer } from "@/components/video-player";
 import { db } from "@/db";
@@ -33,13 +34,7 @@ async function Room({ session, user }: { session: LiveSession; user: { id: strin
   }
   await recordOpen(session.id, user.id, null);
   return (
-    <iframe
-      src={room}
-      title={session.title}
-      allow={ROOM_ALLOW}
-      allowFullScreen
-      className="mt-6 h-[78vh] min-h-[480px] w-full rounded-2xl border border-line bg-white"
-    />
+    <LiveRoom src={room} title={session.title} allow={ROOM_ALLOW} className="h-[78vh] min-h-[480px] w-full rounded-2xl border border-line bg-white" />
   );
 }
 
