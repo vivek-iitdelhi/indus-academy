@@ -4,7 +4,11 @@
  * `maxTouchPoints` tells iPadOS (which reports itself as a Mac) from a real Mac.
  */
 export function blocksEmbeddedRoom(userAgent: string, maxTouchPoints = 0): boolean {
-  const ios = /iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+  const ios = isAppleMobile(userAgent, maxTouchPoints);
   const safari = /Safari\//.test(userAgent) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Firefox\/|Android/.test(userAgent);
   return ios || safari;
 }
+
+/** iPhone, iPad or iPod, where every browser (Chrome too) is Safari underneath. */
+export const isAppleMobile = (userAgent: string, maxTouchPoints = 0) =>
+  /iPhone|iPad|iPod/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);

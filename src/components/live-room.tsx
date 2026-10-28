@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { blocksEmbeddedRoom } from "@/lib/embedded-room";
+import { CopyButton } from "@/components/copy-button";
+import { blocksEmbeddedRoom, isAppleMobile } from "@/lib/embedded-room";
 
 const ROOM_ORIGIN = "https://webinar.gg";
 // What the room posts to its parent page (webinar.gg docs, "Embedding the room"): the viewer is
@@ -10,9 +11,20 @@ const ROOM_ORIGIN = "https://webinar.gg";
 const DONE = new Set(["webinar-user-left", "webinar-user-kicked", "webinar-tab-duplicate", "webinar-ended"]);
 
 const noSubscribe = () => () => {};
-/** Null on the server and while hydrating; then whether this browser needs the room on its own page. */
-const useBlocksEmbeddedRoom = () =>
-  useSyncExternalStore(noSubscribe, () => blocksEmbeddedRoom(navigator.userAgent, navigator.maxTouchPoints), () => null);
+/**
+ * Null on the server and while hydrating; then whether this browser blocks the room's cookies:
+ * "phone" on iPhone/iPad (no browser there works), "browser" for Safari or Brave, else false.
+ */
+const useBlockedRoom = () =>
+  useSyncExternalStore(
+    noSubscribe,
+    () => {
+      const { userAgent, maxTouchPoints } = navigator;
+      if (isAppleMobile(userAgent, maxTouchPoints)) return "phone";
+      return blocksEmbeddedRoom(userAgent, maxTouchPoints) || "brave" in navigator ? "browser" : false;
+    },
+    () => null,
+  );
 
 /**
  * The webinar.gg room, filling the whole window, with nothing of ours around it: the room's own
@@ -20,14 +32,15 @@ const useBlocksEmbeddedRoom = () =>
  * nothing), but the room first posts "webinar-user-left", and that is what sends the viewer back
  * to `leaveHref`. The first click into the room also turns on true full screen.
  *
- * Safari and every iPhone/iPad browser block an embedded site's cookies, so there the room opens
- * on its own page instead (`ownPage`).
+ * Safari, Brave and every iPhone/iPad browser block an embedded site's cookies, so the room can't
+ * run there; webinar.gg's answer is "use Chrome", and nobody should land on webinar.gg itself, so
+ * those browsers get a "use Chrome" screen with this page's link to copy.
  */
 export function LiveRoom({ src, title, allow, leaveHref }: { src: string; title: string; allow: string; leaveHref: string }) {
   const router = useRouter();
   const box = useRef<HTMLDivElement>(null);
   const [fullScreen, setFullScreen] = useState(false);
-  const ownPage = useBlocksEmbeddedRoom();
+  const blocked = useBlockedRoom();
 
   useEffect(() => {
     const goFull = () => {
@@ -54,18 +67,30 @@ export function LiveRoom({ src, title, allow, leaveHref }: { src: string; title:
     };
   }, [router, leaveHref]);
 
-  if (ownPage === null) return <p className="fixed inset-0 z-50 grid place-items-center bg-black text-sm text-white/70">Opening the class…</p>;
-  if (ownPage) {
+  if (blocked === null) return <p className="fixed inset-0 z-50 grid place-items-center bg-black text-sm text-white/70">Opening the class…</p>;
+  if (blocked) {
     return (
-      <div className="mt-6 rounded-2xl border border-line bg-white p-6">
-        <p className="font-medium">This browser opens the class on its own page.</p>
-        <p className="mt-1 text-sm text-muted">
-          Safari, and browsers on iPhone and iPad, can&apos;t run the class inside this page. Join it below; when you&apos;re done,
-          come back here with your browser&apos;s back button.
+      <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-line bg-white p-6 sm:p-8">
+        <p className="text-xl font-semibold tracking-[-0.01em]">
+          {blocked === "phone" ? "Join this class from a computer or an Android phone" : "Open this class in Google Chrome"}
         </p>
-        <a href={src} className="mt-4 inline-block rounded-full bg-ink px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-pine">
-          Join the class
-        </a>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          {blocked === "phone"
+            ? "Browsers on iPhone and iPad, Chrome included, block what the live class needs. Copy this link and open it in Chrome on a laptop, desktop or Android phone."
+            : "This browser blocks what the live class needs. Copy this link, open it in Chrome, and you'll go straight into the class."}
+        </p>
+        <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+          <CopyButton
+            text={location.href}
+            label="Copy class link"
+            className="rounded-full bg-ink px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-pine"
+          />
+          {blocked === "browser" && (
+            <a href="https://www.google.com/chrome/" target="_blank" rel="noreferrer" className="text-sm font-medium text-pine underline underline-offset-4">
+              Get Chrome
+            </a>
+          )}
+        </div>
       </div>
     );
   }

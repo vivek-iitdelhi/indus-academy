@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { blocksEmbeddedRoom } from "./embedded-room.ts";
+import { blocksEmbeddedRoom, isAppleMobile } from "./embedded-room.ts";
 
 const UA = {
   macSafari: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
@@ -22,4 +22,11 @@ test("Safari and every iPhone/iPad browser get the room in its own tab; Chrome, 
   assert.equal(blocksEmbeddedRoom(UA.winFirefox), false);
   assert.equal(blocksEmbeddedRoom(UA.androidChrome), false);
   assert.equal(blocksEmbeddedRoom(UA.macChrome, 0), false);
+});
+
+test("isAppleMobile: iPhone, iPad (even posing as a Mac), not a Mac", () => {
+  assert.equal(isAppleMobile(UA.iphoneChrome), true);
+  assert.equal(isAppleMobile(UA.macSafari, 5), true);
+  assert.equal(isAppleMobile(UA.macSafari), false);
+  assert.equal(isAppleMobile(UA.androidChrome), false);
 });
