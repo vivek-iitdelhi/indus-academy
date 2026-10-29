@@ -1,0 +1,1 @@
+ALTER TABLE "courses" ADD COLUMN "partner_only" boolean DEFAULT false NOT NULL;

@@ -153,6 +153,9 @@ export const courses = pgTable("courses", {
   coverImageUrl: text("cover_image_url"),
   language: text("language").notNull().default("en"), // ISO 639-1 of the teaching language
   recordingDays: integer("recording_days").notNull().default(15), // live classes: how long recordings stay
+  // Off the public site (catalogue, course page, checkout); partners licensed to it still get it
+  // over the API. For demo courses partners build and test against.
+  partnerOnly: boolean("partner_only").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

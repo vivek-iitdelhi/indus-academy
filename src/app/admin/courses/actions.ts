@@ -178,6 +178,7 @@ export async function updateCourse(courseId: string, form: FormData): Promise<Ac
         listPricePaise,
         sequential: checked(form, "sequential"),
         certificateEnabled: checked(form, "certificateEnabled"),
+        partnerOnly: checked(form, "partnerOnly"),
         coverImageUrl: coverImageUrl || null,
         language,
         recordingDays,

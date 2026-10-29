@@ -8,8 +8,8 @@ import { courses, liveSessions, type Course } from "../../db/schema.ts";
 
 export type LiveClass = { id: string; title: string; startsAt: Date; endsAt: Date };
 
-/** SQL: the course is not a live course, or one of its classes has not ended yet. */
-export const listedNow = sql`(${courses.format} <> 'live' or exists (select 1 from ${liveSessions} s where s.course_id = ${courses.id} and s.starts_at + s.duration_minutes * interval '1 minute' > now()))`;
+/** SQL: not partner-only, and not a live course or one of its classes has not ended yet. */
+export const listedNow = sql`not ${courses.partnerOnly} and (${courses.format} <> 'live' or exists (select 1 from ${liveSessions} s where s.course_id = ${courses.id} and s.starts_at + s.duration_minutes * interval '1 minute' > now()))`;
 
 /** The course's live classes in time order, with their end times. */
 export async function liveClasses(courseId: string): Promise<LiveClass[]> {
@@ -25,8 +25,8 @@ export async function liveClasses(courseId: string): Promise<LiveClass[]> {
 export const stillRunning = (course: Pick<Course, "format">, classes: LiveClass[], now = new Date()) =>
   course.format !== "live" || classes.some((c) => c.endsAt > now);
 
-/** Published, and (for a live course) not over: what can be bought or enrolled in. */
+/** Published, not partner-only, and (for a live course) not over: what can be bought or enrolled in on the site. */
 export async function onSale(course: Course, now = new Date()): Promise<boolean> {
-  if (course.status !== "published") return false;
+  if (course.status !== "published" || course.partnerOnly) return false;
   return course.format !== "live" || stillRunning(course, await liveClasses(course.id), now);
 }

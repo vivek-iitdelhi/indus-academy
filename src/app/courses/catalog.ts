@@ -66,7 +66,7 @@ export const getCatalogCourse = cache(async (slug: string) => {
   if (!dbAvailable()) return null;
   return orEmptyAtBuild(async () => {
     const course = await getCourseBySlug(slug);
-    if (!course || course.status !== "published") return null;
+    if (!course || course.status !== "published" || course.partnerOnly) return null;
     const classes = course.format === "live" ? await liveClasses(course.id) : [];
     if (!stillRunning(course, classes)) return null;
     return { course, outline: await getCourseOutline(course.id), liveClasses: classes };

@@ -169,6 +169,13 @@
       "when": 1793186994956,
       "tag": "0023_live_class_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793273944746,
+      "tag": "0024_partner_only_courses",
+      "breakpoints": true
     }
   ]
 }

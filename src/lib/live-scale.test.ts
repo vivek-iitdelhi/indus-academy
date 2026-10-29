@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.ts";
-import { courses, liveAttendance, liveAttendanceSyncs, liveJoinLinks, liveSessions, user } from "../db/schema.ts";
+import { certificates, courses, liveAttendance, liveAttendanceSyncs, liveJoinLinks, liveSessions, user } from "../db/schema.ts";
 import { joinUrl } from "./live.ts";
-import { recordOpen, syncAttendance } from "./live-attendance.ts";
+import { recordOpen, SETTLE_MS, syncAttendance } from "./live-attendance.ts";
 
 // webinar.gg stand-in: counts requests, answers join-token and the invite list.
 const calls: string[] = [];
@@ -48,6 +48,7 @@ describe("live classes", { skip: !process.env.DATABASE_URL && "DATABASE_URL not 
   after(async () => {
     globalThis.fetch = realFetch;
     await db.delete(liveJoinLinks).where(eq(liveJoinLinks.webinarId, `wgg-${run}`));
+    await db.delete(certificates).where(eq(certificates.courseId, courseId)); // attending issues them
     await db.delete(courses).where(eq(courses.id, courseId));
     await db.delete(user).where(inArray(user.id, userIds));
     await db.$client.end();
@@ -99,6 +100,27 @@ describe("live classes", { skip: !process.env.DATABASE_URL && "DATABASE_URL not 
     const [done] = await db.select().from(liveSessions).where(eq(liveSessions.id, session.id));
     assert.ok(done.attendanceSyncedAt);
     assert.equal((await db.select().from(liveAttendanceSyncs).where(eq(liveAttendanceSyncs.sessionId, session.id))).length, 0);
+  });
+
+  test("a class the host just ended is not final until webinar.gg's list has settled", async () => {
+    const endedAt = new Date(Date.now() - 60_000);
+    const [fresh] = await db
+      .insert(liveSessions)
+      .values({ courseId, title: "Live test 3", startsAt: new Date(Date.now() - 3600_000), durationMinutes: 60, webinarId: `wgg3-${run}`, endedAt })
+      .returning();
+    invitees = userIds.slice(0, 5).map((id) => ({ email: `${id}.0a1b2c3d@learners.invalid`, isHost: false, attended: false }));
+    await recordOpen(fresh.id, userIds[0], null);
+    assert.equal(await syncAttendance(fresh), false, "not final a minute after the end");
+    const [row] = await db.select().from(liveAttendance).where(and(eq(liveAttendance.sessionId, fresh.id), eq(liveAttendance.userId, userIds[0])));
+    assert.equal(row.attended, null, "not marked absent yet");
+    const [sync] = await db.select().from(liveAttendanceSyncs).where(eq(liveAttendanceSyncs.sessionId, fresh.id));
+    assert.equal(sync.nextPage, 0, "reads the whole list again next time");
+
+    invitees[0].attended = true; // webinar.gg catches up
+    const later = { ...fresh, endedAt: new Date(Date.now() - SETTLE_MS - 1000) };
+    assert.equal(await syncAttendance(later), true);
+    const [after] = await db.select().from(liveAttendance).where(and(eq(liveAttendance.sessionId, fresh.id), eq(liveAttendance.userId, userIds[0])));
+    assert.equal(after.attended, true);
   });
 
   test("a second worker backs off while the first holds the lease", async () => {

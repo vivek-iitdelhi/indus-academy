@@ -47,7 +47,7 @@ async function FromClass({ sessionId, issued }: { sessionId: string; issued: Set
     return (
       <div role="status" className={box}>
         <p className="font-medium">Preparing your certificate for {row.title}…</p>
-        <p className="mt-1 text-sm text-muted">We&apos;re confirming attendance for the class. It takes about a minute; this page updates by itself.</p>
+        <p className="mt-1 text-sm text-muted">We&apos;re confirming attendance for the class. It can take up to 15 minutes after the class; this page updates by itself.</p>
         <AutoRefresh seconds={10} />
       </div>
     );

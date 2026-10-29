@@ -276,6 +276,12 @@ export default async function CourseEditorPage({ params, searchParams }: PagePro
               hint="Issue a certificate when a learner completes every lesson."
               defaultChecked={course.certificateEnabled}
             />
+            <CheckField
+              name="partnerOnly"
+              label="Partners only"
+              hint="Hidden from the website; licensed partners still get it over the API. For demo and test courses."
+              defaultChecked={course.partnerOnly}
+            />
           </div>
         </ActionForm>
       </section>

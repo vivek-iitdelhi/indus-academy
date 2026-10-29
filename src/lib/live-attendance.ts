@@ -41,6 +41,18 @@ async function markAttended(sessionId: string, seen: string[]) {
 const LEASE = sql`now() + interval '1 minute'`;
 
 /**
+ * How long after a class ends webinar.gg's attendee list is trusted as final. Read at the moment
+ * the host ended a class (2026-10-29), it still had nobody as attended, and all 63 were marked absent.
+ */
+export const SETTLE_MS = 15 * 60_000;
+
+/** The class ended (host or schedule) at least SETTLE_MS ago. */
+export function settled(session: Pick<LiveSession, "startsAt" | "durationMinutes" | "endedAt">, now = Date.now()) {
+  const over = session.endedAt?.getTime() ?? session.startsAt.getTime() + session.durationMinutes * 60_000 + LATE_GRACE_MS;
+  return now - over >= SETTLE_MS;
+}
+
+/**
  * Reads who was in the room from webinar.gg, from the page the last run stopped at, until done
  * or `until` (ms epoch); then marks everyone else who opened it as absent. One worker per class
  * at a time (a lease on live_attendance_syncs). True once the class is final.
@@ -76,6 +88,13 @@ export async function syncAttendance(session: LiveSession, until = Date.now() + 
       }
       await markAttended(session.id, result.ids);
       page++;
+      if (result.last && !settled(session)) {
+        // webinar.gg fills in who attended only minutes after the room closes: certify who it
+        // shows so far, and read the whole list again on the next run (the cron, every minute).
+        await certifyAttendees(session);
+        page = 0;
+        return false;
+      }
       if (result.last) {
         await db.transaction(async (tx) => {
           await tx
