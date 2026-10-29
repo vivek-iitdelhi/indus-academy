@@ -92,13 +92,13 @@ export default async function LiveClassPage({ params }: PageProps<"/learn/[cours
   const { session, course } = row;
   const status = liveStatus(session);
   // Out of the room (left, or the class is over): back to the course, or after its last class
-  // to My courses, where the course's certificate shows.
+  // to My certificates, which waits for this class's certificate to be issued.
   const [later] = await db
     .select({ id: liveSessions.id })
     .from(liveSessions)
     .where(and(eq(liveSessions.courseId, course.id), gt(liveSessions.startsAt, session.startsAt)))
     .limit(1);
-  const leaveHref = later ? `/learn/${course.slug}` : "/learn";
+  const leaveHref = later ? `/learn/${course.slug}` : course.certificateEnabled ? `/learn/certificates?from=${session.id}` : "/learn";
   // Over, with no recording to show (yet): nothing to do here.
   if (status === "ended" && !session.recordingVideoUid && !session.recordingUntil && !session.recordingUrl) redirect(leaveHref);
 

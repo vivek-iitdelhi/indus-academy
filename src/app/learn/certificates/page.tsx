@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { eq } from "drizzle-orm";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { CertificateActions, HolderNameForm } from "@/components/certificate-actions";
 import { Accent, ButtonLink, Container, Eyebrow } from "@/components/ui";
 import { company, site } from "@/content/site";
+import { db } from "@/db";
+import { courses, liveSessions } from "@/db/schema";
+import { isUuid } from "@/lib/distributors";
+import { liveStatus } from "@/lib/live-times";
 import { formatIssueDate, linkedInAddUrl, listCertificates } from "@/lib/lms/certificates";
 import { setCertificateSearchVisible } from "./actions";
 import { requireUser } from "@/lib/session";
@@ -13,9 +19,53 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function CertificatesPage() {
+/**
+ * Arriving from the last class of a course (?from=<class id>), the certificate is issued only
+ * once webinar.gg's attendance list is in, about a minute after the class ends: until then say so
+ * and check again; after, if there is still none, say what's left.
+ */
+async function FromClass({ sessionId, issued }: { sessionId: string; issued: Set<string> }) {
+  const [row] = await db
+    .select({ session: liveSessions, slug: courses.slug, title: courses.title })
+    .from(liveSessions)
+    .innerJoin(courses, eq(liveSessions.courseId, courses.id))
+    .where(eq(liveSessions.id, sessionId));
+  if (!row || issued.has(row.slug)) return null;
+  const { session } = row;
+  const box = "mt-10 rounded-2xl border border-line bg-white p-6";
+  if (liveStatus(session) !== "ended") {
+    return (
+      <p className={box}>
+        <strong>{session.title}</strong> is still going.{" "}
+        <Link href={`/learn/${row.slug}/live/${session.id}`} className="font-medium text-pine underline underline-offset-4">
+          Rejoin the class
+        </Link>
+      </p>
+    );
+  }
+  if (!session.attendanceSyncedAt) {
+    return (
+      <div role="status" className={box}>
+        <p className="font-medium">Preparing your certificate for {row.title}…</p>
+        <p className="mt-1 text-sm text-muted">We&apos;re confirming attendance for the class. It takes about a minute; this page updates by itself.</p>
+        <AutoRefresh seconds={10} />
+      </div>
+    );
+  }
+  return (
+    <p className={box}>
+      No certificate for {row.title} yet: it&apos;s issued once every lesson is done and every class attended or its recording watched.{" "}
+      <Link href={`/learn/${row.slug}`} className="font-medium text-pine underline underline-offset-4">
+        See what&apos;s left
+      </Link>
+    </p>
+  );
+}
+
+export default async function CertificatesPage({ searchParams }: PageProps<"/learn/certificates">) {
   const user = await requireUser("/learn/certificates");
   const rows = await listCertificates(user.id);
+  const { from } = await searchParams;
 
   return (
     <Container className="max-w-5xl! py-16 sm:py-24">
@@ -36,7 +86,10 @@ export default async function CertificatesPage() {
           ? `Issued by ${company.legalName}. Each has a public page anyone can use to check it.`
           : "Finish every lesson in a course and its certificate appears here, ready to download and add to LinkedIn."}
       </p>
-      {rows.length === 0 && (
+      {typeof from === "string" && isUuid(from) && (
+        <FromClass sessionId={from} issued={new Set(rows.map((r) => r.courseSlug))} />
+      )}
+      {rows.length === 0 && !from && (
         <div className="mt-10">
           <ButtonLink href="/learn" variant="dark">
             Go to my courses
