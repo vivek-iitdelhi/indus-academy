@@ -6,6 +6,7 @@ import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { logoPath } from "@/components/logo";
 import { company, site } from "@/content/site";
+import { BLS_LOGO, BLS_SIGNATURE } from "@/lib/certificate-bls-assets";
 import { indicFont, latinEms, NAME_BOX, nameFontSize } from "@/lib/certificate-text";
 import { formatIssueDate, getCertificate, verifyCertificateHash } from "@/lib/lms/certificates";
 
@@ -15,14 +16,14 @@ const size = { width: 1600, height: 1131 };
 type Font = { name: string; data: ArrayBuffer; weight: 400 | 600; style: "normal" | "italic" };
 let fontsPromise: Promise<Font[]> | undefined;
 
-/** Geist (the site's sans) and Instrument Serif italic (the name), fetched once per instance. */
+/** Geist (the site's sans), Instrument Serif italic (the name) and Playfair Display italic (BLS's name), fetched once per instance. */
 function loadFonts(): Promise<Font[]> {
   fontsPromise ??= (async () => {
     const css = await fetch(
-      "https://fonts.googleapis.com/css2?family=Geist:wght@400;600&family=Instrument+Serif:ital@1",
+      "https://fonts.googleapis.com/css2?family=Geist:wght@400;600&family=Instrument+Serif:ital@1&family=Playfair+Display:ital@1",
     ).then((r) => r.text());
     const faces = [...css.matchAll(/font-family: '([^']+)';\s*font-style: (\w+);\s*font-weight: (\d+);\s*src: url\(([^)]+)\)/g)];
-    if (faces.length !== 3) throw new Error("unexpected Google Fonts CSS");
+    if (faces.length !== 4) throw new Error("unexpected Google Fonts CSS");
     return Promise.all(
       faces.map(async ([, name, style, weight, url]) => ({
         name,
@@ -111,7 +112,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
   const { serial } = await ctx.params;
   const row = await getCertificate(serial);
   if (!row) return new Response("No certificate with that serial exists.", { status: 404 });
-  const { certificate: cert, courseTitle } = row;
+  const { certificate: cert, courseTitle, bls } = row;
   const stamp = cert.revokedAt ? "Revoked" : verifyCertificateHash(cert) ? null : "Not verified";
   const name = cert.holderName.trim();
   const family = indicFont(name);
@@ -120,7 +121,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
   // Revalidated on every view (cheap: one query) and re-rendered only when what it shows
   // changes (revocation, a name being set, a redeploy), so a revocation shows at once.
   const etag = `"${createHash("sha1")
-    .update(JSON.stringify([cert.holderName, courseTitle, cert.partnerName, cert.issuedAt, stamp, fonts.length, Boolean(indicFontFile), site.url, process.env.VERCEL_GIT_COMMIT_SHA, process.env.NEXT_DEPLOYMENT_ID]))
+    .update(JSON.stringify([bls, cert.holderName, courseTitle, cert.partnerName, cert.issuedAt, stamp, fonts.length, Boolean(indicFontFile), site.url, process.env.VERCEL_GIT_COMMIT_SHA, process.env.NEXT_DEPLOYMENT_ID]))
     .digest("base64url")}"`;
   const headers: Record<string, string> = { "Cache-Control": "public, no-cache", ETag: etag };
   if (new URL(request.url).searchParams.get("download") === "1") {
@@ -131,6 +132,19 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
   const verifyUrl = `${site.url.replace(/^https?:\/\//, "")}/verify/${cert.serial}`;
   const muted = "#56655f";
   const indicName = family && indicFontFile ? await renderIndicName(name, family, indicFontFile, "#0b1916") : null;
+  const stampBox = stamp && <Stamp text={stamp} />;
+  if (bls) {
+    return new ImageResponse(
+      <BlsCertificate
+        name={name}
+        indicName={indicName}
+        courseTitle={courseTitle}
+        footer={`Certificate no. ${cert.serial} · Issued on ${formatIssueDate(cert.issuedAt)} · Verify at ${verifyUrl}`}
+        stamp={stampBox}
+      />,
+      { ...size, headers, ...(fonts.length > 0 && { fonts }) },
+    );
+  }
 
   return new ImageResponse(
     (
@@ -234,28 +248,115 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
           </div>
           <div style={{ marginTop: 30, fontSize: 21, color: muted }}>{`Verify this certificate at ${verifyUrl}`}</div>
 
-          {stamp && (
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div
-                style={{
-                  transform: "rotate(-14deg)",
-                  border: "10px solid #b42318",
-                  borderRadius: 24,
-                  padding: "10px 56px",
-                  color: "#b42318",
-                  fontSize: stamp.length > 8 ? 110 : 150,
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {stamp}
-              </div>
-            </div>
-          )}
+          {stampBox}
         </div>
       </div>
     ),
     { ...size, headers, ...(fonts.length > 0 && { fonts }) },
+  );
+}
+
+function Stamp({ text }: { text: string }) {
+  return (
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          transform: "rotate(-14deg)",
+          border: "10px solid #b42318",
+          borderRadius: 24,
+          padding: "10px 56px",
+          color: "#b42318",
+          fontSize: text.length > 8 ? 110 : 150,
+          fontWeight: 600,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  );
+}
+
+/** BLS E-Services × Indus AI certificate of participation, after the Canva design (canva.link/uoi1b3xsdgdigke). */
+function BlsCertificate({
+  name,
+  indicName,
+  courseTitle,
+  footer,
+  stamp,
+}: {
+  name: string;
+  indicName: { src: string; width: number; height: number } | null;
+  courseTitle: string;
+  footer: string;
+  stamp: React.ReactNode;
+}) {
+  const ink = "#2b2b2b";
+  const muted = "#7a7a7a";
+  return (
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", width: "100%", height: "100%", background: "#ffffff", padding: "70px 150px 40px", color: ink, fontFamily: "Geist" }}>
+      <svg width="760" height="605" viewBox="0 0 206 164" fill="none" style={{ position: "absolute", left: (size.width - 760) / 2, top: 230 }}>
+        <path d={logoPath} stroke="rgba(70,95,130,0.09)" strokeWidth="10.44" strokeLinejoin="round" />
+      </svg>
+      <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- rendered by Satori, not a page */}
+        <img src={BLS_LOGO} width={206} height={142} alt="" />
+        <div style={{ width: 2, height: 100, background: ink }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 18, color: "#2a524a" }}>
+          <svg width="120" height="96" viewBox="0 0 206 164" fill="none">
+            <path d={logoPath} stroke="#2a524a" strokeWidth="13" strokeLinejoin="round" />
+          </svg>
+          <div style={{ fontSize: 72, fontWeight: 600, letterSpacing: "-0.02em" }}>Indus AI</div>
+        </div>
+      </div>
+      <div style={{ marginTop: 92, fontSize: 38, fontWeight: 600, letterSpacing: "0.32em", color: "#3a3a3a" }}>CERTIFICATE OF PARTICIPATION</div>
+      <div style={{ marginTop: 64, fontSize: 32, color: muted }}>This certifies that</div>
+      {indicName ? (
+        // eslint-disable-next-line @next/next/no-img-element -- rendered by Satori, not a page
+        <img src={indicName.src} width={indicName.width} height={indicName.height} alt="" style={{ marginTop: 26 }} />
+      ) : (
+        <div
+          style={{
+            marginTop: 8,
+            maxWidth: NAME_BOX,
+            fontFamily: "Playfair Display",
+            fontStyle: "italic",
+            fontSize: name ? nameFontSize(latinEms(name) * 1.2).fontSize : 72,
+            lineHeight: 1.15,
+            color: name ? "#1f1f1f" : muted,
+            textAlign: "center",
+            textWrap: "balance",
+            wordBreak: "break-word",
+          }}
+        >
+          {name || "Name to be confirmed"}
+        </div>
+      )}
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", maxWidth: 1250, marginTop: 34, fontSize: 34, textAlign: "center" }}>
+        <span>has completed the&nbsp;</span>
+        <span style={{ fontWeight: 600 }}>{courseTitle}</span>
+        <span>.</span>
+      </div>
+
+      <div style={{ display: "flex", width: "100%", justifyContent: "space-between", marginTop: "auto" }}>
+        {[
+          { title: "Vivek Gupta - IIT Delhi Alumnus", role: "Founder · Indus AI Academy", signature: null },
+          { title: "BLS E-Services Limited", role: "Issuing company", signature: BLS_SIGNATURE },
+        ].map((s, i) => (
+          <div key={s.title} style={{ display: "flex", flexDirection: "column", alignItems: i ? "center" : "flex-start", width: 470 }}>
+            <div style={{ display: "flex", height: 110, alignItems: "flex-end", justifyContent: "center", width: "100%" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- rendered by Satori, not a page */}
+              {s.signature && <img src={s.signature} width={292} height={108} alt="" />}
+            </div>
+            <div style={{ width: "100%", height: 2, background: ink }} />
+            <div style={{ marginTop: 22, fontSize: 30, fontWeight: 600 }}>{s.title}</div>
+            <div style={{ marginTop: 8, fontSize: 24, color: muted }}>{s.role}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 34, fontSize: 18, color: muted }}>{footer}</div>
+      {stamp}
+    </div>
   );
 }

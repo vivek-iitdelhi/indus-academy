@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { certificateCounters, certificates, courses, user, type Certificate } from "../../db/schema.ts";
+import { certificateCounters, certificates, courses, distributorCourses, distributors, user, type Certificate } from "../../db/schema.ts";
 
 /** IAA-<year>-<n>, n zero-padded to at least 4 digits. */
 export const formatSerial = (year: number, n: number) => `IAA-${year}-${String(n).padStart(4, "0")}`;
@@ -117,7 +117,14 @@ async function findCertificate(userId: string, courseId: string) {
 /** A certificate by serial with its course, for the public verification page. */
 export async function getCertificate(serial: string) {
   const [row] = await db
-    .select({ certificate: certificates, courseTitle: courses.title, courseSlug: courses.slug })
+    .select({
+      certificate: certificates,
+      courseTitle: courses.title,
+      courseSlug: courses.slug,
+      // BLS's co-branded design: earned through BLS, or a course licensed to BLS (their trainees
+      // also sign up on our site). ponytail: one partner design; a template per partner when a second wants one.
+      bls: sql<boolean>`(${certificates.partnerName} ilike 'BLS%' or exists (select 1 from ${distributorCourses} dc join ${distributors} d on d.id = dc.distributor_id where dc.course_id = ${courses.id} and d.certificate_name ilike 'BLS%'))`,
+    })
     .from(certificates)
     .innerJoin(courses, eq(certificates.courseId, courses.id))
     .where(eq(certificates.serial, serial));
