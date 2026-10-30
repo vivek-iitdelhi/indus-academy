@@ -493,15 +493,16 @@ Which of your learners opened the class, and whether they got into the room.
   fine.
 - Learners who never opened the class aren't listed.
 
-## Customers: you take payment, they learn with us
+## Customers
 
-Use this if your customer pays you and then does everything else on Indus AI Academy: the
-enrolment email, login, videos, live classes and certificate. You host no player, track no lessons
-and run no quizzes, and the rest of this document is optional.
+Enrol a customer in a course and get back a link that signs them in to it. The enrolment email,
+videos, live classes and certificate are all handled on Indus AI Academy.
+
+1. Call `GET /courses` to list your courses, and keep each course's `id`.
+2. Call `POST /customers` with the customer's details and the `course_id`.
+3. Redirect the customer to the `login_url` in the response.
 
 ### `POST /customers`
-
-Call it from your server once the customer has paid, then redirect them to `login_url`.
 
 ```sh
 curl -X POST https://indusai.academy/api/v2/customers \
@@ -513,39 +514,62 @@ curl -X POST https://indusai.academy/api/v2/customers \
     "mobile": "+919876543210",
     "state": "Bihar",
     "district": "Patna",
-    "course": "ai-practitioner"
+    "course_id": "d3bfce76-01fd-4e97-ba5f-9b338ea42d30"
   }'
 ```
 
-`name`, `email`, `mobile` and `course` (the slug from `GET /courses`) are required. `state` and
-`district` are optional, up to 100 characters each.
+| Field | Required | Notes |
+| --- | --- | --- |
+| `name` | Yes | Printed on the certificate. Up to 120 characters. |
+| `email` | Yes | Identifies the customer, so use an address they can open. |
+| `mobile` | Yes | 7–15 digits, with an optional leading `+`. |
+| `state` | No | Up to 100 characters. |
+| `district` | No | Up to 100 characters. |
+| `course_id` | Yes | The `id` from `GET /courses`. |
 
 ```json
 {
-  "customer": { "email": "asha@example.com" },
-  "enrolment": { "course": "ai-practitioner" },
+  "customer": {
+    "name": "Asha Rao",
+    "email": "asha@example.com",
+    "mobile": "+919876543210",
+    "state": "Bihar",
+    "district": "Patna"
+  },
+  "enrolment": {
+    "course_id": "d3bfce76-01fd-4e97-ba5f-9b338ea42d30",
+    "course": "ai-at-work-essentials",
+    "title": "AI at Work: Essentials"
+  },
   "login_url": "https://indusai.academy/api/auth/magic-link/verify?token=…",
-  "course_url": "https://indusai.academy/learn/ai-practitioner"
+  "course_url": "https://indusai.academy/learn/ai-at-work-essentials"
 }
 ```
 
-- `201` means newly enrolled, and we email the customer that their course is ready. `200` means
-  they were already enrolled, and nothing is sent or billed again.
-- **`login_url`** signs the customer in and opens their course. It works once, within 10 minutes,
-  so create it when you redirect, and never store it or put it in a message.
-- **`login_url` can be `null`**: when the customer already had an account with us that they made
-  themselves, and with test keys. Redirect to `course_url` instead; they sign in with the link we
-  email them. We never let an API key open an account its owner made.
-- The customer is identified by email, so use the address they can open. Sending it again with a
-  new `mobile`, `state` or `district` updates those details.
-- This call is safe to repeat, so it needs no `Idempotency-Key`; a replayed response would carry
-  a used `login_url`. Call it again for a fresh link.
-- With a test key, nothing reaches a real person: no account is opened, no email goes out and
-  `login_url` is `null`.
-- Errors: `400 invalid_request`; `404 not_found` for a course not licensed to you; `409
-  customer_conflict` if the email belongs to another partner's customer.
+| Status | Meaning |
+| --- | --- |
+| `201` | The customer was enrolled, and we emailed them. |
+| `200` | The customer was already enrolled. Nothing is emailed or billed again. |
+| `400 invalid_request` | A field is missing or invalid. `message` says which. |
+| `401 unauthorized` | The API key is missing, invalid or revoked. |
+| `404 not_found` | The course isn't licensed to you. |
+| `409 customer_conflict` | The email belongs to another partner's customer. |
 
-To remove a customer, `DELETE /learners/{email}`. Their account, details and certificates are erased.
+`login_url` works once and expires after 10 minutes, so request it when you redirect the customer,
+and don't store it or send it in a message. To send a customer back to their course later, make
+the same call again for a new link.
+
+`login_url` is `null` if the customer already had an Indus AI Academy account of their own. Redirect
+them to `course_url`, and they sign in with a link we email to them.
+
+Sending a customer again updates their `mobile`, `state` and `district`. This call is safe to
+repeat, so don't send an `Idempotency-Key`: a replayed response would contain a used `login_url`.
+
+With a test key, the customer is kept in your sandbox and no email is sent. `login_url` still
+works, so you can test the whole flow.
+
+To remove a customer, call `DELETE /learners/{email}`. Their account and details are erased, and
+their certificates are revoked.
 
 ## Learners and certificates
 
@@ -954,7 +978,7 @@ A `429` and a `503 live_busy` also carry `retry_after` (seconds) in the `error` 
 
 ### 30 Oct 2026: customers
 
-`POST /customers`: enrol a customer who paid you, and send them here with a one-time login link.
+`POST /customers`: enrol a customer in a course and get a one-time link that signs them in to it.
 
 ### 28 Oct 2026: enrolments, v2, and more for large partners
 

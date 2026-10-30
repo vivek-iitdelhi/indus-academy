@@ -34,7 +34,7 @@ export type EnrolmentInput = {
   enrolledAt: Date | null;
   expiresAt: Date | null;
 };
-export type CustomerInput = { name: string; email: string; phone: string; state: string | null; district: string | null; courseSlug: string };
+export type CustomerInput = { name: string; email: string; phone: string; state: string | null; district: string | null; course: string };
 export type Learner = PartnerLearner & { name: string };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -78,8 +78,8 @@ export function parseCustomerInput(body: unknown): Parsed<CustomerInput> {
   const state = label(b.state, "state");
   const district = label(b.district, "district");
   for (const r of [state, district]) if (!r.ok) return r;
-  const courseSlug = text(b.course);
-  if (!courseSlug) return { ok: false, message: "`course` is required: the course slug." };
+  const course = text(b.course_id) || text(b.course);
+  if (!course) return { ok: false, message: "`course_id` is required: the `id` from GET /courses." };
   return {
     ok: true,
     value: {
@@ -88,7 +88,7 @@ export function parseCustomerInput(body: unknown): Parsed<CustomerInput> {
       phone: mobile.value.phone!,
       state: state.ok ? state.value : null,
       district: district.ok ? district.value : null,
-      courseSlug,
+      course,
     },
   };
 }

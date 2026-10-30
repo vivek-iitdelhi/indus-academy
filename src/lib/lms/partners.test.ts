@@ -131,7 +131,7 @@ test("certificateStatus", () => {
 // Against a real database: DATABASE_URL=postgres://localhost/indus_lms npm test
 describe("customers who carry on here after paying a client", () => {
   const run = randomUUID().slice(0, 8);
-  const input = (email: string) => ({ name: "Asha Rao", email, phone: "+919876543210", state: "Bihar", district: "Patna", courseSlug: "x" });
+  const input = (email: string) => ({ name: "Asha Rao", email, phone: "+919876543210", state: "Bihar", district: "Patna", course: "x" });
   const distributorIds: string[] = [];
   const emails: string[] = [];
   const client = async () => {
@@ -150,15 +150,17 @@ describe("customers who carry on here after paying a client", () => {
   });
 
   test("parseCustomerInput needs a name, email, mobile and course", () => {
-    const good = { name: "Asha", email: "ASHA@Example.com", mobile: "98765 43210", state: "Bihar", district: "Patna", course: "ai" };
+    const good = { name: "Asha", email: "ASHA@Example.com", mobile: "98765 43210", state: "Bihar", district: "Patna", course_id: "ai" };
     assert.deepEqual(parseCustomerInput(good), {
       ok: true,
-      value: { name: "Asha", email: "asha@example.com", phone: "9876543210", state: "Bihar", district: "Patna", courseSlug: "ai" },
+      value: { name: "Asha", email: "asha@example.com", phone: "9876543210", state: "Bihar", district: "Patna", course: "ai" },
     });
-    for (const missing of ["name", "email", "mobile", "course"]) {
+    for (const missing of ["name", "email", "mobile", "course_id"]) {
       assert.equal(parseCustomerInput({ ...good, [missing]: undefined }).ok, false, missing);
     }
     assert.equal(parseCustomerInput({ ...good, state: undefined, district: undefined }).ok, true);
+    const bySlug = parseCustomerInput({ ...good, course_id: undefined, course: "by-slug" });
+    assert.equal(bySlug.ok && bySlug.value.course, "by-slug");
   });
 
   test("a new customer gets a real account made for this client, and a repeat changes nothing", async () => {

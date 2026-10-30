@@ -180,11 +180,11 @@ export function licensedCourses(distributorId: string) {
 }
 
 /** The course if it is published and licensed to the distributor, else null. */
-export async function licensedCourse(distributorId: string, slug: string): Promise<Course | null> {
+export async function licensedCourse(distributorId: string, slugOrId: string): Promise<Course | null> {
   const [row] = await db
     .select({ course: courses })
     .from(courses)
-    .where(and(eq(courses.slug, slug), licensedPublished(distributorId)))
+    .where(and(isUuid(slugOrId) ? eq(courses.id, slugOrId) : eq(courses.slug, slugOrId), licensedPublished(distributorId)))
     .limit(1);
   return row?.course ?? null;
 }
