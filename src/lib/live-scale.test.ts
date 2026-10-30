@@ -26,13 +26,15 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     failPage = null;
     return Response.json({ success: false, data: null, error: "boom" }, { status: 500 });
   }
-  return reply({ users: invitees.slice(page * limit, (page + 1) * limit), pagination: { total: invitees.length, page, limit } });
+  // webinar.gg lowercases every email it stores.
+  const users = invitees.slice(page * limit, (page + 1) * limit).map((u) => ({ ...u, email: u.email.toLowerCase() }));
+  return reply({ users, pagination: { total: invitees.length, page, limit } });
 }) as typeof fetch;
 
 // Against your own database: DATABASE_URL=postgres://localhost/indus_lms_live node --test src/lib/live-scale.test.ts
 describe("live classes", { skip: !process.env.DATABASE_URL && "DATABASE_URL not set" }, () => {
   const run = randomUUID().slice(0, 8);
-  const userIds = Array.from({ length: 45 }, (_, i) => `livetest${run}u${i}`);
+  const userIds = Array.from({ length: 45 }, (_, i) => `LiveTest${run}U${i}`);
   let session: typeof liveSessions.$inferSelect;
   let courseId = "";
 

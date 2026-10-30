@@ -28,9 +28,16 @@ export async function recordOpen(sessionId: string, userId: string, distributorI
     });
 }
 
-/** Marks these users (ours only: a deleted account can't be referenced) as in the room. */
+/**
+ * Marks these users (ours only: a deleted account can't be referenced) as in the room.
+ * webinar.gg lowercases emails, so the ids read back from them are lowercased: match ignoring case.
+ */
+// ponytail: lower(id) scans the user table per page of 20; add an index on lower(id) if that shows.
 async function markAttended(sessionId: string, seen: string[]) {
-  const known = seen.length ? (await db.select({ id: user.id }).from(user).where(inArray(user.id, seen))).map((u) => u.id) : [];
+  const lowered = seen.map((id) => id.toLowerCase());
+  const known = seen.length
+    ? (await db.select({ id: user.id }).from(user).where(inArray(sql`lower(${user.id})`, lowered))).map((u) => u.id)
+    : [];
   if (!known.length) return;
   await db
     .insert(liveAttendance)
