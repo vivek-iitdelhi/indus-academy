@@ -6,7 +6,7 @@ import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { logoPath } from "@/components/logo";
 import { company, site } from "@/content/site";
-import { BLS_LOGO, BLS_SIGNATURE } from "@/lib/certificate-bls-assets";
+import { BLS_LOGO, BLS_SIGNATURE, VIVEK_SIGNATURE } from "@/lib/certificate-bls-assets";
 import { indicFont, latinEms, NAME_BOX, nameFontSize } from "@/lib/certificate-text";
 import { formatIssueDate, getCertificate, verifyCertificateHash } from "@/lib/lms/certificates";
 
@@ -236,11 +236,14 @@ export async function GET(request: Request, ctx: RouteContext<"/api/certificates
                   display: "flex",
                   flexDirection: "column",
                   flex: 1,
+                  position: "relative",
                   alignItems: ["flex-start", "center", "flex-end"][i],
                   borderTop: "2px solid #dcd8cc",
                   paddingTop: 18,
                 }}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element -- rendered by Satori, not a page */}
+                {i === 2 && <img src={VIVEK_SIGNATURE} width={290} height={74} alt="" style={{ position: "absolute", right: 20, top: -70 }} />}
                 <div style={{ fontSize: 20, color: muted }}>{label}</div>
                 <div style={{ marginTop: 6, fontSize: 28, fontWeight: 600 }}>{value}</div>
               </div>
@@ -341,13 +344,13 @@ function BlsCertificate({
 
       <div style={{ display: "flex", width: "100%", justifyContent: "space-between", marginTop: "auto" }}>
         {[
-          { title: "Vivek Gupta - IIT Delhi Alumnus", role: "Founder · Indus AI Academy", signature: null },
-          { title: "BLS E-Services Limited", role: "Issuing company", signature: BLS_SIGNATURE },
+          { title: "Vivek Gupta - IIT Delhi Alumnus", role: "Founder · Indus AI Academy", signature: { src: VIVEK_SIGNATURE, width: 330, height: 84 } },
+          { title: "BLS E-Services Limited", role: "Issuing company", signature: { src: BLS_SIGNATURE, width: 292, height: 108 } },
         ].map((s, i) => (
           <div key={s.title} style={{ display: "flex", flexDirection: "column", alignItems: i ? "center" : "flex-start", width: 470 }}>
             <div style={{ display: "flex", height: 110, alignItems: "flex-end", justifyContent: "center", width: "100%" }}>
               {/* eslint-disable-next-line @next/next/no-img-element -- rendered by Satori, not a page */}
-              {s.signature && <img src={s.signature} width={292} height={108} alt="" />}
+              <img src={s.signature.src} width={s.signature.width} height={s.signature.height} alt="" style={{ marginBottom: i ? 0 : -10 }} />
             </div>
             <div style={{ width: "100%", height: 2, background: ink }} />
             <div style={{ marginTop: 22, fontSize: 30, fontWeight: 600 }}>{s.title}</div>
