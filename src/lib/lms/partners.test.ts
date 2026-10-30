@@ -194,6 +194,14 @@ describe("customers who carry on here after paying a client", () => {
     assert.equal(await upsertCustomer(b, input(email)), null);
   });
 
+  test("a sandbox learner keeps state and district too", async () => {
+    const d = await client();
+    const { learner } = await upsertLearner(d, mail("sandbox"), { name: "Test", email: "t@example.com", state: "Bihar", district: "Patna" });
+    assert.equal(learner.state, "Bihar");
+    const { learner: again } = await upsertLearner(d, learner.externalId, { name: "Test", email: "t@example.com" });
+    assert.equal(again.district, "Patna", "a repeat without them keeps them");
+  });
+
   test("erasing frees the email and empties the account", async () => {
     const d = await client();
     const email = mail("gone");

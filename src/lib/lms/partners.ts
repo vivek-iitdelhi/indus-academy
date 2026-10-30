@@ -24,7 +24,7 @@ import { issueOrGetCertificate } from "./certificates.ts";
 // certificates are released (docs/superpowers/specs/2026-10-23-partner-learners-design.md).
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; message: string };
-export type LearnerInput = { name: string; email: string | null; phone?: string | null };
+export type LearnerInput = { name: string; email: string | null; phone?: string | null; state?: string | null; district?: string | null };
 export type CompletionInput = { courseSlug: string; batch: string | null; completedAt: Date }; // batch: null only in v2
 export type EnrolmentInput = {
   courseSlug: string;
@@ -166,6 +166,12 @@ export async function findLearner(distributorId: string, externalId: string): Pr
   return row ? { ...row.learner, name: row.name } : null;
 }
 
+/** State and district are optional: a repeat without them keeps what we have. */
+const where = (input: Pick<LearnerInput, "state" | "district">) => ({
+  ...(input.state && { state: input.state }),
+  ...(input.district && { district: input.district }),
+});
+
 /**
  * Creates or updates the client's learner (PUT semantics: `email` is replaced, null clears it).
  * New learners get their own user row with an unreachable `.invalid` email, so they can never
@@ -181,7 +187,7 @@ export async function upsertLearner(
     await db.update(user).set({ name: input.name }).where(eq(user.id, existing.userId));
     const [row] = await db
       .update(partnerLearners)
-      .set({ email: input.email, phone: input.phone ?? null })
+      .set({ email: input.email, phone: input.phone ?? null, ...where(input) })
       .where(and(eq(partnerLearners.distributorId, distributorId), eq(partnerLearners.externalId, externalId)))
       .returning();
     return { learner: { ...row, name: input.name }, created: false };
@@ -192,7 +198,7 @@ export async function upsertLearner(
       await tx.insert(user).values({ id: userId, name: input.name, email: `p-${userId}@learners.invalid` });
       const [row] = await tx
         .insert(partnerLearners)
-        .values({ distributorId, externalId, userId, email: input.email, phone: input.phone ?? null })
+        .values({ distributorId, externalId, userId, email: input.email, phone: input.phone ?? null, ...where(input) })
         .returning();
       return { learner: { ...row, name: input.name }, created: true };
     });
@@ -209,8 +215,7 @@ export async function upsertLearner(
  * person. `directAccount` says we made the account for this client.
  */
 export async function upsertCustomer(distributorId: string, input: CustomerInput): Promise<Learner | null> {
-  // State and district are optional: a repeat without them keeps what we have.
-  const contact = { email: input.email, phone: input.phone, ...(input.state && { state: input.state }), ...(input.district && { district: input.district }) };
+  const contact = { email: input.email, phone: input.phone, ...where(input) };
   const [made] = await db
     .insert(user)
     .values({ id: randomUUID(), name: input.name, email: input.email, phone: input.phone })
