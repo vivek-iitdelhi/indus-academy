@@ -1,8 +1,9 @@
 import { Accent, Container, Eyebrow } from "@/components/ui";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ButtonLink } from "@/components/ui";
 import { site } from "@/content/site";
 import { safeNextPath } from "@/lib/safe-next";
-import { requireUser } from "@/lib/session";
+import { isAdminEmail, requireUser } from "@/lib/session";
 import { AccountForm } from "./account-form";
 
 export default async function AccountPage({ searchParams }: PageProps<"/learn/account">) {
@@ -49,8 +50,13 @@ export default async function AccountPage({ searchParams }: PageProps<"/learn/ac
         </a>
         .
       </p>
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <SignOutButton className="rounded-full border border-ink/15 px-5 py-2.5 hover:border-ink/40" />
+        {(await isAdminEmail(user.email)) && (
+          <ButtonLink href="/admin" variant="outline" className="h-10 lg:hidden">
+            Admin
+          </ButtonLink>
+        )}
       </div>
     </Container>
   );

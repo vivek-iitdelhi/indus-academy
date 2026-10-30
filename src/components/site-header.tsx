@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { nav, type NavItem, type NavLink } from "@/content/site";
 import { authClient } from "@/lib/auth-client";
+import { LearnerLinks } from "./learner-nav";
 import { Logo } from "./logo";
 import { ArrowIcon, ButtonLink, Container } from "./ui";
 
@@ -58,8 +59,8 @@ export function SiteHeader() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const navRef = useRef<HTMLElement>(null);
-  // Read in the browser so pages stay static; until it loads, visitors see "Sign in".
-  const { data: session } = authClient.useSession();
+  // Read in the browser so pages stay static. Signed in, the site is theirs: their courses, not the sales menu.
+  const { data: session, isPending } = authClient.useSession();
 
   const closeAll = () => {
     setOpenMenu(null);
@@ -96,11 +97,11 @@ export function SiteHeader() {
   return (
     <header className="print:hidden sticky top-0 z-50 border-b border-line/70 bg-paper/85 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between gap-6">
-        <Link href="/" onClick={closeAll} aria-label="Indus AI Academy home" className="rounded-md">
+        <Link href={session ? "/learn" : "/"} onClick={closeAll} aria-label={session ? "My courses" : "Indus AI Academy home"} className="rounded-md">
           <Logo />
         </Link>
 
-        <nav ref={navRef} aria-label="Main" className="hidden items-center gap-1 lg:flex">
+        {session ? <LearnerLinks /> : <nav ref={navRef} aria-label="Main" className="hidden items-center gap-1 lg:flex">
           {nav.map((item) => {
             const active = isActive(pathname, item.href);
             const itemClass = `rounded-full px-4 py-2 text-sm transition-colors ${
@@ -181,32 +182,24 @@ export function SiteHeader() {
               </div>
             );
           })}
-        </nav>
+        </nav>}
 
-        <div className="hidden items-center gap-2 lg:flex">
-          {/* Signed in: just the way back to their courses. /learn sends signed-out visitors to /signin and back. */}
-          {session ? (
-            <ButtonLink href="/learn" variant="dark" className="h-10 px-5 text-sm">
-              My learning
-            </ButtonLink>
-          ) : (
-            <>
-              <Link href="/learn" onClick={closeAll} className="rounded-full px-4 py-2 text-sm text-muted transition-colors hover:text-ink">
-                Sign in
-              </Link>
-              <ButtonLink href="/contact?interest=enterprise" variant="dark" className="h-10 px-5 text-sm">
-                Talk to us
-              </ButtonLink>
-            </>
-          )}
-        </div>
+        {!session && <div className={`hidden items-center gap-2 lg:flex ${isPending ? "invisible" : ""}`}>
+          {/* /learn sends signed-out visitors to /signin and back. */}
+          <Link href="/learn" onClick={closeAll} className="rounded-full px-4 py-2 text-sm text-muted transition-colors hover:text-ink">
+            Sign in
+          </Link>
+          <ButtonLink href="/contact?interest=enterprise" variant="dark" className="h-10 px-5 text-sm">
+            Talk to us
+          </ButtonLink>
+        </div>}
 
-        <button
+        {!session && <button
           type="button"
           onClick={() => setMobileOpen((v) => !v)}
           aria-expanded={mobileOpen}
           aria-controls="mobile-nav"
-          className="grid size-10 place-items-center rounded-full border border-line lg:hidden"
+          className={`grid size-10 place-items-center rounded-full border border-line lg:hidden ${isPending ? "invisible" : ""}`}
         >
           <span className="sr-only">{mobileOpen ? "Close menu" : "Open menu"}</span>
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="size-5">
@@ -216,12 +209,12 @@ export function SiteHeader() {
               <path d="M3 7h14M3 13h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             )}
           </svg>
-        </button>
+        </button>}
       </Container>
 
       <div
         id="mobile-nav"
-        hidden={!mobileOpen}
+        hidden={!mobileOpen || Boolean(session)}
         className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-line/70 lg:hidden"
       >
         <Container className="flex flex-col gap-1 py-4">
@@ -274,24 +267,14 @@ export function SiteHeader() {
               </div>
             );
           })}
-          {session ? (
-            <div className="mt-3" onClick={closeAll}>
-              <ButtonLink href="/learn" variant="dark" className="w-full">
-                My learning
-              </ButtonLink>
-            </div>
-          ) : (
-            <>
-              <Link href="/learn" onClick={closeAll} className="rounded-xl px-3 py-3 text-lg font-medium hover:bg-ink/[0.04]">
-                Sign in
-              </Link>
-              <div className="mt-3" onClick={closeAll}>
-                <ButtonLink href="/contact?interest=enterprise" variant="dark" className="w-full">
-                  Talk to us
-                </ButtonLink>
-              </div>
-            </>
-          )}
+          <Link href="/learn" onClick={closeAll} className="rounded-xl px-3 py-3 text-lg font-medium hover:bg-ink/[0.04]">
+            Sign in
+          </Link>
+          <div className="mt-3" onClick={closeAll}>
+            <ButtonLink href="/contact?interest=enterprise" variant="dark" className="w-full">
+              Talk to us
+            </ButtonLink>
+          </div>
         </Container>
       </div>
     </header>

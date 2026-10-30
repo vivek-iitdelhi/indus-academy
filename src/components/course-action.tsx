@@ -128,6 +128,8 @@ export function CourseAction({
       .then((res) => (res.ok ? (res.json() as Promise<Ownership>) : null))
       .then((state) => {
         if (cancelled || !state) return;
+        // Already theirs: a sales page has nothing for them, so straight to the course.
+        if (state.owned) return window.location.replace(`/learn/${slug}`);
         setMe(state);
         // Back from a redirect checkout (?order=…): confirm it.
         const orderId = takeReturnedOrder();

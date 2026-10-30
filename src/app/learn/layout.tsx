@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { and, eq, gt, lt } from "drizzle-orm";
 import { Logo } from "@/components/logo";
-import { SignOutButton } from "@/components/sign-out-button";
+import { LearnerLinks, LearnerTabs } from "@/components/learner-nav";
 import { ButtonLink, Container } from "@/components/ui";
 import { db } from "@/db";
 import { courses, enrollments, liveSessions } from "@/db/schema";
@@ -40,30 +40,11 @@ export default async function LearnLayout({ children }: LayoutProps<"/learn">) {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur">
-        <Container className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-2 py-2 text-sm">
+        <Container className="flex h-14 items-center justify-between gap-6">
           <Link href="/learn" aria-label="My courses" className="shrink-0">
             <Logo />
           </Link>
-          <nav aria-label="Learner" className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 text-muted">
-            <Link href="/learn" className="font-medium text-ink hover:text-pine">
-              My courses
-            </Link>
-            <Link href="/courses" className="hover:text-ink">
-              Browse courses
-            </Link>
-            <Link href="/learn/certificates" className="hover:text-ink">
-              Certificates
-            </Link>
-            {(await isAdminEmail(user.email)) && (
-              <Link href="/admin" className="hover:text-ink">
-                Admin
-              </Link>
-            )}
-            <Link href="/learn/account" className="max-w-40 truncate hover:text-ink">
-              {user.name || "Account"}
-            </Link>
-            <SignOutButton className="hover:text-ink" />
-          </nav>
+          <LearnerLinks admin={await isAdminEmail(user.email)} />
         </Container>
       </header>
       {(await openClasses(user.id)).map((c) => (
@@ -80,6 +61,7 @@ export default async function LearnLayout({ children }: LayoutProps<"/learn">) {
         </div>
       ))}
       {children}
+      <LearnerTabs />
     </>
   );
 }

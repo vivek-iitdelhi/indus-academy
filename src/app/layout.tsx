@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SignedInTabs } from "@/components/learner-nav";
 import { MarketingChrome } from "@/components/marketing-chrome";
 import { company, founder, site } from "@/content/site";
 import { siteGraph } from "@/lib/schema";
@@ -78,6 +79,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </main>
         <MarketingChrome>
           <SiteFooter />
+          <SignedInTabs />
         </MarketingChrome>
       </body>
     </html>

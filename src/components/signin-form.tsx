@@ -6,7 +6,7 @@ import { TEST_EMAIL } from "@/lib/test-login";
 import { CheckIcon } from "./ui";
 
 const inputClass =
-  "h-12 w-full rounded-full border border-line bg-white px-5 text-sm text-ink transition-colors placeholder:text-muted/60 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20";
+  "h-12 w-full rounded-full border border-line bg-white px-5 text-base text-ink transition-colors placeholder:text-muted/60 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20";
 
 export function SignInForm({ next, googleEnabled }: { next: string; googleEnabled: boolean }) {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -35,8 +35,8 @@ export function SignInForm({ next, googleEnabled }: { next: string; googleEnable
           Check your email
         </p>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          We sent a sign-in link to <strong className="text-ink">{email}</strong>. It works once and expires in 15
-          minutes.
+          We sent a sign-in link to <strong className="text-ink">{email}</strong>. Open it on this phone or computer. It
+          works once and expires in 15 minutes.
         </p>
         <button type="button" onClick={() => setStatus("idle")} className="mt-4 text-sm font-medium text-pine underline underline-offset-4">
           Use a different email

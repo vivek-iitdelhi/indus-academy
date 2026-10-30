@@ -5,7 +5,7 @@ import { CheckIcon } from "@/components/ui";
 import { saveAccount, type AccountState } from "./actions";
 
 const inputClass =
-  "h-12 w-full rounded-full border border-line bg-white px-5 text-[0.95rem] text-ink transition-colors placeholder:text-muted/60 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20";
+  "h-12 w-full rounded-full border border-line bg-white px-5 text-base text-ink transition-colors placeholder:text-muted/60 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20";
 
 export function AccountForm({
   firstName,
