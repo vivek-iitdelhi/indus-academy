@@ -10,6 +10,7 @@ import {
   distributors,
   enrollments,
   partnerLearners,
+  session,
   user,
   type Certificate,
   type CertificateReleaseMode,
@@ -33,6 +34,7 @@ export type EnrolmentInput = {
   enrolledAt: Date | null;
   expiresAt: Date | null;
 };
+export type CustomerInput = { name: string; email: string; phone: string; state: string | null; district: string | null; courseSlug: string };
 export type Learner = PartnerLearner & { name: string };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -63,6 +65,32 @@ export function parseLearnerInput(body: unknown): Parsed<LearnerInput> {
     if (!PHONE_PATTERN.test(phone)) return { ok: false, message: "`phone` must be 7–15 digits, optionally starting with +." };
   }
   return { ok: true, value: { name, email, phone } };
+}
+
+/** POST /customers: everything the client knows about a customer who paid them for a course. */
+export function parseCustomerInput(body: unknown): Parsed<CustomerInput> {
+  const b = record(body);
+  const learner = parseLearnerInput(b);
+  if (!learner.ok) return learner;
+  if (b.email == null) return { ok: false, message: "`email` is required." };
+  const mobile = parseLearnerInput({ name: "x", phone: b.mobile ?? "" });
+  if (!mobile.ok) return { ok: false, message: "`mobile` is required: 7–15 digits, optionally starting with +." };
+  const state = label(b.state, "state");
+  const district = label(b.district, "district");
+  for (const r of [state, district]) if (!r.ok) return r;
+  const courseSlug = text(b.course);
+  if (!courseSlug) return { ok: false, message: "`course` is required: the course slug." };
+  return {
+    ok: true,
+    value: {
+      name: learner.value.name,
+      email: learner.value.email!,
+      phone: mobile.value.phone!,
+      state: state.ok ? state.value : null,
+      district: district.ok ? district.value : null,
+      courseSlug,
+    },
+  };
 }
 
 /** An optional timestamp field: null when absent; it must carry a zone (Z or ±hh:mm). */
@@ -173,6 +201,32 @@ export async function upsertLearner(
     if (await findLearner(distributorId, externalId)) return upsertLearner(distributorId, externalId, input);
     throw error;
   }
+}
+
+/**
+ * The client's customer, who carries on here after paying them: a real account, found by email or
+ * made now, unlike upsertLearner's unreachable ones. Null if another client already has that
+ * person. `directAccount` says we made the account for this client.
+ */
+export async function upsertCustomer(distributorId: string, input: CustomerInput): Promise<Learner | null> {
+  // State and district are optional: a repeat without them keeps what we have.
+  const contact = { email: input.email, phone: input.phone, ...(input.state && { state: input.state }), ...(input.district && { district: input.district }) };
+  const [made] = await db
+    .insert(user)
+    .values({ id: randomUUID(), name: input.name, email: input.email, phone: input.phone })
+    .onConflictDoNothing({ target: user.email })
+    .returning({ id: user.id });
+  const [account] = await db.select({ id: user.id, name: user.name }).from(user).where(eq(user.id, made?.id ?? sql`(select id from "user" where email = ${input.email})`));
+  await db
+    .insert(partnerLearners)
+    .values({ distributorId, externalId: input.email, userId: account.id, directAccount: Boolean(made), ...contact })
+    .onConflictDoNothing();
+  const [row] = await db
+    .update(partnerLearners)
+    .set(contact)
+    .where(and(eq(partnerLearners.userId, account.id), eq(partnerLearners.distributorId, distributorId)))
+    .returning();
+  return row ? { ...row, name: account.name } : null;
 }
 
 export type CertificateStatus = "pending_payment" | "pending_release" | "released" | "revoked" | "not_offered";
@@ -790,9 +844,14 @@ export async function eraseLearner(distributorId: string, externalId: string): P
       .update(certificates)
       .set({ holderName: "", revokedAt: sql`coalesce(${certificates.revokedAt}, now())` })
       .where(eq(certificates.userId, learner.userId));
+    // A real account goes too: it must stop working, and its email must be free to sign up again.
+    if (learner.directAccount) {
+      await tx.update(user).set({ email: `p-${learner.userId}@learners.invalid`, phone: null }).where(eq(user.id, learner.userId));
+      await tx.delete(session).where(eq(session.userId, learner.userId));
+    }
     await tx
       .update(partnerLearners)
-      .set({ externalId: `erased:${learner.userId}`, email: null, phone: null, deletedAt: new Date() })
+      .set({ externalId: `erased:${learner.userId}`, email: null, phone: null, state: null, district: null, deletedAt: new Date() })
       .where(and(eq(partnerLearners.distributorId, distributorId), eq(partnerLearners.externalId, externalId)));
   });
   return true;

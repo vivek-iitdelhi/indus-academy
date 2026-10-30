@@ -369,6 +369,11 @@ export const partnerLearners = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     email: text("email"), // contact only; never used to sign in or to match accounts
     phone: text("phone"), // contact only, like email
+    state: text("state"), // POST /customers: where the customer is, for the client's reporting
+    district: text("district"),
+    // A real account we made for POST /customers. Only these may be handed a login link: anyone
+    // who signed up with us themselves keeps their account to themselves.
+    directAccount: boolean("direct_account").notNull().default(false),
     // Erased at the client's request: name and contact details are gone and external_id is freed.
     deletedAt: ts("deleted_at"),
     createdAt: createdAt(),

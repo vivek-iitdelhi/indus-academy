@@ -493,6 +493,60 @@ Which of your learners opened the class, and whether they got into the room.
   fine.
 - Learners who never opened the class aren't listed.
 
+## Customers: you take payment, they learn with us
+
+Use this if your customer pays you and then does everything else on Indus AI Academy: the
+enrolment email, login, videos, live classes and certificate. You host no player, track no lessons
+and run no quizzes, and the rest of this document is optional.
+
+### `POST /customers`
+
+Call it from your server once the customer has paid, then redirect them to `login_url`.
+
+```sh
+curl -X POST https://indusai.academy/api/v2/customers \
+  -H "Authorization: Bearer $IAA_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Asha Rao",
+    "email": "asha@example.com",
+    "mobile": "+919876543210",
+    "state": "Bihar",
+    "district": "Patna",
+    "course": "ai-practitioner"
+  }'
+```
+
+`name`, `email`, `mobile` and `course` (the slug from `GET /courses`) are required. `state` and
+`district` are optional, up to 100 characters each.
+
+```json
+{
+  "customer": { "email": "asha@example.com" },
+  "enrolment": { "course": "ai-practitioner" },
+  "login_url": "https://indusai.academy/api/auth/magic-link/verify?token=…",
+  "course_url": "https://indusai.academy/learn/ai-practitioner"
+}
+```
+
+- `201` means newly enrolled, and we email the customer that their course is ready. `200` means
+  they were already enrolled, and nothing is sent or billed again.
+- **`login_url`** signs the customer in and opens their course. It works once, within 10 minutes,
+  so create it when you redirect, and never store it or put it in a message.
+- **`login_url` can be `null`**: when the customer already had an account with us that they made
+  themselves, and with test keys. Redirect to `course_url` instead; they sign in with the link we
+  email them. We never let an API key open an account its owner made.
+- The customer is identified by email, so use the address they can open. Sending it again with a
+  new `mobile`, `state` or `district` updates those details.
+- This call is safe to repeat, so it needs no `Idempotency-Key`; a replayed response would carry
+  a used `login_url`. Call it again for a fresh link.
+- With a test key, nothing reaches a real person: no account is opened, no email goes out and
+  `login_url` is `null`.
+- Errors: `400 invalid_request`; `404 not_found` for a course not licensed to you; `409
+  customer_conflict` if the email belongs to another partner's customer.
+
+To remove a customer, `DELETE /learners/{email}`. Their account, details and certificates are erased.
+
 ## Learners and certificates
 
 The lifecycle:
@@ -897,6 +951,10 @@ A `429` and a `503 live_busy` also carry `retry_after` (seconds) in the `error` 
 | 503    | `live_busy`               | Many learners are joining the live class at once; retry after `retry_after` seconds (also in `Retry-After`) |
 
 ## Changelog
+
+### 30 Oct 2026: customers
+
+`POST /customers`: enrol a customer who paid you, and send them here with a one-time login link.
 
 ### 28 Oct 2026: enrolments, v2, and more for large partners
 

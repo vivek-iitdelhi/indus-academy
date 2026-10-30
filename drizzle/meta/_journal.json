@@ -176,6 +176,13 @@
       "when": 1793273944746,
       "tag": "0024_partner_only_courses",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793353190282,
+      "tag": "0025_partner_customers",
+      "breakpoints": true
     }
   ]
 }

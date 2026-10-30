@@ -46,6 +46,35 @@ export async function emailCertificateIssued(cert: Certificate) {
   }
 }
 
+/** Tells a client's customer their course is ready here. After the response; never throws. */
+export async function emailEnrolled(email: string, name: string, courseSlug: string, courseTitle: string) {
+  try {
+    const { after, shell, escapeHtml, site } = await nextOnly();
+    const url = `${site.url}/learn/${courseSlug}`;
+    const first = name.trim().split(/\s+/)[0];
+    const course = escapeHtml(courseTitle);
+    after(() =>
+      sendEmail({
+        from: from(site.name),
+        to: [email],
+        reply_to: site.email,
+        subject: `You're enrolled in ${courseTitle}`,
+        html: shell(
+          `<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;color:#0b1916">Welcome${first ? `, ${escapeHtml(first)}` : ""}!</h1>
+           <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#56655f">
+             You're enrolled in <strong style="color:#0b1916">${course}</strong>. Your classes, videos and certificate are all on ${escapeHtml(site.name)}. To sign in, use this email address, and we'll send you a link.
+           </p>
+           ${button(url, "Go to your course")}`,
+          `<p style="margin:0">You received this because you were enrolled in a course with ${escapeHtml(site.name)}.</p>`,
+        ),
+        text: `You're enrolled in ${courseTitle}.\n\nGo to your course: ${url}\nTo sign in, use this email address, and we'll send you a link.`,
+      }).catch((e) => console.error("[lifecycle] enrolment email:", e)),
+    );
+  } catch (error) {
+    console.error("[lifecycle] enrolment email:", error);
+  }
+}
+
 async function sendCertificateEmail(cert: Certificate, { shell, escapeHtml, site, company }: Omit<Awaited<ReturnType<typeof nextOnly>>, "after">) {
   const [row] = await db
     .select({ email: user.email, courseTitle: courses.title })

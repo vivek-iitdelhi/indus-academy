@@ -23,6 +23,7 @@ import {
   listBatches,
   parseCompletionInput,
   parseEnrolmentInput,
+  parseCustomerInput,
   parseLearnerInput,
   recordCompletion,
   releasable,
@@ -32,6 +33,7 @@ import {
   partnerStats,
   setReleaseMode,
   undoCompletion,
+  upsertCustomer,
   upsertLearner,
   validExternalId,
   waitingCertificates,
@@ -127,6 +129,81 @@ test("certificateStatus", () => {
 });
 
 // Against a real database: DATABASE_URL=postgres://localhost/indus_lms npm test
+describe("customers who carry on here after paying a client", () => {
+  const run = randomUUID().slice(0, 8);
+  const input = (email: string) => ({ name: "Asha Rao", email, phone: "+919876543210", state: "Bihar", district: "Patna", courseSlug: "x" });
+  const distributorIds: string[] = [];
+  const emails: string[] = [];
+  const client = async () => {
+    const [d] = await db.insert(distributors).values({ name: `Client ${randomUUID()}`, keyPrefix: "iaa_test", keyHash: randomUUID() }).returning();
+    distributorIds.push(d.id);
+    return d.id;
+  };
+  const mail = (name: string) => {
+    const email = `${name}-${run}@example.com`;
+    emails.push(email);
+    return email;
+  };
+  after(async () => {
+    await db.delete(user).where(inArray(user.email, emails));
+    await db.delete(distributors).where(inArray(distributors.id, distributorIds));
+  });
+
+  test("parseCustomerInput needs a name, email, mobile and course", () => {
+    const good = { name: "Asha", email: "ASHA@Example.com", mobile: "98765 43210", state: "Bihar", district: "Patna", course: "ai" };
+    assert.deepEqual(parseCustomerInput(good), {
+      ok: true,
+      value: { name: "Asha", email: "asha@example.com", phone: "9876543210", state: "Bihar", district: "Patna", courseSlug: "ai" },
+    });
+    for (const missing of ["name", "email", "mobile", "course"]) {
+      assert.equal(parseCustomerInput({ ...good, [missing]: undefined }).ok, false, missing);
+    }
+    assert.equal(parseCustomerInput({ ...good, state: undefined, district: undefined }).ok, true);
+  });
+
+  test("a new customer gets a real account made for this client, and a repeat changes nothing", async () => {
+    const d = await client();
+    const email = mail("new");
+    const first = await upsertCustomer(d, input(email));
+    assert.equal(first?.directAccount, true);
+    assert.equal(first?.state, "Bihar");
+    const again = await upsertCustomer(d, { ...input(email), district: "Gaya" });
+    assert.equal(again?.userId, first?.userId);
+    assert.equal(again?.directAccount, true);
+    assert.equal(again?.district, "Gaya");
+    const bare = await upsertCustomer(d, { ...input(email), state: null, district: null });
+    assert.equal(bare?.state, "Bihar", "a repeat without a state keeps it");
+    assert.equal(bare?.district, "Gaya");
+  });
+
+  test("someone who signed up themselves is not an account made for the client", async () => {
+    const d = await client();
+    const email = mail("own");
+    await db.insert(user).values({ id: randomUUID(), name: "Their Own Name", email });
+    const learner = await upsertCustomer(d, input(email));
+    assert.equal(learner?.directAccount, false);
+    assert.equal(learner?.name, "Their Own Name");
+  });
+
+  test("two clients can't share a customer", async () => {
+    const [a, b] = [await client(), await client()];
+    const email = mail("shared");
+    assert.ok(await upsertCustomer(a, input(email)));
+    assert.equal(await upsertCustomer(b, input(email)), null);
+  });
+
+  test("erasing frees the email and empties the account", async () => {
+    const d = await client();
+    const email = mail("gone");
+    const learner = await upsertCustomer(d, input(email));
+    assert.equal(await eraseLearner(d, email), true);
+    const [row] = await db.select().from(user).where(eq(user.id, learner!.userId));
+    assert.notEqual(row.email, email);
+    assert.equal(row.phone, null);
+    emails.push(row.email);
+  });
+});
+
 describe("partner learners", { skip: !process.env.DATABASE_URL && "DATABASE_URL not set" }, () => {
   const tag = randomUUID().slice(0, 8);
   const distributorIds: string[] = [];
