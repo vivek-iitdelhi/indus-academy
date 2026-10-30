@@ -28,6 +28,7 @@ const ROUTES: [RegExp, string][] = [
   [/^\/live-sessions\/[^/]+\/join$/, "/live-sessions/{id}/join"],
   [/^\/live-sessions\/[^/]+\/attendance$/, "/live-sessions/{id}/attendance"],
   [/^\/webhook-events$/, "/webhook-events"],
+  [/^\/customers$/, "/customers"],
 ];
 
 /**

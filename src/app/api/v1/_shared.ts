@@ -23,12 +23,17 @@ export const notFound = () => apiError(404, "not_found", "No such resource.");
  */
 export function withDistributor<C>(handler: (distributor: ApiDistributor, request: Request, context: C) => Promise<Response>) {
   return async (request: Request, context: C) => {
+    const started = Date.now();
     let distributor: ApiDistributor | null = null;
     let limit: RateLimit | null = null;
     let response: Response;
     try {
       const d = (distributor = await authenticateDistributor(request));
-      if (!d) return apiError(401, "unauthorized", "Missing, invalid or revoked API key.", { "www-authenticate": "Bearer" });
+      if (!d) {
+        const unknownKey = request.headers.get("authorization")?.match(/^Bearer (iaa_[a-z]+_.{4})/)?.[1];
+        if (unknownKey) logRequest(request, started, { key: unknownKey, status: 401, error: "unauthorized" });
+        return apiError(401, "unauthorized", "Missing, invalid or revoked API key.", { "www-authenticate": "Bearer" });
+      }
       // The limiter fails open: a hiccup in it should not take the API down with it.
       limit = await hitRateLimit(d.keyId, d.rateLimitPerMinute).catch((e) => (console.error("[rate limit]", e), null));
       response = limit && !limit.allowed ? rateLimited(limit) : await idempotent(d, request, () => handler(d, request, context));
@@ -39,15 +44,29 @@ export function withDistributor<C>(handler: (distributor: ApiDistributor, reques
     }
     if (distributor) {
       // Usage is counted after the response is sent, so it never slows the API down.
-      const { id } = distributor;
+      const { id, name, testMode: test } = distributor;
       const status = response.status;
       after(() => recordApiRequest(id, endpointOf(request.method, request.url), status).catch((e) => console.error("[api usage]", e)));
+      const failed = status >= 400 ? response.clone() : null;
+      after(async () => {
+        const body = (await failed?.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+        logRequest(request, started, { partner: name, test, status, error: body?.error?.code, message: body?.error?.message });
+      });
     }
     if (!limit) return response;
     const headers = new Headers(response.headers);
     for (const [name, value] of Object.entries(rateLimitHeaders(limit))) headers.set(name, value);
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   };
+}
+
+/**
+ * One log line per partner request, for scripts/partner-watch.sh. The route pattern, not the path,
+ * and never the key or the body: paths and bodies carry customers' details. Error messages are
+ * our own fixed text.
+ */
+function logRequest(request: Request, started: number, fields: Record<string, unknown>) {
+  console.info(`[partner-api] ${JSON.stringify({ endpoint: endpointOf(request.method, request.url), ms: Date.now() - started, ...fields })}`);
 }
 
 const rateLimited = (limit: RateLimit) =>
