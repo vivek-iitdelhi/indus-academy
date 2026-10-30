@@ -51,7 +51,8 @@ export DATABASE_URL
 echo "Building $image"
 docker build --platform linux/arm64 --build-arg DEPLOYMENT_ID="$tag" \
   --secret id=database_url,env=DATABASE_URL -t "$image" .
-docker push "$image" >/dev/null
+# A flaky connection drops big layer uploads; a retry resumes with the layers already pushed.
+for try in 1 2 3 4 5; do docker push "$image" >/dev/null && break; [[ $try == 5 ]] && exit 1; echo "push failed, retrying"; sleep 5; done
 
 vpc=$(aws ec2 describe-vpcs --filters Name=is-default,Values=true --query 'Vpcs[0].VpcId' --output text)
 subnets=$(aws ec2 describe-subnets --filters Name=vpc-id,Values="$vpc" Name=default-for-az,Values=true \
