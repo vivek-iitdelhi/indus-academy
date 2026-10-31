@@ -154,13 +154,13 @@ export function createDistributorWithKey(values: { name: string; contactEmail: s
 }
 
 /** Condition on `courses`: published, and licensed to the distributor (all courses, or picked ones). */
-// A sandbox twin is licensed exactly like its partner, so licences are read from coalesce(sandbox_of, id).
+// A sandbox twin has its partner's licences plus any of its own (test-only courses, e.g. demos).
 const licensedPublished = (distributorId: string) =>
   and(
     eq(courses.status, "published"),
     or(
       sql`exists (select 1 from ${distributors} d join ${distributors} l on l.id = coalesce(d.sandbox_of, d.id) where d.id = ${distributorId} and l.all_courses)`,
-      sql`exists (select 1 from ${distributors} d join ${distributorCourses} dc on dc.distributor_id = coalesce(d.sandbox_of, d.id) where d.id = ${distributorId} and dc.course_id = ${courses.id})`,
+      sql`exists (select 1 from ${distributors} d join ${distributorCourses} dc on dc.distributor_id in (d.id, d.sandbox_of) where d.id = ${distributorId} and dc.course_id = ${courses.id})`,
     ),
   );
 

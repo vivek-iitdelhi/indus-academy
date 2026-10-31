@@ -4,7 +4,7 @@ import { after, describe, test } from "node:test";
 import { inArray } from "drizzle-orm";
 import { db } from "../db/index.ts";
 import { courses, distributorCourses, distributors } from "../db/schema.ts";
-import { generateApiKey, hashApiKey, licensedCourse, licensedCourses, parseBearer } from "./distributors.ts";
+import { generateApiKey, hashApiKey, licensedCourse, licensedCourses, parseBearer, sandboxFor } from "./distributors.ts";
 
 test("generates a random iaa_live_ key with a display prefix and its SHA-256", () => {
   const a = generateApiKey();
@@ -76,5 +76,22 @@ describe("licensing", { skip: !process.env.DATABASE_URL && "DATABASE_URL not set
     assert.ok((await slugs(picked.id)).includes(a.slug));
     assert.ok(!(await slugs(picked.id)).includes(later.slug));
     assert.equal(await licensedCourse(picked.id, later.slug), null);
+  });
+
+  test("a test key sees its partner's courses plus its own; the live key doesn't see the test-only ones", async () => {
+    const partner = await distributor(false);
+    const twin = await sandboxFor(partner);
+    distributorIds.push(twin.id);
+    const real = await course("published");
+    const demo = await course("published");
+    await db.insert(distributorCourses).values([
+      { distributorId: partner.id, courseId: real.id },
+      { distributorId: twin.id, courseId: demo.id },
+    ]);
+
+    assert.deepEqual(await slugs(partner.id), [real.slug]);
+    assert.deepEqual((await slugs(twin.id)).sort(), [real.slug, demo.slug].sort());
+    assert.equal((await licensedCourse(twin.id, demo.id))?.id, demo.id);
+    assert.equal(await licensedCourse(partner.id, demo.id), null);
   });
 });
